@@ -1,0 +1,4 @@
+node_modules/
+app/chk.js
+*.png.tmp
+.DS_Store
