@@ -228,13 +228,12 @@
 @media (max-width:960px){.sb-wrap{grid-template-columns:minmax(0,1fr);gap:28px;padding:28px 18px 32px;max-width:560px}.sb-hero{gap:16px}.sb-lead{font-size:15px}.sb-feats{gap:8px}.sb-feats li{padding:10px 12px}.sb-feats small{display:none}.sb-foot{margin-top:0;text-align:center}}
 @media (max-width:600px){.sb-wrap{gap:22px;padding-top:22px}.sb-feats,.sb-eyebrow{display:none}.sb-hero h2{font-size:32px}.sb-brand img{width:46px;height:46px}.sb-brand b{font-size:15.5px}}
 @media (max-width:420px){.sb-feats svg{width:30px;height:30px;padding:6px}.sb-feats b{font-size:13px}.sb-card{padding:30px 20px 24px}.sb-card::before{left:20px;right:20px}}
-.sb-acct{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 4px 14px;padding:10px 10px 10px 12px;border:1px solid rgba(201,164,92,.4);border-radius:14px;background:rgba(255,255,255,.05)}
+.sb-acct{position:sticky;bottom:0;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:14px 4px 0;padding:10px 10px 10px 12px;border:1px solid rgba(201,164,92,.4);border-radius:14px;background:#13213D;box-shadow:0 -14px 20px -6px #0D1729,0 30px 0 6px #172B4E}
 .sb-ini{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#B8913F,#E4C98E);color:#152B50;font-weight:800;font-size:13px}
 .sb-who{min-width:0;flex:1 1 150px;display:flex;flex-direction:column;line-height:1.25}.sb-who b{color:#fff;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sb-who small{color:#AFC0DD;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sb-out{flex:1 0 auto;justify-content:center;display:inline-flex;align-items:center;gap:6px;min-height:36px;background:transparent;border:1px solid rgba(228,201,142,.7);color:#F3E3BF;border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
 .sb-out:hover,.sb-out:focus-visible{background:#E4C98E;color:#152B50;outline:none}.sb-out:disabled{opacity:.7;cursor:progress}
-.sb-out-mini{display:none}
-@media (max-width:900px){.sb-out-mini{display:grid;place-items:center;flex:none;width:44px;height:44px;margin-left:auto;margin-right:8px;border-radius:12px;border:1px solid rgba(228,201,142,.6);background:transparent;color:#F3E3BF;cursor:pointer}.rail:not(:has(#nav[data-open="true"])) .sb-acct{display:none}.sb-acct{margin:12px 0 4px}}`;
+@media (max-width:900px){.rail:not(:has(#nav[data-open="true"])) .sb-acct{display:none}.sb-acct{margin:12px 0 4px;position:static;box-shadow:none}}`;
   let mode = "in";
   /* Data Privacy Act of 2012 (RA 10173): consent is required at sign-in and saved on the account with the notice version and time. */
   const DPA_V = "2026-10-12"; let dpaNow = false, held = null;
@@ -320,7 +319,7 @@
   const boot = async () => { const { data } = await sb.auth.getSession(); if (!data.session && !started && mode !== "newpw") gate(); };
   if (document.body) boot(); else document.addEventListener("DOMContentLoaded", boot);
 
-  // Sign out: an account bar at the top of the menu (desktop) and at the top of the opened menu (phone).
+  // Sign out: an account bar pinned to the bottom of the menu (Glenn 2026-10-12).
   let leaving = false; const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   async function signOutNow(btn) {
     if (leaving) return; leaving = true; if (btn) { btn.disabled = true; btn.querySelector("b") ? (btn.querySelector("b").textContent = "Signing out…") : (btn.textContent = "Signing out…"); }
@@ -331,14 +330,12 @@
   }
   window.hrSignOut = signOutNow;
   new MutationObserver(() => {
-    const brand = document.querySelector(".rail > .brand"); if (!brand || !me || document.querySelector(".sb-acct")) return;
+    const nav = document.getElementById("nav"); if (!nav || !me || document.querySelector(".sb-acct")) return;
     const ini = String(me.name || me.email || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
     const d = document.createElement("div"); d.className = "sb-acct no-tl";
     d.innerHTML = `<span class="sb-ini" aria-hidden="true">${esc(ini)}</span><span class="sb-who"><b>${esc(me.name && me.name !== me.email ? me.name : "Signed in")}</b><small>${esc(me.email || "")}</small></span>
       <button type="button" class="sb-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><b>Sign out</b></button>`;
     d.querySelector(".sb-out").addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(ev.currentTarget); });
-    brand.after(d);
-    const tg = document.getElementById("menu-toggle"); if (tg && !document.querySelector(".sb-out-mini")) { const m = document.createElement("button"); m.type = "button"; m.className = "sb-out-mini no-tl"; m.setAttribute("aria-label", "Sign out"); m.title = "Sign out";
-      m.innerHTML = d.querySelector(".sb-out svg").outerHTML; m.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(m); }); tg.before(m); }
+    nav.after(d);
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
