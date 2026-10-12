@@ -309,6 +309,8 @@
         if (!v("#sb-name")) throw new Error("Enter your full name.");
         const { data, error } = await sb.auth.signUp({ email: v("#sb-email"), password: f.querySelector("#sb-pw").value, options: { data: { full_name: v("#sb-name"), dpa_v: DPA_V, dpa_at: new Date().toISOString() }, emailRedirectTo: location.origin + location.pathname } });
         if (error) throw error;
+        // Supabase answers a sign-up for an existing email with an empty identity list and sends no email.
+        if (data.user && Array.isArray(data.user.identities) && !data.user.identities.length) { mode = "in"; gate("This email already has an account. Sign in, or tap Forgot password? to set a new password.", "err"); return; }
         if (!data.session) { mode = "in"; gate("Check your email and tap the confirmation link, then sign in here.", "ok"); return; }
       } else if (mode === "reset") {
         const { error } = await sb.auth.resetPasswordForEmail(v("#sb-email"), { redirectTo: location.origin + location.pathname }); if (error) throw error;
