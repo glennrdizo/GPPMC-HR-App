@@ -214,6 +214,15 @@
 .sb-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;font-size:12px;color:#7A8090}
 .sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}
 .sb-gate.seen .sb-hero,.sb-gate.seen .sb-card{animation:none}
+.sb-dpa{display:flex;gap:10px;align-items:flex-start;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:#F6F1E4;border:1px solid #E8DCBC;font-size:13px;line-height:1.5;color:#3A4560;cursor:pointer}
+.sb-dpa input{width:20px;height:20px;flex:0 0 auto;margin:1px 0 0;padding:0;accent-color:#1B2B4B;cursor:pointer}.sb-dpa a,.sb-foot button,.sb-pnl{color:#8A6A1F;font-weight:700;text-decoration:underline;cursor:pointer}
+.sb-card label.sb-dpa{font-weight:500;letter-spacing:0;font-size:13px;margin:18px 0 0}.sb-card .sb-dpa input{-webkit-appearance:auto;appearance:auto;border:0;border-radius:4px;box-shadow:none;padding:0;width:20px;height:20px}.sb-card .sb-dpa span{flex:1}
+.sb-dpa.bad{border-color:#D9534F;background:#FDF1F0}
+.sb-foot button{background:none;border:0;padding:0;font:inherit;color:#E0BE7A}
+.sb-pn{position:fixed;inset:0;z-index:10000;background:rgba(6,11,22,.72);display:grid;place-items:center;padding:16px;backdrop-filter:blur(4px)}
+.sb-pn>div{background:#FFFDF8;color:#1F2A44;max-width:680px;width:100%;max-height:min(86vh,820px);overflow:auto;border-radius:20px;padding:28px 28px 22px;box-sizing:border-box;box-shadow:0 30px 80px rgba(0,0,0,.5);font-size:14.5px;line-height:1.6}
+.sb-pn h2{font-family:"Playfair Display",Georgia,serif;font-size:26px;margin:0 0 4px;color:#0F1B33}.sb-pn h3{font-size:15px;margin:18px 0 4px;color:#0F1B33}.sb-pn p,.sb-pn ul{margin:0 0 8px}.sb-pn ul{padding-left:20px}.sb-pn .meta{color:#6A7080;font-size:13px;margin-bottom:14px}
+.sb-pn .close{position:sticky;bottom:-22px;display:block;width:100%;margin-top:18px;min-height:48px;border:0;border-radius:12px;background:#1B2B4B;color:#fff;font:inherit;font-weight:800;cursor:pointer}
 @keyframes sbIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){.sb-hero,.sb-card{animation:none}}
 @media (max-width:960px){.sb-wrap{grid-template-columns:minmax(0,1fr);gap:28px;padding:28px 18px 32px;max-width:560px}.sb-hero{gap:16px}.sb-lead{font-size:15px}.sb-feats{gap:8px}.sb-feats li{padding:10px 12px}.sb-feats small{display:none}.sb-foot{margin-top:0;text-align:center}}
@@ -221,14 +230,29 @@
 @media (max-width:420px){.sb-feats svg{width:30px;height:30px;padding:6px}.sb-feats b{font-size:13px}.sb-card{padding:30px 20px 24px}.sb-card::before{left:20px;right:20px}}
 .sb-out{display:block;margin:10px 12px 18px;background:transparent;border:1px solid rgba(201,164,92,.45);color:#C9D2E6;border-radius:99px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}`;
   let mode = "in";
+  /* Data Privacy Act of 2012 (RA 10173): consent is required at sign-in and saved on the account with the notice version and time. */
+  const DPA_V = "2026-10-12"; let dpaNow = false, held = null;
+  const NOTICE = `<h2>Privacy Notice</h2><p class="meta">GD Prime Property Management Corporation · HR &amp; Payroll Portal · Version ${DPA_V}</p>
+    <p>We respect your privacy and protect your personal information under the <b>Data Privacy Act of 2012 (Republic Act No. 10173)</b>, its Implementing Rules and Regulations, and the issuances of the National Privacy Commission (NPC).</p>
+    <h3>What we collect</h3><ul><li>Personal and contact details: name, birth date, civil status, address, phone, email and emergency contacts.</li><li>Employment records: position, assignment, contracts, evaluations, training, disciplinary and separation records.</li><li>Government numbers: TIN, SSS, PhilHealth and Pag-IBIG.</li><li>Pay records: salary, allowances, deductions, loans, bank details and payslips.</li><li>Attendance: clock-in and out times, and when you clock in by phone, a selfie and your location at that moment.</li><li>Health information, such as medical exam results and medical certificates for leave. This is sensitive personal information and is handled with extra care.</li></ul>
+    <h3>Why we use it</h3><ul><li>To manage your employment, attendance, leave, training and benefits.</li><li>To compute and pay your salary, 13th month pay and final pay.</li><li>To meet our legal duties to SSS, PhilHealth, Pag-IBIG, BIR and DOLE.</li><li>To keep our workplaces safe and our records accurate.</li></ul>
+    <h3>Who sees it</h3><p>Only authorized HR, payroll and management staff, each limited to what their role needs. You see your own records. We share data only with government agencies as the law requires, and with partners that help us pay or cover you (such as banks and HMOs), under agreements that protect it. We do not sell your data.</p>
+    <h3>How we protect and keep it</h3><p>Records are stored encrypted with access controls, and every change is logged. We keep them for as long as you work with us and afterward only as long as labor, tax and social security laws require, then dispose of them securely.</p>
+    <h3>Your rights</h3><p>You have the right to be informed, to access your data, to object, to have it corrected, to have it erased or blocked when allowed by law, to data portability, to be indemnified for damages, and to file a complaint with the National Privacy Commission (privacy.gov.ph).</p>
+    <h3>Contact us</h3><p>For questions or requests about your personal data, contact the HR Department or our Data Protection Officer at the GD Prime head office, or through <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a>.</p>
+    <p><b>Consent.</b> By ticking the box and continuing, you confirm that you have read this notice and agree to the collection and processing of your personal and sensitive personal information for the purposes above.</p>
+    <button type="button" class="close" data-sb-pn-close>I understand</button>`;
+  const showNotice = () => { if (document.querySelector(".sb-pn")) return; const d = document.createElement("div"); d.className = "sb-pn"; d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-label", "Privacy Notice"); d.innerHTML = `<div tabindex="-1">${NOTICE}</div>`; document.body.appendChild(d); d.firstChild.focus(); };
+  const dpaBox = () => `<label class="sb-dpa"><input type="checkbox" id="sb-dpa" required ${dpaNow ? "checked" : ""}><span>I have read the <a data-sb-pn>Privacy Notice</a> and agree to GD Prime processing my personal information under the Data Privacy Act of 2012 (RA 10173).</span></label>`;
+  const dpaSave = async () => { try { await sb.auth.updateUser({ data: { dpa_v: DPA_V, dpa_at: new Date().toISOString() } }); } catch {} };
   function gate(msg, kind) {
     let g = document.querySelector(".sb-gate"); g?.classList.add("seen");
     if (!g) { const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st); g = document.createElement("div"); g.className = "sb-gate"; document.body.appendChild(g); }
     const logo = window.CO_LOGO_URL || "";
-    const title = { in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
+    const title = { dpa: "Privacy consent", in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
     const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     const feats = [[ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'), "Clock in from your phone", "Selfie and location, right at your site"], [ic('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>'), "Payslips and pay", "Every cutoff, 13th month and loans"], [ic('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'), "Leave and requests", "File, track and get approvals fast"], [ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'), "Ask HR anytime", "Answers on policies, benefits and forms"]];
-    const hello = { in: ["Welcome back", "Sign in with your work email to continue."], up: ["Join GD Prime HR", "Create your account with the email HR has on file."], reset: ["Reset your password", "We'll email you a secure link."], newpw: ["Set a new password", "Choose at least 8 characters."] }[mode];
+    const hello = { in: ["Welcome back", "Sign in with your work email to continue."], up: ["Join GD Prime HR", "Create your account with the email HR has on file."], reset: ["Reset your password", "We'll email you a secure link."], newpw: ["Set a new password", "Choose at least 8 characters."], dpa: ["Your privacy matters", "Before you continue, please read our Privacy Notice and confirm your consent."] }[mode];
     g.innerHTML = `<div class="sb-wrap"><aside class="sb-hero"><div class="sb-brand">${logo ? `<img src="${logo}" width="56" height="56" alt="">` : ""}<div><b>GD Prime Property Management Corporation</b><span>HR &amp; Payroll Portal</span></div></div>
       <span class="sb-eyebrow">For every GD Prime employee</span><h2>Your work life,<br><em>beautifully</em> in one place.</h2>
       <p class="sb-lead">Time, pay, leave and HR help for our people at the head office and every project site, from your phone or desk.</p>
@@ -236,24 +260,33 @@
       </aside>
       <form class="sb-card" novalidate><h1>${hello[0]}</h1><p class="sub" aria-label="${title}">${hello[1]}</p>
       ${mode === "up" ? `<label for="sb-name">Full name</label><input id="sb-name" autocomplete="name" required>` : ""}
-      ${mode !== "newpw" ? `<label for="sb-email">Email</label><input id="sb-email" type="email" autocomplete="email" required>` : ""}
-      ${mode !== "reset" ? `<label for="sb-pw">${mode === "newpw" ? "New password" : "Password"}</label><input id="sb-pw" type="password" autocomplete="${mode === "in" ? "current-password" : "new-password"}" minlength="8" required>` : ""}
-      <button class="go" type="submit">${{ in: "Sign in", up: "Create account", reset: "Send reset link", newpw: "Save password" }[mode]}</button>
+      ${mode !== "newpw" && mode !== "dpa" ? `<label for="sb-email">Email</label><input id="sb-email" type="email" autocomplete="email" required>` : ""}
+      ${mode !== "reset" && mode !== "dpa" ? `<label for="sb-pw">${mode === "newpw" ? "New password" : "Password"}</label><input id="sb-pw" type="password" autocomplete="${mode === "in" ? "current-password" : "new-password"}" minlength="8" required>` : ""}
+      ${["in", "up", "dpa"].includes(mode) ? dpaBox() : ""}
+      <button class="go" type="submit">${{ dpa: "Agree and continue", in: "Sign in", up: "Create account", reset: "Send reset link", newpw: "Save password" }[mode]}</button>
       <div class="sb-msg ${kind || ""}" role="status">${msg || ""}</div>
-      <div class="links">${mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
+      <div class="links">${mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
       <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
-      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a></div></div>`;
+      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button></div></div>`;
     g.querySelector("input")?.focus();
   }
+  document.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-sb-pn]")) { ev.preventDefault(); showNotice(); return; }
+    if (ev.target.closest("[data-sb-pn-close]") || ev.target.classList?.contains("sb-pn")) { document.querySelector(".sb-pn")?.remove(); document.getElementById("sb-dpa")?.focus(); return; }
+    if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); sb.auth.signOut(); return; } }, true);
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelector(".sb-pn")?.remove(); });
   document.addEventListener("click", (ev) => { const a = ev.target.closest("[data-sb]"); if (!a) return; ev.preventDefault(); mode = a.dataset.sb; gate(); });
   document.addEventListener("submit", async (ev) => {
     const f = ev.target.closest(".sb-card"); if (!f) return; ev.preventDefault();
-    const v = (id) => f.querySelector(id)?.value.trim() || ""; const btn = f.querySelector("button.go"); btn.disabled = true;
+    const v = (id) => f.querySelector(id)?.value.trim() || ""; const btn = f.querySelector("button.go");
+    const ck = f.querySelector("#sb-dpa"); if (ck && !ck.checked) { ck.closest(".sb-dpa").classList.add("bad"); const m = f.querySelector(".sb-msg"); m.className = "sb-msg err"; m.textContent = "Please read the Privacy Notice and tick the box to continue."; ck.focus(); return; }
+    if (ck) dpaNow = true; btn.disabled = true;
     try {
+      if (mode === "dpa") { await dpaSave(); const s0 = held; held = null; mode = "in"; await start(s0); return; }
       if (mode === "in") { const { error } = await sb.auth.signInWithPassword({ email: v("#sb-email"), password: f.querySelector("#sb-pw").value }); if (error) throw error; }
       else if (mode === "up") {
         if (!v("#sb-name")) throw new Error("Enter your full name.");
-        const { data, error } = await sb.auth.signUp({ email: v("#sb-email"), password: f.querySelector("#sb-pw").value, options: { data: { full_name: v("#sb-name") }, emailRedirectTo: location.origin + location.pathname } });
+        const { data, error } = await sb.auth.signUp({ email: v("#sb-email"), password: f.querySelector("#sb-pw").value, options: { data: { full_name: v("#sb-name"), dpa_v: DPA_V, dpa_at: new Date().toISOString() }, emailRedirectTo: location.origin + location.pathname } });
         if (error) throw error;
         if (!data.session) { mode = "in"; gate("Check your email and tap the confirmation link, then sign in here.", "ok"); return; }
       } else if (mode === "reset") {
@@ -265,6 +298,7 @@
 
   async function start(session) {
     const u = session.user; const name = u.user_metadata?.full_name || u.user_metadata?.name || "";
+    if (u.user_metadata?.dpa_v !== DPA_V) { if (dpaNow) dpaSave(); else { held = session; mode = "dpa"; gate(); return; } }
     const { data, error } = await sb.rpc("hr_claim", { display_name: name || null });
     if (error) { gate("Couldn't reach the HR database. Check your connection and reload.", "err"); return; }
     me = { id: u.id, email: u.email, name: name || u.email, editor: !!data?.editor, owner: !!data?.owner };
