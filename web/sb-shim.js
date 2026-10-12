@@ -186,28 +186,63 @@
   sb.auth.onAuthStateChange((_ev, session) => { swToken(session?.access_token); if (session) sb.realtime.setAuth(session.access_token); });
 
   /* ---------- sign-in screen ---------- */
-  const css = `.sb-gate{position:fixed;inset:0;z-index:9999;background:linear-gradient(160deg,#0D1729,#16233F);display:grid;place-items:center;padding:16px;font-family:Manrope,system-ui,sans-serif;overflow:auto}
-.sb-card{background:#fff;border-radius:18px;max-width:400px;width:100%;padding:28px 24px;box-shadow:0 20px 60px rgba(0,0,0,.35);color:#14213D}
-.sb-card img{display:block;margin:0 auto 10px;border-radius:50%}.sb-card h1{font-family:"Playfair Display",Georgia,serif;font-size:24px;text-align:center;margin:0 0 4px}
-.sb-card .sub{text-align:center;color:#5F6472;margin:0 0 18px;font-size:14px}.sb-card label{display:block;font-weight:700;font-size:13px;margin:12px 0 5px}
-.sb-card input{width:100%;box-sizing:border-box;border:1px solid #CBD2E1;border-radius:10px;padding:12px;font:inherit;font-size:16px}
-.sb-card button.go{width:100%;margin-top:18px;min-height:48px;border:0;border-radius:12px;background:#1B2B4B;color:#fff;font:inherit;font-weight:800;font-size:16px;cursor:pointer}
-.sb-card .links{display:flex;justify-content:space-between;gap:10px;margin-top:14px;font-size:14px;flex-wrap:wrap}.sb-card .links a{color:#8A6A1F;font-weight:700;cursor:pointer;text-decoration:underline}
+  const css = `.sb-gate{position:fixed;inset:0;z-index:9999;overflow:auto;font-family:Manrope,system-ui,sans-serif;color:#F4EFE4;background:#0A1222;
+  background-image:radial-gradient(900px 520px at 18% 8%,rgba(46,84,160,.30),transparent 65%),radial-gradient(700px 420px at 92% 0%,rgba(201,164,92,.12),transparent 60%),radial-gradient(900px 700px at 110% 110%,rgba(46,84,160,.35),transparent 60%),linear-gradient(160deg,#0A1222 0%,#101C35 55%,#0B1427 100%)}
+.sb-gate::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;background-image:linear-gradient(rgba(201,164,92,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(201,164,92,.07) 1px,transparent 1px);background-size:72px 72px;-webkit-mask-image:radial-gradient(ellipse at 30% 40%,#000 0%,transparent 70%);mask-image:radial-gradient(ellipse at 30% 40%,#000 0%,transparent 70%)}
+.sb-wrap{position:relative;min-height:100%;max-width:1240px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,440px);gap:64px;align-items:center;align-content:center;padding:48px 40px;box-sizing:border-box}
+.sb-hero{display:flex;flex-direction:column;gap:26px;animation:sbIn .8s ease both}
+.sb-brand{display:flex;align-items:center;gap:14px}.sb-brand img{width:56px;height:56px;border-radius:50%;box-shadow:0 0 0 1px rgba(224,190,122,.55),0 0 0 6px rgba(224,190,122,.08)}
+.sb-brand b{display:block;font-family:"Playfair Display",Georgia,serif;font-size:18px;letter-spacing:.01em;color:#fff}.sb-brand span{display:block;font-size:11.5px;letter-spacing:.24em;text-transform:uppercase;color:#E0BE7A;font-weight:700;margin-top:3px}
+.sb-eyebrow{display:inline-flex;align-items:center;gap:10px;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:#E0BE7A;font-weight:700}.sb-eyebrow::before{content:"";width:34px;height:1px;background:linear-gradient(90deg,#E0BE7A,transparent)}
+.sb-hero h2{font-family:"Playfair Display",Georgia,serif;font-weight:700;font-size:clamp(34px,4.4vw,58px);line-height:1.06;margin:0;color:#fff;letter-spacing:-.01em}
+.sb-hero h2 em{font-style:italic;background:linear-gradient(100deg,#F3DDA6,#C9A45C 60%,#F3DDA6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sb-lead{margin:0;max-width:52ch;font-size:16.5px;line-height:1.65;color:#C8CFDE}
+.sb-feats{list-style:none;margin:6px 0 0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:620px}
+.sb-feats li{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(224,190,122,.16);backdrop-filter:blur(6px)}
+.sb-feats svg{flex:0 0 auto;width:34px;height:34px;padding:7px;box-sizing:border-box;border-radius:10px;background:rgba(224,190,122,.12);color:#E0BE7A}
+.sb-feats b{display:block;font-size:14.5px;color:#fff}.sb-feats small{display:block;font-size:13px;color:#AEB7CA;margin-top:2px;line-height:1.45}
+.sb-foot{grid-column:1;margin-top:-40px;font-size:12.5px;color:#8C96AD;letter-spacing:.02em}.sb-foot a{color:#E0BE7A;text-decoration:none}
+.sb-card{position:relative;background:linear-gradient(180deg,#FFFFFF,#FBF8F1);border-radius:24px;width:100%;padding:36px 32px 30px;box-sizing:border-box;color:#14213D;box-shadow:0 40px 90px -30px rgba(0,0,0,.65),0 0 0 1px rgba(224,190,122,.35);animation:sbIn .8s .12s ease both}
+.sb-card::before{content:"";position:absolute;left:32px;right:32px;top:0;height:3px;border-radius:0 0 3px 3px;background:linear-gradient(90deg,transparent,#C9A45C,transparent)}
+.sb-card img{display:none}.sb-card h1{font-family:"Playfair Display",Georgia,serif;font-size:30px;margin:0 0 6px;color:#0F1B33}
+.sb-card .sub{color:#6A7080;margin:0 0 20px;font-size:14.5px;line-height:1.5}.sb-card label{display:block;font-weight:700;font-size:12.5px;letter-spacing:.04em;margin:14px 0 6px;color:#2A3550}
+.sb-card input{width:100%;box-sizing:border-box;border:1px solid #D9DCE5;background:#fff;border-radius:12px;padding:13px 14px;font:inherit;font-size:16px;color:#14213D;transition:border-color .15s,box-shadow .15s}
+.sb-card input:focus{outline:0;border-color:#C9A45C;box-shadow:0 0 0 4px rgba(201,164,92,.18)}
+.sb-card button.go{width:100%;margin-top:22px;min-height:52px;border:0;border-radius:14px;background:linear-gradient(135deg,#0F1B33,#22365F);color:#fff;font:inherit;font-weight:800;font-size:16px;letter-spacing:.02em;cursor:pointer;box-shadow:0 12px 26px -12px rgba(15,27,51,.8),inset 0 -2px 0 rgba(224,190,122,.55);transition:transform .15s,box-shadow .15s}
+.sb-card button.go:hover{transform:translateY(-1px);box-shadow:0 16px 30px -12px rgba(15,27,51,.9),inset 0 -2px 0 #E0BE7A}.sb-card button.go:disabled{opacity:.6;cursor:wait;transform:none}
+.sb-card .links{display:flex;justify-content:space-between;gap:10px;margin-top:18px;font-size:14px;flex-wrap:wrap}.sb-card .links a{color:#8A6A1F;font-weight:700;cursor:pointer;text-decoration:none;border-bottom:1px solid rgba(138,106,31,.35)}.sb-card .links a:hover{border-color:#8A6A1F}
+.sb-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;font-size:12px;color:#7A8090}
 .sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}
+.sb-gate.seen .sb-hero,.sb-gate.seen .sb-card{animation:none}
+@keyframes sbIn{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sb-hero,.sb-card{animation:none}}
+@media (max-width:960px){.sb-wrap{grid-template-columns:minmax(0,1fr);gap:28px;padding:28px 18px 32px;max-width:560px}.sb-hero{gap:16px}.sb-lead{font-size:15px}.sb-feats{gap:8px}.sb-feats li{padding:10px 12px}.sb-feats small{display:none}.sb-foot{margin-top:0;text-align:center}}
+@media (max-width:600px){.sb-wrap{gap:22px;padding-top:22px}.sb-feats,.sb-eyebrow{display:none}.sb-hero h2{font-size:32px}.sb-brand img{width:46px;height:46px}.sb-brand b{font-size:15.5px}}
+@media (max-width:420px){.sb-feats svg{width:30px;height:30px;padding:6px}.sb-feats b{font-size:13px}.sb-card{padding:30px 20px 24px}.sb-card::before{left:20px;right:20px}}
 .sb-out{display:block;margin:10px 12px 18px;background:transparent;border:1px solid rgba(201,164,92,.45);color:#C9D2E6;border-radius:99px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}`;
   let mode = "in";
   function gate(msg, kind) {
-    let g = document.querySelector(".sb-gate");
+    let g = document.querySelector(".sb-gate"); g?.classList.add("seen");
     if (!g) { const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st); g = document.createElement("div"); g.className = "sb-gate"; document.body.appendChild(g); }
     const logo = window.CO_LOGO_URL || "";
     const title = { in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
-    g.innerHTML = `<form class="sb-card" novalidate>${logo ? `<img src="${logo}" width="64" height="64" alt="">` : ""}<h1>GD Prime HR</h1><p class="sub">${title}</p>
+    const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+    const feats = [[ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'), "Clock in from your phone", "Selfie and location, right at your site"], [ic('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>'), "Payslips and pay", "Every cutoff, 13th month and loans"], [ic('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'), "Leave and requests", "File, track and get approvals fast"], [ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'), "Ask HR anytime", "Answers on policies, benefits and forms"]];
+    const hello = { in: ["Welcome back", "Sign in with your work email to continue."], up: ["Join GD Prime HR", "Create your account with the email HR has on file."], reset: ["Reset your password", "We'll email you a secure link."], newpw: ["Set a new password", "Choose at least 8 characters."] }[mode];
+    g.innerHTML = `<div class="sb-wrap"><aside class="sb-hero"><div class="sb-brand">${logo ? `<img src="${logo}" width="56" height="56" alt="">` : ""}<div><b>GD Prime Property Management Corporation</b><span>HR &amp; Payroll Portal</span></div></div>
+      <span class="sb-eyebrow">For every GD Prime employee</span><h2>Your work life,<br><em>beautifully</em> in one place.</h2>
+      <p class="sb-lead">Time, pay, leave and HR help for our people at the head office and every project site, from your phone or desk.</p>
+      <ul class="sb-feats">${feats.map(([i, t, d]) => `<li>${i}<div><b>${t}</b><small>${d}</small></div></li>`).join("")}</ul>
+      </aside>
+      <form class="sb-card" novalidate><h1>${hello[0]}</h1><p class="sub" aria-label="${title}">${hello[1]}</p>
       ${mode === "up" ? `<label for="sb-name">Full name</label><input id="sb-name" autocomplete="name" required>` : ""}
       ${mode !== "newpw" ? `<label for="sb-email">Email</label><input id="sb-email" type="email" autocomplete="email" required>` : ""}
       ${mode !== "reset" ? `<label for="sb-pw">${mode === "newpw" ? "New password" : "Password"}</label><input id="sb-pw" type="password" autocomplete="${mode === "in" ? "current-password" : "new-password"}" minlength="8" required>` : ""}
       <button class="go" type="submit">${{ in: "Sign in", up: "Create account", reset: "Send reset link", newpw: "Save password" }[mode]}</button>
       <div class="sb-msg ${kind || ""}" role="status">${msg || ""}</div>
-      <div class="links">${mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div></form>`;
+      <div class="links">${mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
+      <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
+      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a></div></div>`;
     g.querySelector("input")?.focus();
   }
   document.addEventListener("click", (ev) => { const a = ev.target.closest("[data-sb]"); if (!a) return; ev.preventDefault(); mode = a.dataset.sb; gate(); });
