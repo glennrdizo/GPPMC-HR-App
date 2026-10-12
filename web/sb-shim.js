@@ -94,10 +94,10 @@
   };
 
   /* ---------- files: stored privately; /_blob/<id> is served by sw.js with the signed-in token ---------- */
-  const extOf = (t) => ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "application/pdf": "pdf", "image/svg+xml": "svg" }[t] || "bin");
+  const extOf = (t) => ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "application/pdf": "pdf", "image/svg+xml": "svg", "audio/webm": "webm", "video/webm": "webm", "audio/mp4": "m4a", "video/mp4": "mp4", "audio/ogg": "ogg" }[t] || "bin");
   const assets = {
     upload: async (blob, opts) => {
-      const type = opts?.type || blob?.type || "application/octet-stream";
+      const type = (opts?.type || blob?.type || "application/octet-stream").replace(/;.*$/, "");
       const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}.${extOf(type)}`;
       const { error } = await sb.storage.from(BUCKET).upload(id, blob, { contentType: type, upsert: false });
       if (error) throw fail(/size|large/i.test(error.message) ? "too_large" : "unavailable", error.message);
