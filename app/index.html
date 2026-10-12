@@ -11963,7 +11963,7 @@ const RF = { navy: "0A1F44", blue: "3B82F6", blue2: "2563EB", sky: "60A5FA", dee
 const RF_JEWEL = ["1E3A8A", "0B7A5A", "A3204F", "6D28D9", "0F766E", "A3410F", "2B4FB8", "0A1F44"];
 const RF_TONE = { good: RF.ok, watch: RF.watch, risk: RF.bad, info: RF.info };
 const RF_CO = { offices: [["MANILA OFFICE", ["Unit 1204, Jollibee Center", "San Miguel Avenue", "Ortigas Center, Pasig City 1605"]], ["CEBU OFFICE", ["The Reef Mactan, Block 5 Lot 4", "Vistamar Subdivision, Angasil Road", "Mactan, Lapu-Lapu City"]]],
-  contact: ["+63 917 829 4477", "(02) 5310 2016", "(02) 5310 2019"], digital: ["www.gd-prime.com", "info@gd-prime.com", "grdizo@gd-prime.com"] };
+  contact: ["+63 917 829 4477", "(02) 5310 2016", "(02) 5310 2019"], digital: ["www.gd-prime.com", "info@gd-prime.com"] };
 const RF_PARTS = [["Executive Summary", "What happened this month, in brief."], ["Key Figures", "Eight measures, compared with last month."], ["Six-Month Trends", "Headcount, movement, payroll cost and time."],
   ["Findings & Actions", "What needs attention, and what we will do."], ["Module Analysis", "Every module and submodule, reviewed."], ["Detailed Tables", "The records behind the figures."]];
 const rfHex = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
@@ -11971,7 +11971,7 @@ const rfHex = (h) => [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), 
 async function rfPng(src, size, draw) { const im = new Image(); im.src = src; await im.decode(); const cv = document.createElement("canvas"); cv.width = cv.height = size; const g = cv.getContext("2d"); if (draw) draw(g, size); g.drawImage(im, draw ? size * 0.25 : 0, draw ? size * 0.25 : 0, draw ? size * 0.5 : size, draw ? size * 0.5 : size); return cv.toDataURL("image/png"); }
 async function rfAssets() {
   const logo = await rfPng(CO_LOGO, 160).catch(() => null);
-  const ic = async (k, c) => rfPng("data:image/svg+xml;charset=utf-8," + encodeURIComponent(icon(k, 24).replace('stroke="currentColor"', 'stroke="#ffffff"').replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')), 128, (g, s) => { g.fillStyle = "#" + c; g.beginPath(); g.arc(s / 2, s / 2, s / 2, 0, 7); g.fill(); }).catch(() => null);
+  const ic = async (k, c) => rfPng("data:image/svg+xml;charset=utf-8," + encodeURIComponent(icon(k, 24).replace('stroke="currentColor"', 'stroke="#ffffff"').replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ')), 128, (g, s) => { g.fillStyle = "rgba(255,255,255,0.2)"; g.beginPath(); g.arc(s / 2, s / 2, s / 2, 0, 7); g.fill(); }).catch(() => null);
   const keys = ["people", "plus", "door", "log", "cal", "clock", "pay", "project"]; const icons = [];
   for (let i = 0; i < keys.length; i++) icons.push(await ic(keys[i], RF_JEWEL[i]));
   return { logo, icons };
@@ -12024,12 +12024,12 @@ function rfPlan(D, R, X, mods, A) {
   divider(2); body("Key Figures", "Key figures", "The month in eight numbers");
   const kp = [["Active employees", M.end, P.end, "n", "up"], ["New hires", M.hires, P.hires, "n", "up"], ["Separations", M.seps, P.seps, "n", "down"], ["Turnover (month)", M.turnover, P.turnover, "p", "down"], ["Absence rate", M.absRate, P.absRate, "p", "down"], ["Overtime hours", M.ot, P.ot, "n", "down"], ["Payroll cost", M.cost, P.cost, "m", "down"], ["Projects staffed", M.fill ?? 0, P.fill ?? 0, "p", "up"]];
   kp.forEach(([l, v, pv, f, better], i) => { const w = 2.1, h = 1.5, x = 0.5 + (i % 4) * 2.3, y = 1.45 + Math.floor(i / 4) * 1.62, cx = x + w / 2; const c = pv ? chg(v, pv) : null; const good = c == null || c === 0 ? null : (c > 0) === (better === "up");
-    D.rect(x, y, w, h, { fill: "FFFFFF", line: RF.line, radius: 0.08 }); D.rect(x + 0.25, y, w - 0.5, 0.04, { fill: RF_JEWEL[i] });
+    D.rect(x, y, w, h, { fill: RF_JEWEL[i], line: "E4C98E", radius: 0.08 }); D.rect(x + 0.25, y, w - 0.5, 0.04, { fill: "E4C98E" });
     if (A.icons[i]) D.img(A.icons[i], cx - 0.17, y + 0.13, 0.34, 0.34);
-    D.text(fv(v, f), x + 0.05, y + 0.5, w - 0.1, 0.42, { size: f === "m" ? 15 : 22, color: RF.navy, font: "serif", bold: true, align: "center", valign: "middle" });
-    D.rect(cx - 0.2, y + 0.95, 0.4, 0.02, { fill: RF.blue });
-    D.text(l, x + 0.05, y + 1.0, w - 0.1, 0.22, { size: 9.5, color: RF.slate, align: "center" });
-    D.text(c == null ? "No figure last month" : c === 0 ? "Same as last month" : `${c > 0 ? "+" : "-"}${pct(Math.abs(c))} vs last month`, x + 0.05, y + 1.22, w - 0.1, 0.2, { size: 8.5, bold: true, color: good == null ? RF.mute : good ? RF.ok : RF.bad, align: "center" }); });
+    D.text(fv(v, f), x + 0.05, y + 0.5, w - 0.1, 0.42, { size: f === "m" ? 15 : 22, color: "FFFFFF", font: "serif", bold: true, align: "center", valign: "middle" });
+    D.rect(cx - 0.2, y + 0.95, 0.4, 0.02, { fill: "E4C98E" });
+    D.text(l, x + 0.05, y + 1.0, w - 0.1, 0.22, { size: 9.5, color: "E8ECF5", align: "center" });
+    D.text(c == null ? "No figure last month" : c === 0 ? "Same as last month" : `${c > 0 ? "+" : "-"}${pct(Math.abs(c))} vs last month`, x + 0.05, y + 1.22, w - 0.1, 0.2, { size: 8.5, bold: true, color: good == null ? "E4C98E" : good ? "A7F3D0" : "FECDD3", align: "center" }); });
   band(X.sum[0] ? cut(X.sum[0], 160) : `${M.end} active employees at month end.`, 4.82);
   // 03 Trends
   divider(3); body("Six-Month Trends", "Six-month trends", "How the last six months moved"); const labs = trend.map((t) => mShort(t.month));
