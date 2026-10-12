@@ -31,3 +31,10 @@ setTimeout(async function mail(n = 0) { if (!S.userCap?.profiles || !S.myId) { i
   try { const me = await S.userCap.me?.().catch(() => null); if (me?.name && !isMail(me.name)) S.myName = String(me.name).trim(); else if (isMail(me?.name)) S.myEmail = me.name;
     const ps = await S.userCap.profiles([S.myId]); const p = ps?.[S.myId] || {}; const em = p.email || (isMail(p.name) ? p.name : ""); if (em) S.myEmail = String(em).trim();
     if (p.name && !isMail(p.name)) S.myName = String(p.name).trim(); if (S.view?.name === "dash") render(); } catch {} }, 1800);
+// Greeting name in gold (Glenn 2026-10-12): split "Good Afternoon, Name" into the greeting and a gold name.
+{ const RX = /^(Good (?:Morning|Afternoon|Evening)|Magandang (?:umaga|hapon|gabi)),\s+(.+)$/; const TLG = { "Good Morning": "Magandang umaga", "Good Afternoon": "Magandang hapon", "Good Evening": "Magandang gabi" };
+  const goldName = () => { for (const h of document.querySelectorAll("#main h1")) { if (h.querySelector(".gn-name") || h.childNodes.length !== 1 || h.firstChild.nodeType !== 3) continue;
+    const m = h.textContent.trim().match(RX); if (!m) continue; const w = S.lang === "tl" ? TLG[m[1]] || m[1] : m[1];
+    const sp = document.createElement("span"); sp.className = "gn-name"; sp.textContent = m[2]; h.textContent = `${w}, `; h.appendChild(sp); } };
+  let q = 0; new MutationObserver(() => { if (!q) q = requestAnimationFrame(() => { q = 0; goldName(); }); }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  const st = document.createElement("style"); st.textContent = `.gn-name{color:#E4C98E;background:linear-gradient(180deg,#F3E1B0,#D4AF63);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}@media print{.gn-name{-webkit-text-fill-color:currentColor}}`; document.head.appendChild(st); }
