@@ -228,7 +228,13 @@
 @media (max-width:960px){.sb-wrap{grid-template-columns:minmax(0,1fr);gap:28px;padding:28px 18px 32px;max-width:560px}.sb-hero{gap:16px}.sb-lead{font-size:15px}.sb-feats{gap:8px}.sb-feats li{padding:10px 12px}.sb-feats small{display:none}.sb-foot{margin-top:0;text-align:center}}
 @media (max-width:600px){.sb-wrap{gap:22px;padding-top:22px}.sb-feats,.sb-eyebrow{display:none}.sb-hero h2{font-size:32px}.sb-brand img{width:46px;height:46px}.sb-brand b{font-size:15.5px}}
 @media (max-width:420px){.sb-feats svg{width:30px;height:30px;padding:6px}.sb-feats b{font-size:13px}.sb-card{padding:30px 20px 24px}.sb-card::before{left:20px;right:20px}}
-.sb-out{display:block;margin:10px 12px 18px;background:transparent;border:1px solid rgba(201,164,92,.45);color:#C9D2E6;border-radius:99px;padding:7px 12px;font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;text-align:left}`;
+.sb-acct{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:4px 4px 14px;padding:10px 10px 10px 12px;border:1px solid rgba(201,164,92,.4);border-radius:14px;background:rgba(255,255,255,.05)}
+.sb-ini{flex:none;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#B8913F,#E4C98E);color:#152B50;font-weight:800;font-size:13px}
+.sb-who{min-width:0;flex:1 1 150px;display:flex;flex-direction:column;line-height:1.25}.sb-who b{color:#fff;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sb-who small{color:#AFC0DD;font-size:11.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-out{flex:1 0 auto;justify-content:center;display:inline-flex;align-items:center;gap:6px;min-height:36px;background:transparent;border:1px solid rgba(228,201,142,.7);color:#F3E3BF;border-radius:99px;padding:6px 12px;font:inherit;font-size:13px;font-weight:700;cursor:pointer}
+.sb-out:hover,.sb-out:focus-visible{background:#E4C98E;color:#152B50;outline:none}.sb-out:disabled{opacity:.7;cursor:progress}
+.sb-out-mini{display:none}
+@media (max-width:900px){.sb-out-mini{display:grid;place-items:center;flex:none;width:44px;height:44px;margin-left:auto;margin-right:8px;border-radius:12px;border:1px solid rgba(228,201,142,.6);background:transparent;color:#F3E3BF;cursor:pointer}.rail:not(:has(#nav[data-open="true"])) .sb-acct{display:none}.sb-acct{margin:12px 0 4px}}`;
   let mode = "in";
   /* Data Privacy Act of 2012 (RA 10173): consent is required at sign-in and saved on the account with the notice version and time. */
   const DPA_V = "2026-10-12"; let dpaNow = false, held = null;
@@ -273,7 +279,7 @@
   document.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-sb-pn]")) { ev.preventDefault(); showNotice(); return; }
     if (ev.target.closest("[data-sb-pn-close]") || ev.target.classList?.contains("sb-pn")) { document.querySelector(".sb-pn")?.remove(); document.getElementById("sb-dpa")?.focus(); return; }
-    if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); sb.auth.signOut(); return; } }, true);
+    if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); signOutNow(); return; } }, true);
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelector(".sb-pn")?.remove(); });
   document.addEventListener("click", (ev) => { const a = ev.target.closest("[data-sb]"); if (!a) return; ev.preventDefault(); mode = a.dataset.sb; gate(); });
   document.addEventListener("submit", async (ev) => {
@@ -309,15 +315,30 @@
   sb.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { mode = "newpw"; gate(); return; }
     if (session && !started && ev !== "PASSWORD_RECOVERY") { started = true; start(session); }
-    if (ev === "SIGNED_OUT") location.reload();
+    if (ev === "SIGNED_OUT" && !leaving) location.reload();
   });
   const boot = async () => { const { data } = await sb.auth.getSession(); if (!data.session && !started && mode !== "newpw") gate(); };
   if (document.body) boot(); else document.addEventListener("DOMContentLoaded", boot);
 
-  // Sign out, at the bottom of the menu.
+  // Sign out: an account bar at the top of the menu (desktop) and at the top of the opened menu (phone).
+  let leaving = false; const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  async function signOutNow(btn) {
+    if (leaving) return; leaving = true; if (btn) { btn.disabled = true; btn.querySelector("b") ? (btn.querySelector("b").textContent = "Signing out…") : (btn.textContent = "Signing out…"); }
+    try { await Promise.race([sb.auth.signOut({ scope: "local" }), new Promise((r) => setTimeout(r, 4000))]); } catch {}
+    try { for (const k of Object.keys(localStorage)) if (/^sb-|supabase/i.test(k)) localStorage.removeItem(k); } catch {}
+    try { swToken(null); } catch {}
+    location.reload();
+  }
+  window.hrSignOut = signOutNow;
   new MutationObserver(() => {
-    const nav = document.getElementById("nav"); if (!nav || !me || nav.querySelector(".sb-out")) return;
-    const b = document.createElement("button"); b.className = "sb-out no-tl"; b.type = "button"; b.textContent = `Sign out · ${me.email}`;
-    b.onclick = () => sb.auth.signOut(); nav.appendChild(b);
+    const brand = document.querySelector(".rail > .brand"); if (!brand || !me || document.querySelector(".sb-acct")) return;
+    const ini = String(me.name || me.email || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
+    const d = document.createElement("div"); d.className = "sb-acct no-tl";
+    d.innerHTML = `<span class="sb-ini" aria-hidden="true">${esc(ini)}</span><span class="sb-who"><b>${esc(me.name && me.name !== me.email ? me.name : "Signed in")}</b><small>${esc(me.email || "")}</small></span>
+      <button type="button" class="sb-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><b>Sign out</b></button>`;
+    d.querySelector(".sb-out").addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(ev.currentTarget); });
+    brand.after(d);
+    const tg = document.getElementById("menu-toggle"); if (tg && !document.querySelector(".sb-out-mini")) { const m = document.createElement("button"); m.type = "button"; m.className = "sb-out-mini no-tl"; m.setAttribute("aria-label", "Sign out"); m.title = "Sign out";
+      m.innerHTML = d.querySelector(".sb-out svg").outerHTML; m.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(m); }); tg.before(m); }
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
