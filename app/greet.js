@@ -46,3 +46,7 @@ setTimeout(async function mail(n = 0) { if (!S.userCap?.profiles || !S.myId) { i
 @media (max-width:1180px){.hero .hero-brand{position:static;order:-1;width:100%;max-width:none;flex-direction:row;text-align:left;justify-content:flex-start}}
 @media (max-width:600px){.hero .hero-brand .hero-logo{width:52px;height:52px}.hero .hero-brand p.hero-co{font-size:16px}.hero .hero-brand p.hero-tag{font-size:12px}}
 @media print{.hero .hero-brand{position:static}}`; document.head.appendChild(st); }
+// Side menu: larger module headings (Glenn 2026-10-12).
+{ const st = document.createElement("style"); st.textContent = `#nav .nav-label,.rail .nav-label{font-size:16px !important;letter-spacing:.06em;line-height:1.25}
+#nav .nav-label .mod-ic{width:32px;height:32px}
+@media (max-width:600px),(min-width:901px) and (max-width:1180px){#nav .nav-label,.rail .nav-label{font-size:15px !important}}`; document.head.appendChild(st); }
