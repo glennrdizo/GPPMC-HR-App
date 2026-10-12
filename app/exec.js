@@ -175,10 +175,15 @@ async function exPdf(R) {
   y += 6; h2("Key figures");
   const kp = [["Active employees", M.end, P.end, "n"], ["New hires", M.hires, P.hires, "n"], ["Separations", M.seps, P.seps, "n"], ["Turnover (month)", M.turnover, P.turnover, "p"], ["Absence rate", M.absRate, P.absRate, "p"], ["Overtime hours", M.ot, P.ot, "n"], ["Payroll cost", M.cost, P.cost, "m"], ["Projects staffed", M.fill ?? 0, P.fill ?? 0, "p"]];
   const fv = (v, f) => (f === "m" ? peso(v) : f === "p" ? pct(v) : Number(v).toLocaleString("en-PH"));
+  { const JW = [[21, 43, 80], [11, 122, 90], [163, 32, 79], [109, 40, 217], [15, 118, 110], [163, 65, 15], [43, 79, 184], [21, 43, 80]]; const tw = (W - 100 - 30) / 4, th = 74;
+    kp.forEach(([l, v, pv, f], i) => { const x = 50 + (i % 4) * (tw + 10), ty = y + Math.floor(i / 4) * (th + 10); doc.setFillColor(...JW[i]); doc.roundedRect(x, ty, tw, th, 8, 8, "F"); doc.setFillColor(...gold); doc.rect(x + 8, ty, tw - 16, 2.5, "F");
+      doc.setTextColor(255, 255, 255); doc.setFont("helvetica", "normal"); doc.setFontSize(8.5); doc.text(l.toUpperCase(), x + 10, ty + 18); doc.setFont("times", "bold"); doc.setFontSize(f === "m" ? 13 : 20); doc.text(fv(v, f), x + 10, ty + 44);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(228, 201, 142); doc.text(pv ? `${chg(v, pv) > 0 ? "+" : ""}${pct(chg(v, pv))} vs last month` : "No figure last month", x + 10, ty + 62); });
+    y += 2 * (th + 10) + 8; }
   doc.autoTable({ startY: y, head: [["Figure", "This month", "Last month", "Change"]], body: kp.map(([l, v, pv, f]) => [l, fv(v, f), fv(pv, f), pv ? `${chg(v, pv) > 0 ? "+" : ""}${pct(chg(v, pv))}` : "—"]), theme: "grid", headStyles: { fillColor: navy, textColor: [255, 255, 255], fontStyle: "bold" }, styles: { fontSize: 10, textColor: ink }, columnStyles: { 1: { halign: "right", fontStyle: "bold" }, 2: { halign: "right" }, 3: { halign: "right" } }, margin: { left: 50, right: 50 } });
   y = doc.lastAutoTable.finalY + 26;
   // Trend chart: payroll cost and headcount, drawn as simple bars.
-  h2("Six-month trend");
+  if (y > H - 240) { doc.addPage(); y = 60; } h2("Six-month trend");
   const chart = (title, vals, fmt, x0, w) => { const top = y + 14, hh = 110, max = Math.max(1, ...vals), bw = w / vals.length; doc.setFont("helvetica", "bold"); doc.setFontSize(10); doc.setTextColor(...ink); doc.text(title, x0, y);
     vals.forEach((v, i) => { const bh = (hh * v) / max; doc.setFillColor(...(i === vals.length - 1 ? navy : [150, 165, 195])); doc.rect(x0 + i * bw + 6, top + hh - bh, bw - 12, bh, "F");
       doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(...muted); doc.text(mShort(trend[i].month), x0 + i * bw + bw / 2, top + hh + 12, { align: "center" }); doc.text(fmt(v), x0 + i * bw + bw / 2, top + hh - bh - 4, { align: "center" }); }); };
@@ -212,10 +217,10 @@ async function exPptx(R) {
   const s2 = p.addSlide({ masterName: "BODY" }); title(s2, "Key figures");
   const kp = [["Active employees", M.end, P.end, "n", "up"], ["New hires", M.hires, P.hires, "n", "up"], ["Separations", M.seps, P.seps, "n", "down"], ["Turnover (month)", M.turnover, P.turnover, "p", "down"], ["Absence rate", M.absRate, P.absRate, "p", "down"], ["Overtime hours", M.ot, P.ot, "n", "down"], ["Payroll cost", M.cost, P.cost, "m", "down"], ["Projects staffed", M.fill ?? 0, P.fill ?? 0, "p", "up"]];
   kp.forEach(([l, v, pv, f, better], i) => { const x = 0.5 + (i % 4) * 3.1, y = 1.35 + Math.floor(i / 4) * 2.7; const ch = pv ? chg(v, pv) : null; const good = ch == null || ch === 0 ? null : (ch > 0) === (better === "up");
-    s2.addShape(p.ShapeType.rect, { x, y, w: 2.9, h: 2.4, fill: { color: "FAF7F0" }, line: { color: "E7E2D6" } });
-    s2.addText(l, { x: x + 0.2, y: y + 0.15, w: 2.5, h: 0.4, fontSize: 13, color: MUTED });
-    s2.addText(f === "m" ? `₱${money(v)}` : f === "p" ? pct(v) : Number(v).toLocaleString("en-PH"), { x: x + 0.2, y: y + 0.65, w: 2.6, h: 0.8, fontSize: f === "m" ? 20 : 30, bold: true, color: INK, fontFace: "Georgia" });
-    s2.addText(ch == null ? "No figure last month" : ch === 0 ? "Same as last month" : `${ch > 0 ? "▲" : "▼"} ${pct(Math.abs(ch))} vs last month`, { x: x + 0.2, y: y + 1.6, w: 2.6, h: 0.4, fontSize: 12, color: good == null ? MUTED : good ? "15803D" : "B4462F" }); });
+    const JC = ["152B50", "0B7A5A", "A3204F", "6D28D9", "0F766E", "A3410F", "2B4FB8", "152B50"][i]; s2.addShape(p.ShapeType.roundRect, { x, y, w: 2.9, h: 2.4, fill: { color: JC }, line: { color: "E4C98E", width: 0.75 }, rectRadius: 0.12 }); s2.addShape(p.ShapeType.rect, { x: x + 0.2, y: y + 0.06, w: 2.5, h: 0.04, fill: { color: "E4C98E" }, line: { color: "E4C98E" } });
+    s2.addText(l, { x: x + 0.2, y: y + 0.15, w: 2.5, h: 0.4, fontSize: 13, color: "E8ECF5" });
+    s2.addText(f === "m" ? `₱${money(v)}` : f === "p" ? pct(v) : Number(v).toLocaleString("en-PH"), { x: x + 0.2, y: y + 0.65, w: 2.6, h: 0.8, fontSize: f === "m" ? 20 : 30, bold: true, color: "FFFFFF", fontFace: "Georgia" });
+    s2.addText(ch == null ? "No figure last month" : ch === 0 ? "Same as last month" : `${ch > 0 ? "▲" : "▼"} ${pct(Math.abs(ch))} vs last month`, { x: x + 0.2, y: y + 1.6, w: 2.6, h: 0.4, fontSize: 12, bold: true, color: good == null ? "E4C98E" : good ? "A7F3D0" : "FECDD3" }); });
   const s3 = p.addSlide({ masterName: "BODY" }); title(s3, "Six-month trends");
   const co = { showLegend: true, legendPos: "b", legendFontSize: 10, catAxisLabelFontSize: 10, valAxisLabelFontSize: 9, valGridLine: { color: "E7E2D6", size: 0.5 }, showTitle: true, titleFontSize: 12, titleColor: INK };
   s3.addChart(p.ChartType.line, [{ name: "Active employees", labels: labs, values: trend.map((t) => t.end) }], { ...co, x: 0.5, y: 1.25, w: 6.1, h: 2.8, chartColors: [NAVY], lineSize: 2, lineDataSymbolSize: 7, title: "Active employees", showLegend: false });
