@@ -39,11 +39,12 @@ setTimeout(async function mail(n = 0) { if (!S.userCap?.profiles || !S.myId) { i
   let q = 0; new MutationObserver(() => { if (!q) q = requestAnimationFrame(() => { q = 0; goldName(); }); }).observe(document.body, { childList: true, subtree: true, characterData: true });
   const st = document.createElement("style"); st.textContent = `.gn-name{color:#E4C98E;background:linear-gradient(180deg,#F3E1B0,#D4AF63);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}@media print{.gn-name{-webkit-text-fill-color:currentColor}}`; document.head.appendChild(st); }
 // Dashboard banner: logo, company name and tagline at the upper right (Glenn 2026-10-12).
-{ const st = document.createElement("style"); st.textContent = `.hero .hero-brand{position:absolute;top:24px;right:28px;z-index:1;display:flex;align-items:center;gap:14px;flex-direction:row-reverse;text-align:right;max-width:46%}
+{ const st = document.createElement("style"); st.textContent = `.hero .hero-brand{position:absolute;top:24px;right:28px;z-index:1;display:flex;align-items:center;gap:14px;flex-direction:row-reverse;text-align:right;max-width:40%}
+.hero .hero-text h1{max-width:58%}
 .hero .hero-brand .hero-logo{margin:0;flex:none;width:68px;height:68px}
 .hero .hero-brand p.hero-co{font-family:"Playfair Display",Georgia,serif;font-size:19px;font-weight:700;line-height:1.2;color:#fff;margin:0}
 .hero .hero-brand p.hero-tag{font-size:13px;font-style:italic;letter-spacing:.02em;color:#E4C98E;margin:4px 0 0}
-@media (max-width:1180px){.hero .hero-brand{position:static;order:-1;width:100%;max-width:none;flex-direction:row;text-align:left;justify-content:flex-start}}
+@media (max-width:1180px){.hero .hero-text h1{max-width:none}.hero .hero-brand{position:static;order:-1;width:100%;max-width:none;flex-direction:row;text-align:left;justify-content:flex-start}}
 @media (max-width:600px){.hero .hero-brand .hero-logo{width:52px;height:52px}.hero .hero-brand p.hero-co{font-size:16px}.hero .hero-brand p.hero-tag{font-size:12px}}
 @media print{.hero .hero-brand{position:static}}`; document.head.appendChild(st); }
 // Side menu: larger module headings (Glenn 2026-10-12).
