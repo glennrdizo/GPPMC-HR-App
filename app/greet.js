@@ -3,7 +3,10 @@
 const isMail = (s) => /@/.test(String(s || ""));
 const firstOf = (s) => String(s || "").trim().split(/\s+/)[0] || "";
 function myFirstName() {
-  const u = S.access?.users?.[S.myId] || {}; const emps = S.allEmps || S.emps;
+  const u = S.access?.users?.[S.myId] || {};
+  // The name exactly as Users & permissions shows it (Glenn 2026-10-12).
+  const listed = u.name || S.profiles?.[S.myId]?.name || S.access?.names?.[S.myId] || (S.myName && !isMail(S.myName) ? S.myName : "");
+  if (listed && !isMail(listed)) return String(listed).trim(); const emps = S.allEmps || S.emps;
   const e = (u.empId && emps?.get(u.empId)) || ((u.email || S.myEmail) && [...(emps?.values() || [])].find((x) => x.email && String(x.email).toLowerCase() === String(u.email || S.myEmail).toLowerCase()));
   if (e?.first) return e.first;
   if (S.access?.names?.[S.myId]) return firstOf(S.access.names[S.myId]);
@@ -19,8 +22,8 @@ function myFirstName() {
     : `$1 <button class="link gn-add" data-gn-add>Add your name</button>$2`); }; }
 document.addEventListener("click", async (ev) => { if (ev.target.closest("[data-gn-add]")) { S.gnEdit = true; render(); setTimeout(() => document.getElementById("gn-in")?.focus(), 50); return; }
   if (!ev.target.closest("[data-gn-save]")) return; const nm = String(document.getElementById("gn-in")?.value || "").trim().replace(/\s+/g, " ").slice(0, 60); if (!nm) return;
-  const a = S.access || {}; const next = { ...a, names: { ...(a.names || {}), [S.myId]: nm } };
-  try { await S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))); S.access = next; S.myName = nm; S.gnEdit = false; toast(`Hello, ${firstOf(nm)}!`); render(); } catch { toast("Couldn't save your name. Try again."); } });
+  const a = S.access || {}; const next = { ...a, users: { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), name: nm } } };
+  try { await S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))); S.access = next; S.myName = nm; S.gnEdit = false; toast(`Hello, ${nm}!`); render(); } catch { toast("Couldn't save your name. Try again."); } });
 document.addEventListener("keydown", (ev) => { if (ev.key === "Enter" && ev.target.id === "gn-in") document.querySelector("[data-gn-save]")?.click(); });
 { const st = document.createElement("style"); st.textContent = `.gn-add{font-size:15px;font-weight:700;margin-left:10px;vertical-align:middle;color:#E4C98E !important;text-decoration:underline}.gn-in{display:inline-block;width:min(240px,60vw);vertical-align:middle;font-size:16px;margin-left:6px}`; document.head.appendChild(st); }
 /* learn the account email too (the website gives it; claude.ai may not) */

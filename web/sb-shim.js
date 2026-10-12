@@ -252,7 +252,7 @@
   const dpaSave = async () => { try { await sb.auth.updateUser({ data: { dpa_v: DPA_V, dpa_at: new Date().toISOString() } }); } catch {} };
   function gate(msg, kind) {
     let g = document.querySelector(".sb-gate"); g?.classList.add("seen");
-    if (!g) { const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st); g = document.createElement("div"); g.className = "sb-gate"; document.body.appendChild(g); }
+    if (!g) { cssOnce(); g = document.createElement("div"); g.className = "sb-gate"; document.body.appendChild(g); }
     const logo = window.CO_LOGO_URL || "";
     const title = { dpa: "Privacy consent", in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
     const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
@@ -321,6 +321,7 @@
 
   // Sign out: an account bar pinned to the bottom of the menu (Glenn 2026-10-12).
   let leaving = false; const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  function cssOnce() { if (document.getElementById("sb-css")) return; const st = document.createElement("style"); st.id = "sb-css"; st.textContent = css; document.head.appendChild(st); }
   async function signOutNow(btn) {
     if (leaving) return; leaving = true; if (btn) { btn.disabled = true; btn.querySelector("b") ? (btn.querySelector("b").textContent = "Signing out…") : (btn.textContent = "Signing out…"); }
     try { await Promise.race([sb.auth.signOut({ scope: "local" }), new Promise((r) => setTimeout(r, 4000))]); } catch {}
@@ -332,8 +333,8 @@
   new MutationObserver(() => {
     const nav = document.getElementById("nav"); if (!nav || !me || document.querySelector(".sb-acct")) return;
     const ini = String(me.name || me.email || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
-    const d = document.createElement("div"); d.className = "sb-acct no-tl";
-    d.innerHTML = `<span class="sb-ini" aria-hidden="true">${esc(ini)}</span><span class="sb-who"><b>${esc(me.name && me.name !== me.email ? me.name : "Signed in")}</b><small>${esc(me.email || "")}</small></span>
+    cssOnce(); const d = document.createElement("div"); d.className = "sb-acct no-tl";
+    d.innerHTML = `<span class="sb-ini" aria-hidden="true">${esc(ini)}</span><span class="sb-who">${me.name && me.name !== me.email ? `<b>${esc(me.name)}</b><small>${esc(me.email || "")}</small>` : `<b>${esc(me.email || "Signed in")}</b>`}</span>
       <button type="button" class="sb-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><b>Sign out</b></button>`;
     d.querySelector(".sb-out").addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(ev.currentTarget); });
     nav.after(d);

@@ -3,7 +3,7 @@
   const D = window.__D || {}; // path -> data
   const V = {}; for (const k in D) V[k] = 1;
   const U = window.__U; // { id, email, name, editor, owner } or null (signed out)
-  let session = U ? { access_token: "tok", user: { id: U.id, email: U.email, user_metadata: { full_name: U.name } } } : null;
+  let session = U ? { access_token: "tok", user: { id: U.id, email: U.email, user_metadata: { full_name: U.name, ...(U.dpa ? { dpa_v: U.dpa } : {}) } } } : null;
   const editors = new Set(window.__EDITORS || []); if (U?.editor) editors.add(U.id);
   const subs = []; window.__writes = [];
   const isEd = () => session && editors.has(session.user.id);

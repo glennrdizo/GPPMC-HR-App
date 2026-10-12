@@ -97,7 +97,10 @@ setTimeout(async function who(n = 0) { if (!S.userCap?.profiles || !S.myId) { if
   try { const ps = await S.userCap.profiles([S.myId]); const nm = String(ps?.[S.myId]?.name || "").trim(); if (nm) { S.myName = nm; S.myFirst = nm.split(/\s+/)[0]; claimInvite().catch(() => {}); if (S.view?.name === "dash") render(); } } catch {} }, 1500);
 
 /* Users & permissions: a table of the people who use the app, with their position, email, ID number and last sign-in. */
-S.puEdit = null; S.puAcc = null;
+S.puEdit = null; S.puAcc = null; S.puDraft = null;
+// Keep typed edits while the form redraws (e.g. after opening the tick boxes).
+document.addEventListener("input", (ev) => { const f = ev.target.closest?.("#pu-form"); if (!f) return; S.puDraft = { id: f.dataset.id, name: $("#pu-name")?.value, role: $("#pu-role")?.value, emp: $("#pu-emp")?.value, email: $("#pu-email")?.value }; }, true);
+document.addEventListener("change", (ev) => { const f = ev.target.closest?.("#pu-form"); if (!f) return; S.puDraft = { id: f.dataset.id, name: $("#pu-name")?.value, role: $("#pu-role")?.value, emp: $("#pu-emp")?.value, email: $("#pu-email")?.value }; }, true);
 // The modules and sub-modules a user can open, as tick boxes (same boxes as the Access table; a change saves at once and makes the role Custom).
 function puState(id, owner) { const a = S.access || {}; const u = a.users?.[id] || {}; const key = owner ? "admin" : u.role || a.defaultRole || "admin";
   return { key, views: owner || key === "admin" ? null : viewsOf(u, key), edit: owner ? true : key === "custom" ? u.edit !== false : !!ROLES[key]?.edit }; }
@@ -122,17 +125,18 @@ function puAccess(id, owner) {
 function usersTable() {
   const a = S.access || {}; const users = a.users || {}; const P = S.profiles || {};
   const ids = [...new Set([...Object.keys(users), ...Object.keys(a.seen || {})])];
-  const nm = (id) => P[id]?.name || users[id]?.name || (id === S.myId ? "You" : "Someone");
+  const nm = (id) => users[id]?.name || P[id]?.name || (id === S.myId ? "You" : "Someone");
   ids.sort((x, y) => nm(x).localeCompare(nm(y)));
   const fmtSeen = (id) => { const t = a.seenAt?.[id]; if (t) return `${fmtDate(manilaDay(t))} ${new Intl.DateTimeFormat("en-PH", { hour: "numeric", minute: "2-digit", timeZone: "Asia/Manila" }).format(new Date(t))}`; return a.seen?.[id] ? fmtDate(a.seen[id]) : "Not yet"; };
   const empOpts = (cur) => `<option value="">Not linked</option>${active().sort((x, y) => fullName(x).localeCompare(fullName(y))).map((e) => `<option value="${e.id}" ${e.id === cur ? "selected" : ""}>${esc(fullName(e))} · ${esc(e.no || "")}</option>`).join("")}`;
   const row = (id) => { const u = users[id] || {}; const e = S.emps.get(u.empId); const me = id === S.myId; const owner = me && S.isOwner;
-    if (S.puEdit === id) return `<tr><td colspan="8"><form id="pu-form" data-id="${esc(id)}" class="form-grid" style="align-items:end" data-keep>
-      <div class="field"><label>Name</label><input class="input" value="${esc(nm(id))}" disabled></div>
-      <div class="field"><label for="pu-emp">Employee record (gives position and ID number)</label><select class="input" id="pu-emp">${empOpts(u.empId)}</select></div>
-      <div class="field"><label for="pu-email">Email address</label><input class="input" id="pu-email" type="email" value="${esc(u.email || P[id]?.email || e?.email || "")}"></div>
-      <div style="display:flex;gap:8px"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" data-pu-cancel>Cancel</button></div></form></td></tr>`;
-    return `<tr><td><b>${esc(nm(id))}</b>${me ? " (you)" : ""}</td><td>${owner ? "<b>Owner</b>" : `<select class="input" data-perm-role="${esc(id)}" aria-label="Role for ${esc(nm(id))}" style="min-width:150px">${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === u.role ? "selected" : ""}>${esc(r.name)}</option>`).join("")}${u.role ? "" : `<option value="" selected>Default (${esc(ROLES[a.defaultRole || "admin"].name)})</option>`}</select>`}</td>
+    if (S.puEdit === id) { const dr = S.puDraft?.id === id ? S.puDraft : null; const rk = dr ? dr.role : u.role; return `<tr><td colspan="8"><form id="pu-form" data-id="${esc(id)}" class="form-grid" style="align-items:end" data-keep>
+      <div class="field"><label for="pu-name">Name</label><input class="input" id="pu-name" value="${esc(dr ? dr.name : users[id]?.name || P[id]?.name || "")}" placeholder="Full name" autocomplete="off"></div>
+      <div class="field"><label for="pu-role">Role</label>${owner ? '<input class="input" value="Owner (always full access)" disabled>' : `<select class="input" id="pu-role">${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === rk ? "selected" : ""}>${esc(r.name)}</option>`).join("")}${u.role ? "" : `<option value="" ${rk ? "" : "selected"}>Default (${esc(ROLES[a.defaultRole || "admin"].name)})</option>`}</select>`}</div>
+      <div class="field"><label for="pu-emp">Employee record (gives position and ID number)</label><select class="input" id="pu-emp">${empOpts(dr ? dr.emp : u.empId)}</select></div>
+      <div class="field"><label for="pu-email">Email address</label><input class="input" id="pu-email" type="email" value="${esc(dr ? dr.email : u.email || P[id]?.email || e?.email || "")}"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary btn-sm">Save</button><button type="button" class="btn btn-ghost btn-sm" data-pu-cancel>Cancel</button><button type="button" class="btn btn-ghost btn-sm" data-pu-acc="${esc(id)}">${owner ? "See access" : "Change access (tick boxes)"}</button></div></form></td></tr>${S.puAcc === id ? `<tr><td colspan="8">${puAccess(id, owner)}</td></tr>` : ""}`; }
+    return `<tr><td style="min-width:180px"><b>${esc(nm(id))}</b>${me ? " (you)" : ""}<div><button class="link pu-edit-l" style="font-size:13px;white-space:nowrap" data-pu-edit="${esc(id)}">Edit name, role, email</button></div></td><td>${owner ? "<b>Owner</b>" : `<select class="input" data-perm-role="${esc(id)}" aria-label="Role for ${esc(nm(id))}" style="min-width:150px">${Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === u.role ? "selected" : ""}>${esc(r.name)}</option>`).join("")}${u.role ? "" : `<option value="" selected>Default (${esc(ROLES[a.defaultRole || "admin"].name)})</option>`}</select>`}</td>
       <td style="min-width:170px">${puMods(id, owner)}<div><button class="link" style="font-size:13px" data-pu-acc="${esc(id)}" aria-expanded="${S.puAcc === id}">${S.puAcc === id ? "Hide tick boxes" : owner ? "See access" : "Change access"}</button></div></td><td>${esc(e ? pos(e.posId)?.title || "" : "") || '<span class="t-muted">—</span>'}</td><td>${esc(u.email || P[id]?.email || e?.email || "") || '<span class="t-muted">—</span>'}</td>
       <td>${esc(e?.no || "") || '<span class="t-muted">—</span>'}</td><td style="white-space:nowrap">${esc(fmtSeen(id))}</td>
       <td class="num" style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-pu-edit="${esc(id)}">Edit</button> ${owner ? "" : `<button class="btn btn-ghost btn-sm" style="color:#a4262c" data-pu-del="${esc(id)}">Delete</button>`}</td></tr>${S.puAcc === id ? `<tr class="pu-accrow"><td colspan="8">${puAccess(id, owner)}</td></tr>` : ""}`; };
@@ -154,9 +158,9 @@ function usersTable() {
     <p class="t-muted" style="font-size:13px;margin:10px 0 0">Delete removes the person's role and takes them off this list. To stop them opening the app at all, also remove them from the page's Share settings on claude.ai.</p>`;
 }
 document.addEventListener("click", async (ev) => { const t = ev.target.closest("[data-pu-edit],[data-pu-del],[data-pu-cancel],[data-pu-acc]"); if (!t || !isPermAdmin()) return; ev.stopImmediatePropagation();
-  if (t.dataset.puEdit) { S.puEdit = t.dataset.puEdit; render(); return; }
+  if (t.dataset.puEdit) { S.puEdit = t.dataset.puEdit; S.puDraft = null; render(); return; }
   if (t.dataset.puAcc) { S.puAcc = S.puAcc === t.dataset.puAcc ? null : t.dataset.puAcc; render(); return; }
-  if (t.hasAttribute("data-pu-cancel")) { S.puEdit = null; render(); return; }
+  if (t.hasAttribute("data-pu-cancel")) { S.puEdit = null; S.puDraft = null; render(); return; }
   const id = t.dataset.puDel; const name = S.profiles?.[id]?.name || "this person";
   if (!await askConfirm(`Delete ${name} from the users list? Their role is removed.`, "Delete", true)) return;
   const a = S.access || {}; const users = { ...(a.users || {}) }; const seen = { ...(a.seen || {}) }; const seenAt = { ...(a.seenAt || {}) }; delete users[id]; delete seen[id]; delete seenAt[id];
@@ -164,8 +168,9 @@ document.addEventListener("click", async (ev) => { const t = ev.target.closest("
 document.addEventListener("submit", async (ev) => { const f = ev.target; if (f.id !== "pu-form" || !isPermAdmin()) return; ev.preventDefault(); ev.stopImmediatePropagation();
   const id = f.dataset.id; const a = S.access || {}; const users = { ...(a.users || {}) }; const u = { ...(users[id] || {}) };
   const email = $("#pu-email").value.trim(); if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { toast("Check the email address."); return; }
-  u.empId = $("#pu-emp").value || null; u.email = email || null;
-  users[id] = u; S.puEdit = null; try { await saveAccess({ users }, `Updated the user details of ${S.profiles?.[id]?.name || "someone"}`); } catch { toast("Couldn't save. Try again."); } }, true);
+  u.empId = $("#pu-emp").value || null; u.email = email || null; { const n = String($("#pu-name")?.value || "").trim().replace(/\s+/g, " ").slice(0, 80); u.name = n && n !== (S.profiles?.[id]?.name || "") ? n : u.name && n ? n : null; }
+  const rs = $("#pu-role"); if (rs && !(id === S.myId && S.isOwner)) { const k0 = u.role || a.defaultRole || "admin"; if (!rs.value) { delete u.role; delete u.views; delete u.mods; delete u.edit; } else if (rs.value !== u.role) { if (rs.value === "custom" && !Array.isArray(u.views)) { const vs = viewsOf(u, k0); u.views = [...vs].filter((v) => !ALWAYS.has(v)); u.mods = modsOf(vs); u.edit = k0 === "custom" ? u.edit !== false : !!ROLES[k0]?.edit; } u.role = rs.value; } }
+  users[id] = u; S.puEdit = null; S.puDraft = null; try { await saveAccess({ users }, `Updated the user details of ${u.name || S.profiles?.[id]?.name || "someone"}`); } catch { toast("Couldn't save. Try again."); } }, true);
 
 // Add user: an invitation by name; the person gets the role the first time they open the app.
 S.puAdd = null;
