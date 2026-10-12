@@ -212,7 +212,7 @@
 .sb-card button.go:hover{transform:translateY(-1px);box-shadow:0 16px 30px -12px rgba(15,27,51,.9),inset 0 -2px 0 #E0BE7A}.sb-card button.go:disabled{opacity:.6;cursor:wait;transform:none}
 .sb-card .links{display:flex;justify-content:space-between;gap:10px;margin-top:18px;font-size:14px;flex-wrap:wrap}.sb-card .links a{color:#8A6A1F;font-weight:700;cursor:pointer;text-decoration:none;border-bottom:1px solid rgba(138,106,31,.35)}.sb-card .links a:hover{border-color:#8A6A1F}
 .sb-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;font-size:12px;color:#7A8090}
-.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}
+.sb-card label small{font-weight:500;letter-spacing:0;color:#8A8F9C;text-transform:none}.sb-wait{background:#F6F1E6;border:1px solid #E4D3AC;border-radius:12px;padding:14px 16px;margin:4px 0 8px;font-size:14px;line-height:1.5;color:#2A3550}.sb-wait b{display:block;word-break:break-all}.sb-wait p{margin:8px 0 0}.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}
 .sb-gate.seen .sb-hero,.sb-gate.seen .sb-card{animation:none}
 .sb-dpa{display:flex;gap:10px;align-items:flex-start;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:#F6F1E4;border:1px solid #E8DCBC;font-size:13px;line-height:1.5;color:#3A4560;cursor:pointer}
 .sb-dpa input{width:20px;height:20px;flex:0 0 auto;margin:1px 0 0;padding:0;accent-color:#1B2B4B;cursor:pointer}.sb-dpa a,.sb-foot button,.sb-pnl{color:#8A6A1F;font-weight:700;text-decoration:underline;cursor:pointer}
@@ -254,23 +254,32 @@
     let g = document.querySelector(".sb-gate"); g?.classList.add("seen");
     if (!g) { cssOnce(); g = document.createElement("div"); g.className = "sb-gate"; document.body.appendChild(g); }
     const logo = window.CO_LOGO_URL || "";
-    const title = { dpa: "Privacy consent", in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
+    const title = { verify: "Verify your identity", wait: "Waiting for approval", dpa: "Privacy consent", in: "Sign in", up: "Create your account", reset: "Reset your password", newpw: "Set a new password" }[mode];
     const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
     const feats = [[ic('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'), "Clock in from your phone", "Selfie and location, right at your site"], [ic('<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/>'), "Payslips and pay", "Every cutoff, 13th month and loans"], [ic('<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>'), "Leave and requests", "File, track and get approvals fast"], [ic('<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/>'), "Ask HR anytime", "Answers on policies, benefits and forms"]];
-    const hello = { in: ["Welcome back", "Sign in with your work email to continue."], up: ["Join GD Prime HR", "Create your account with the email HR has on file."], reset: ["Reset your password", "We'll email you a secure link."], newpw: ["Set a new password", "Choose at least 8 characters."], dpa: ["Your privacy matters", "Before you continue, please read our Privacy Notice and confirm your consent."] }[mode];
+    const hello = { in: ["Welcome back", "Sign in with your work email to continue."], up: ["Join GD Prime HR", "Create your account with the email HR has on file."], reset: ["Reset your password", "We'll email you a secure link."], newpw: ["Set a new password", "Choose at least 8 characters."], dpa: ["Your privacy matters", "Before you continue, please read our Privacy Notice and confirm your consent."],
+      verify: ["Verify your identity", "HR checks every new account before it opens. Tell us who you are so we can match you to our records."],
+      wait: [acc?.status === "rejected" ? "Not approved yet" : "Waiting for HR approval", acc?.status === "rejected" ? "HR could not verify your account." : "Thanks! HR is checking your details. You can use the portal as soon as they approve your account."] }[mode];
+    const vfy = mode === "verify" ? `<label for="sb-vname">Full name</label><input id="sb-vname" autocomplete="name" required value="${esc(acc?.name || "")}">
+      <label for="sb-vno">Employee number <small>(leave blank if you are newly hired)</small></label><input id="sb-vno" autocomplete="off" placeholder="EMP-0123" value="${esc(acc?.emp_no || "")}">
+      <label for="sb-vpos">Position and site or department</label><input id="sb-vpos" required placeholder="Security Guard, Riverside Tower" value="${esc(acc?.position || "")}">
+      <label for="sb-vmob">Mobile number</label><input id="sb-vmob" type="tel" autocomplete="tel" required placeholder="09XX XXX XXXX" value="${esc(acc?.mobile || "")}">
+      <label for="sb-vnote">Anything HR should know <small>(optional)</small></label><input id="sb-vnote" value="">` : "";
+    const waitBox = mode === "wait" ? `<div class="sb-wait"><b>${esc(acc?.email || "")}</b>${acc?.status === "rejected" ? `${acc?.hr_note ? `<p>HR's note: ${esc(acc.hr_note)}</p>` : ""}<p>Check your details and send them again, or contact HR at the Head Office.</p>` : `<p>Sent ${esc(acc?.at || "just now")}. We'll open the portal for you once HR approves. Come back and tap <b>Check again</b>.</p>`}</div>` : "";
     g.innerHTML = `<div class="sb-wrap"><aside class="sb-hero"><div class="sb-brand">${logo ? `<img src="${logo}" width="56" height="56" alt="">` : ""}<div><b>GD Prime Property Management Corporation</b><span>Human Resources Portal</span></div></div>
       <span class="sb-eyebrow">For every GD Prime employee</span><h2>Your work life,<br><em>beautifully</em> in one place.</h2>
       <p class="sb-lead">Time, pay, leave and HR help for our people at the head office and every project site, from your phone or desk.</p>
       <ul class="sb-feats">${feats.map(([i, t, d]) => `<li>${i}<div><b>${t}</b><small>${d}</small></div></li>`).join("")}</ul>
       </aside>
       <form class="sb-card" novalidate><h1>${hello[0]}</h1><p class="sub" aria-label="${title}">${hello[1]}</p>
+      ${vfy}${waitBox}
       ${mode === "up" ? `<label for="sb-name">Full name</label><input id="sb-name" autocomplete="name" required>` : ""}
-      ${mode !== "newpw" && mode !== "dpa" ? `<label for="sb-email">Email</label><input id="sb-email" type="email" autocomplete="email" required>` : ""}
-      ${mode !== "reset" && mode !== "dpa" ? `<label for="sb-pw">${mode === "newpw" ? "New password" : "Password"}</label><input id="sb-pw" type="password" autocomplete="${mode === "in" ? "current-password" : "new-password"}" minlength="8" required>` : ""}
+      ${!["newpw", "dpa", "verify", "wait"].includes(mode) ? `<label for="sb-email">Email</label><input id="sb-email" type="email" autocomplete="email" required>` : ""}
+      ${!["reset", "dpa", "verify", "wait"].includes(mode) ? `<label for="sb-pw">${mode === "newpw" ? "New password" : "Password"}</label><input id="sb-pw" type="password" autocomplete="${mode === "in" ? "current-password" : "new-password"}" minlength="8" required>` : ""}
       ${["in", "up", "dpa"].includes(mode) ? dpaBox() : ""}
-      <button class="go" type="submit">${{ dpa: "Agree and continue", in: "Sign in", up: "Create account", reset: "Send reset link", newpw: "Save password" }[mode]}</button>
+      <button class="go" type="submit">${{ verify: "Send to HR for approval", wait: acc?.status === "rejected" ? "Update my details" : "Check again", dpa: "Agree and continue", in: "Sign in", up: "Create account", reset: "Send reset link", newpw: "Save password" }[mode]}</button>
       <div class="sb-msg ${kind || ""}" role="status">${msg || ""}</div>
-      <div class="links">${mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
+      <div class="links">${mode === "verify" || mode === "wait" ? `${mode === "wait" && acc?.status !== "rejected" ? `<a data-sb-edit>Edit my details</a>` : ""}<a data-sb-out>Sign out</a>` : mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
       <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
       <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button></div></div>`;
     g.querySelector("input")?.focus();
@@ -278,6 +287,7 @@
   document.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-sb-pn]")) { ev.preventDefault(); showNotice(); return; }
     if (ev.target.closest("[data-sb-pn-close]") || ev.target.classList?.contains("sb-pn")) { document.querySelector(".sb-pn")?.remove(); document.getElementById("sb-dpa")?.focus(); return; }
+    if (ev.target.closest("[data-sb-edit]")) { ev.preventDefault(); mode = "verify"; gate(); return; }
     if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); signOutNow(); return; } }, true);
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelector(".sb-pn")?.remove(); });
   document.addEventListener("click", (ev) => { const a = ev.target.closest("[data-sb]"); if (!a) return; ev.preventDefault(); mode = a.dataset.sb; gate(); });
@@ -287,6 +297,12 @@
     const ck = f.querySelector("#sb-dpa"); if (ck && !ck.checked) { ck.closest(".sb-dpa").classList.add("bad"); const m = f.querySelector(".sb-msg"); m.className = "sb-msg err"; m.textContent = "Please read the Privacy Notice and tick the box to continue."; ck.focus(); return; }
     if (ck) dpaNow = true; btn.disabled = true;
     try {
+      if (mode === "verify") {
+        if (!v("#sb-vname") || !v("#sb-vpos") || !v("#sb-vmob")) throw new Error("Fill in your name, position and mobile number.");
+        if (!/^[+\d][\d\s-]{6,}$/.test(v("#sb-vmob"))) throw new Error("Check your mobile number.");
+        const { error } = await sb.rpc("hr_request_access", { p_name: v("#sb-vname"), p_emp_no: v("#sb-vno") || null, p_position: v("#sb-vpos"), p_mobile: v("#sb-vmob"), p_note: v("#sb-vnote") || null });
+        if (error) throw error; acc = { ...(acc || {}), status: "pending", name: v("#sb-vname"), emp_no: v("#sb-vno"), position: v("#sb-vpos"), mobile: v("#sb-vmob"), at: "just now" }; mode = "wait"; gate(); return; }
+      if (mode === "wait") { if (acc?.status === "rejected") { mode = "verify"; gate(); return; } const s0 = held; await start(s0, true); return; }
       if (mode === "dpa") { await dpaSave(); const s0 = held; held = null; mode = "in"; await start(s0); return; }
       if (mode === "in") { const { error } = await sb.auth.signInWithPassword({ email: v("#sb-email"), password: f.querySelector("#sb-pw").value }); if (error) throw error; }
       else if (mode === "up") {
@@ -301,11 +317,17 @@
     } catch (e) { btn.disabled = false; const m = String(e?.message || e); gate(/Invalid login/i.test(m) ? "Wrong email or password." : /not confirmed/i.test(m) ? "Confirm your email first: open the link we sent you." : m, "err"); }
   });
 
-  async function start(session) {
+  let acc = null;
+  async function start(session, again) {
     const u = session.user; const name = u.user_metadata?.full_name || u.user_metadata?.name || "";
     if (u.user_metadata?.dpa_v !== DPA_V) { if (dpaNow) dpaSave(); else { held = session; mode = "dpa"; gate(); return; } }
     const { data, error } = await sb.rpc("hr_claim", { display_name: name || null });
     if (error) { gate("Couldn't reach the HR database. Check your connection and reload.", "err"); return; }
+    // New accounts wait for HR approval (Glenn 2026-10-12). Older databases without approvals send no "access" and open as before.
+    if (!data?.editor && data?.access && data.access !== "approved") {
+      held = session; acc = { status: data.access, email: u.email, hr_note: data.hr_note || "", name: acc?.name || name };
+      if (data.access === "none") { mode = "verify"; gate(); return; }
+      mode = "wait"; gate(again && data.access === "pending" ? "Not approved yet. Please check again later." : "", again ? "err" : ""); return; }
     me = { id: u.id, email: u.email, name: name || u.email, editor: !!data?.editor, owner: !!data?.owner };
     sb.realtime.setAuth(session.access_token); swToken(session.access_token);
     document.querySelector(".sb-gate")?.remove(); readyOk();

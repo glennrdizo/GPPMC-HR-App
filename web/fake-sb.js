@@ -7,15 +7,20 @@
   const editors = new Set(window.__EDITORS || []); if (U?.editor) editors.add(U.id);
   const subs = []; window.__writes = [];
   const isEd = () => session && editors.has(session.user.id);
+  const SU = window.__SIGNUPS || []; if (U && !SU.some((r) => r.user_id === U.id) && (U.access || "approved") !== "none") SU.push({ user_id: U.id, status: U.access || "approved", email: U.email, name: U.name, requested_at: new Date().toISOString() });
+  const ok = () => isEd() || SU.some((r) => r.user_id === session?.user.id && r.status === "approved");
   const self = (p) => session && (p === "clockins/" + session.user.id || p.startsWith("clockins/" + session.user.id + "/"));
-  const canRead = (p) => isEd() || self(p) || p.startsWith("pub/");
-  const canWrite = (p) => isEd() || self(p);
+  const canRead = (p) => isEd() || (ok() && (self(p) || p.startsWith("pub/")));
+  const canWrite = (p) => isEd() || (ok() && self(p));
   const fire = (path) => setTimeout(() => subs.forEach((f) => f({ new: { path } })), 5);
   const parent = (p) => p.replace(/\/[^/]+$/, "");
   const denied = { data: null, error: { code: "42501", message: "new row violates row-level security policy" } };
   const cmp = (a, op, b) => ({ "==": a === b, "!=": a !== b, "<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b }[op]);
   const rpc = async (name, a) => {
-    if (name === "hr_claim") return { data: { editor: isEd(), owner: !!U?.owner, email: U?.email } };
+    if (name === "hr_claim") { const r = SU.find((x) => x.user_id === session?.user.id); return { data: { editor: isEd(), owner: !!U?.owner, email: U?.email, access: isEd() ? "approved" : r?.status || "none", hr_note: r?.hr_note || null } }; }
+    if (name === "hr_request_access") { let r = SU.find((x) => x.user_id === session.user.id); if (!r) SU.push(r = { user_id: session.user.id, email: session.user.email }); Object.assign(r, { status: "pending", name: a.p_name, emp_no: a.p_emp_no, position: a.p_position, mobile: a.p_mobile, note: a.p_note, requested_at: new Date().toISOString() }); window.__writes.push(["request", a]); return { data: "pending" }; }
+    if (name === "hr_signup_list") return { data: isEd() ? JSON.parse(JSON.stringify(SU)) : [] };
+    if (name === "hr_decide_access") { if (!isEd()) return denied; const r = SU.find((x) => x.user_id === a.target); if (r) Object.assign(r, { status: a.approve ? "approved" : "rejected", decided_at: new Date().toISOString() }); window.__writes.push(["decide", a.target, a.approve]); return { data: null }; }
     if (name === "hr_query") {
       let ks = Object.keys(D).filter((k) => parent(k) === a.c && canRead(k));
       for (const [f, op, v] of a.w || []) ks = ks.filter((k) => D[k][f] !== undefined && cmp(D[k][f], op, v));

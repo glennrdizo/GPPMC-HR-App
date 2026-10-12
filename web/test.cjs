@@ -6,7 +6,7 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   const mk = async (D, U, extra = {}) => {
     const ctx = await b.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Asia/Manila' }); await ctx.route(/cdnjs|jsdelivr|google/, (r) => r.abort());
     const p = await ctx.newPage(); p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => { if (m.type() === 'error' && !/ERR_FAILED|Failed to load/.test(m.text())) errs.push('console: ' + m.text()); });
-    await p.addInitScript(`window.__D=${JSON.stringify(D)};window.__U=${JSON.stringify(U)};window.__LOGIN=${JSON.stringify(extra.login || {})};window.__PEOPLE=${JSON.stringify(extra.people || [])};localStorage.setItem('hr-lang','en');`);
+    await p.addInitScript(`window.__D=${JSON.stringify(D)};window.__U=${JSON.stringify(U)};window.__LOGIN=${JSON.stringify(extra.login || {})};window.__PEOPLE=${JSON.stringify(extra.people || [])};window.__SIGNUPS=${JSON.stringify(extra.signups || [])};localStorage.setItem('hr-lang','en');`);
     await p.addInitScript(fake);
     await p.goto('file://' + W + '/../public/index.html'); await p.waitForTimeout(4000); return p;
   };
@@ -43,6 +43,25 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   await p.fill('input[autocomplete="name"], #sc-name, input[id*=name]', 'Rafael Aguilar').catch(()=>{}); const no = await p.locator('#main input').first(); await no.fill('EMP-0157'); await p.locator('#main button', { hasText: 'Link my account' }).click(); await p.waitForTimeout(1500);
   console.log('after link:', (await p.locator('#main').innerText()).slice(0, 200).replace(/\n+/g, ' | '));
   console.log('emp writes', JSON.stringify(await p.evaluate(() => window.__writes)));
+  // 3. New account: must verify identity, then waits for HR.
+  p = await mk(D, { id: 'u-new', email: 'new@x.com', name: 'Juan Cruz', editor: false, access: 'none', dpa: '2026-10-12' });
+  await p.setViewportSize({ width: 390, height: 860 }); await p.waitForTimeout(300);
+  console.log('new acct gate:', await p.locator('.sb-card h1').textContent().catch(() => 'none'), '| main visible:', await p.locator('.sb-gate').count());
+  await p.screenshot({ path: W + '/t-verify.png', fullPage: true });
+  await p.fill('#sb-vno', 'EMP-0157'); await p.fill('#sb-vpos', 'Security Guard, Riverside'); await p.fill('#sb-vmob', '0917 123 4567'); await p.click('.sb-card button.go'); await p.waitForTimeout(500);
+  console.log('after request:', await p.locator('.sb-card h1').textContent(), '|', (await p.locator('.sb-wait').innerText()).replace(/\n+/g, ' '));
+  await p.screenshot({ path: W + '/t-wait.png', fullPage: true });
+  await p.click('.sb-card button.go'); await p.waitForTimeout(800); console.log('check again:', await p.locator('.sb-msg').textContent());
+  const req = await p.evaluate(() => window.__writes.find((w) => w[0] === 'request')); console.log('request sent:', JSON.stringify(req));
+  // 4. HR sees the request on the dashboard and in Users & permissions, and approves it.
+  const emp = Object.values(D).find((x) => x && x.no === 'EMP-0157');
+  p = await mk(D, { id: 'u-glenn', email: 'glennrdizo@gmail.com', name: 'Glenn Dizo', editor: true, owner: true, dpa: '2026-10-12' }, { signups: [{ user_id: 'u-new', status: 'pending', name: emp ? `${emp.first} ${emp.last}` : 'Juan Cruz', email: 'new@x.com', emp_no: 'EMP-0157', position: 'Guard', mobile: '0917 123 4567', requested_at: new Date().toISOString() }, { user_id: 'u-x', status: 'pending', name: 'Someone Else', email: 'x@x.com', emp_no: 'EMP-9999', position: 'Guard', mobile: '0918', requested_at: new Date().toISOString() }] });
+  await p.waitForTimeout(1500); console.log('dash alert:', await p.locator('.su-alert').innerText().catch(() => 'none'));
+  await p.evaluate(() => document.querySelector('#nav [data-go="perms"]')?.click()); await p.waitForTimeout(1200);
+  console.log('requests card:', (await p.locator('#su-card').innerText().catch(() => 'none')).replace(/\n+/g, ' | ').slice(0, 400));
+  await p.locator('#su-card').screenshot({ path: W + '/t-requests.png' });
+  await p.click('[data-su-ok="u-new"]'); await p.waitForTimeout(300); await p.click('[data-ac="1"]'); await p.waitForTimeout(800);
+  console.log('decide:', JSON.stringify(await p.evaluate(() => window.__writes.filter((w) => w[0] === 'decide'))), '| waiting now:', await p.locator('#su-card .chip.c-warn').first().textContent().catch(() => 'none'));
   console.log('ERRORS', errs);
   await b.close();
 })();
