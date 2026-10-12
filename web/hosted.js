@@ -70,3 +70,12 @@ document.addEventListener("click", async (ev) => {
   if (error) { t.disabled = false; toast("Couldn't save. Try again."); return; }
   logActivity(`${ok ? "Approved" : r?.status === "approved" ? "Removed access for" : "Rejected"} the account of ${nm}`); toast(ok ? `${nm} is approved.` : "Saved."); await loadSignups(true); render(); });
 { const st = document.createElement("style"); st.textContent = ".su-alert{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:14px 0;border-left:4px solid #C9A45C}.su-alert .btn{margin-left:auto}"; document.head.appendChild(st); }
+// HR assistant wording on the website: Claude runs through the company's key (hr-ai function), not the viewer's own account.
+{ const off = () => (S.realEdit ? "The HR assistant isn't switched on yet. HR needs to add the company's Claude API key (ANTHROPIC_API_KEY) in Supabase, Edge Functions, Secrets." : "The HR assistant isn't switched on yet. Use Ask HR instead.");
+  const swap = [[/^(The assistant needs Claude, which isn't available in this view\. Use Ask HR instead\.|Kailangan ng assistant ang Claude, na hindi available dito\. Gamitin ang Magtanong sa HR\.)$/, off],
+    [/^Uses your own Claude account\.\s*/, () => "Uses the company's Claude service. "], [/^Uses your own Claude account, so the first question asks your permission\.\s*/, () => "Uses the company's Claude service. "],
+    [/^Gumagamit ng sarili mong Claude account, kaya hihingi ito ng pahintulot sa unang tanong\.\s*/, () => "Gumagamit ng Claude service ng kumpanya. "]];
+  const fix = () => { const m = document.getElementById("main"); if (!m || !/Claude/.test(m.textContent)) return;
+    for (const el of m.querySelectorAll("p,small,span")) { if (el.children.length) continue; const t = el.textContent; let q = t; for (const [rx, to] of swap) q = q.replace(rx, to); if (q !== t) el.textContent = q; } };
+  new MutationObserver(fix).observe(document.body, { childList: true, subtree: true });
+  const b = toast; toast = (msg) => b(/isn't available in this view|hindi available dito/.test(String(msg)) ? off() : msg); }
