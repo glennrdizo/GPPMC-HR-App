@@ -2,8 +2,15 @@
 /* ---------- Users & Roles grid (Glenn 2026-10-12): roles and users side by side, a tick box for every module and sub-module. ---------- */
 // Role templates live in org/access.roles = { key: { name, views: [navKeys], edit } }: built-in roles can be re-ticked, new roles added.
 // A user on a role follows that role's ticks; ticking a user's own box makes that user Custom (as before).
+// Owner and Executive (Glenn 2026-10-12). Owners manage everyone's roles and access, HR Admins included; HR Admins manage everyone else.
+{ const old = { ...ROLES }; for (const k of Object.keys(ROLES)) delete ROLES[k];
+  Object.assign(ROLES, { owner: { name: "Owner", mods: PERM_MODS, edit: true, note: "Everything. Only Owners can change HR Admins and Owners" }, exec: { name: "Executive", mods: PERM_MODS, edit: false, note: "Sees every module and report" } }, old); }
 const ROLES_BASE = JSON.parse(JSON.stringify(ROLES));
-const RL_FIXED = new Set(["admin", "custom", "none"]);
+const RL_FIXED = new Set(["owner", "custom", "none"]);
+const RL_TOP = new Set(["owner", "admin"]);
+const iAmOwner = () => !!S.isOwner || S.access?.users?.[S.myId]?.role === "owner";
+const rlRoleOf = (id) => { const a = S.access || {}; return a.users?.[id]?.role || a.defaultRole || "admin"; };
+const rlLocked = (id) => !iAmOwner() && (RL_TOP.has(rlRoleOf(id)) || id === S.myId);
 function rlSync() {
   const R = S.access?.roles || {};
   for (const k of Object.keys(ROLES)) if (!ROLES_BASE[k]) delete ROLES[k];
@@ -11,6 +18,10 @@ function rlSync() {
   for (const [k, r] of Object.entries(R)) { if (RL_FIXED.has(k) || !r) continue; const views = Array.isArray(r.views) ? r.views : null; const base = ROLES_BASE[k];
     ROLES[k] = { name: r.name || base?.name || "Role", edit: r.edit ?? base?.edit ?? false, note: r.note || base?.note || "Made in Users & Roles", views, mods: views ? modsOf(new Set(views)) : base?.mods || [], made: !base }; }
 }
+{ const b = myRole; myRole = (...x) => { const r = b(...x); const a = S.access || {}; const u = S.myId ? a.users?.[S.myId] : null; const key = S.isOwner ? "owner" : u?.role || a.defaultRole || "admin";
+    if (key === "owner") return { ...ROLES.admin, ...r, key: "admin", ownerRole: true, name: "Owner", views: null, mods: PERM_MODS, edit: true };
+    if (r.key === "admin" && Array.isArray(ROLES.admin?.views)) { const v = viewsOf({}, "admin"); return { ...r, views: v, mods: modsOf(v), edit: !!ROLES.admin.edit }; }
+    return r; }; }
 { const b = applyPerm; applyPerm = (...x) => { rlSync(); return b(...x); }; }
 { const b = viewsOf; viewsOf = (u, key) => { const r = ROLES[key]; if (key !== "custom" && Array.isArray(r?.views)) return new Set([...r.views, ...ALWAYS]); return b(u, key); }; }
 S.permTab = "list"; S.rlNew = false;
@@ -20,7 +31,7 @@ function rlGrid() {
   const ids = [...new Set([...(S.myId ? [S.myId] : []), ...Object.keys(users), ...Object.keys(a.seen || {})])];
   const nm = (id) => users[id]?.name || P[id]?.name || (id === S.myId ? "You" : "Someone");
   const keys = navKeys(); const groups = [...new Set(keys.map((k) => k.g))];
-  const roleCols = Object.entries(ROLES).filter(([k]) => !RL_FIXED.has(k)).map(([k, r]) => ({ k, r, views: viewsOf({}, k), edit: !!r.edit }));
+  const roleCols = Object.entries(ROLES).filter(([k]) => !RL_FIXED.has(k) && (k !== "admin" || iAmOwner())).map(([k, r]) => ({ k, r, views: viewsOf({}, k), edit: !!r.edit }));
   const userCols = ids.map((id) => { const u = users[id] || {}; const owner = id === S.myId && S.isOwner; const key = owner ? "admin" : u.role || a.defaultRole || "admin";
     return { id, owner, key, listed: !!users[id], views: owner || key === "admin" ? null : viewsOf(u, key), edit: owner ? true : key === "custom" ? u.edit !== false : !!ROLES[key]?.edit }; });
   const has = (vs, v) => !vs || vs.has(v);
@@ -44,7 +55,7 @@ function rlGrid() {
         ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${k.parent ? "pm-l2" : "pm-l1"}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${roleCols.map((c) => rCell(c, k.v, k.l)).join("")}${userCols.map((c) => uCell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
       <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users &amp; permissions</th>${roleCols.map(() => '<td class="pm-c pm-rc"><input type="checkbox" disabled aria-label="Users and permissions"></td>').join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
-    <p class="t-muted" style="margin:10px 0 0;font-size:13px">HR Admin always sees everything, including this page. The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user on the Users list tab.</p></section>`;
+    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page." : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user on the Users list tab.</p></section>`;
 }
 { const b = VIEWS.perms; VIEWS.perms = (...x) => { const h = b(...x); if (!isPermAdmin()) return h;
   const tabs = `<div class="tabs rl-tabs" role="tablist"><button class="tab" role="tab" aria-selected="${S.permTab !== "grid"}" data-perm-tab="list">Users list</button><button class="tab" role="tab" aria-selected="${S.permTab === "grid"}" data-perm-tab="grid">Users &amp; Roles (tick boxes)</button></div>`;
@@ -90,3 +101,26 @@ window.addEventListener("submit", async (ev) => {
 .rl .pm-p{min-width:120px;vertical-align:bottom}.rl .pm-p small{display:block;font-weight:400}.rl-rn{display:block;color:#7a5a1c}.rl-x{font-size:12px;margin-top:2px}
 .rl input[type=checkbox]{width:18px;height:18px;accent-color:#C9A45C;cursor:pointer}.rl input[type=checkbox]:disabled{cursor:not-allowed}
 [data-theme=dark] .rl thead th,[data-theme=dark] .rl thead td,[data-theme=dark] .rl .pm-k{background:#13203A}[data-theme=dark] .rl thead .pm-rc,[data-theme=dark] .rl-kr{background:#2A2A22 !important;color:#E4C98E}[data-theme=dark] .rl-rn{color:#E4C98E}`; document.head.appendChild(st); }
+
+/* ---------- only Owners change HR Admins and Owners ---------- */
+const RL_MSG = "Only an Owner can change HR Admins and Owners.";
+function rlLockUi() {
+  if (iAmOwner()) return;
+  const idOf = (el) => (el.dataset.permRole || el.dataset.pv || el.dataset.pg || el.dataset.pe || el.dataset.permDel || el.dataset.puDel || el.closest("#pu-form")?.dataset.id || "").split("|")[0];
+  for (const el of document.querySelectorAll("#main [data-perm-role], #main [data-pv], #main [data-pg], #main [data-pe], #main [data-perm-del], #main [data-pu-del], #pu-form #pu-role")) { const id = idOf(el); if (id && rlLocked(id)) { el.disabled = true; el.title = RL_MSG; } }
+  for (const sel of document.querySelectorAll("#main [data-perm-role], #pu-role, #pa-role, #perm-new-role, [data-perm-default]")) for (const o of [...sel.options]) if (RL_TOP.has(o.value) && !o.selected) o.remove();
+  for (const el of document.querySelectorAll("[data-perm-default]")) { el.disabled = true; el.title = "Only an Owner can change this."; }
+}
+new MutationObserver(() => { if (S.view.name === "perms") rlLockUi(); }).observe(document.body, { childList: true, subtree: true });
+const rlBlock = (ev) => { ev.preventDefault(); ev.stopImmediatePropagation(); toast(RL_MSG); setTimeout(render, 0); };
+window.addEventListener("change", (ev) => { const t = ev.target; if (iAmOwner() || S.view.name !== "perms") return;
+  const id = (t.dataset.permRole || t.dataset.pv || t.dataset.pg || t.dataset.pe || "").split("|")[0];
+  if ((id && rlLocked(id)) || (t.dataset.permRole != null && RL_TOP.has(t.value)) || t.hasAttribute?.("data-perm-default") || /^(admin|owner)\|/.test(t.dataset.rv || t.dataset.rg || t.dataset.re || "")) rlBlock(ev); }, true);
+window.addEventListener("click", (ev) => { if (iAmOwner()) return; const t = ev.target.closest?.("[data-perm-del],[data-pu-del],[data-perm-add]"); if (!t) return;
+  const id = t.dataset.permDel || t.dataset.puDel; if ((id && rlLocked(id)) || (t.dataset.permAdd && RL_TOP.has($("#perm-new-role")?.value))) rlBlock(ev); }, true);
+window.addEventListener("submit", (ev) => { if (iAmOwner()) return; const f = ev.target; const r = f.querySelector?.("#pu-role, #pa-role"); if (!r) return;
+  if ((f.id === "pu-form" && rlLocked(f.dataset.id)) || (RL_TOP.has(r.value) && !(f.id === "pu-form" && rlRoleOf(f.dataset.id) === r.value))) rlBlock(ev); }, true);
+// The page owner shows as Owner on everyone's screen.
+let rlOwnerSet = false;
+{ const b = applyPerm; applyPerm = (...x) => { const r = b(...x); const a = S.access; if (!rlOwnerSet && S.isOwner && S.myId && a && S.realEdit && S.db && a.users?.[S.myId]?.role !== "owner") { rlOwnerSet = true;
+    const next = { ...a, users: { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: "owner" } } }; S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))).then(() => { S.access = next; }).catch(() => {}); } return r; }; }
