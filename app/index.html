@@ -12303,13 +12303,17 @@ async function uioImport(file) {
   if (!await askConfirm(msg, "Import")) return;
   try { await saveAccess({ users: JSON.parse(JSON.stringify(users)), invites: JSON.parse(JSON.stringify(invites)) }, `Imported the Users list (${upd} updated, ${inv} invited)`); } catch { toast("Couldn't save. Try again."); }
 }
+S.uioOpen = false;
 { const b = VIEWS.perms; VIEWS.perms = (...x) => { const h = b(...x); if (!isPermAdmin()) return h;
-  const btns = `<button class="btn btn-ghost btn-sm" data-uio-exp>${icon("download")}Export to Excel</button><button class="btn btn-ghost btn-sm" data-uio-imp>${icon("upload")}Import from Excel</button><input type="file" id="uio-file" accept=".xlsx,.xls,.csv" hidden>`;
-  return h.replace(/(<h2>Users<\/h2>(?:<button[^>]*data-pu-add[^>]*>[\s\S]*?<\/button>)?)/, `$1${btns}`); }; }
-document.addEventListener("click", (ev) => { const t = ev.target.closest("[data-uio-exp],[data-uio-imp]"); if (!t || !isPermAdmin()) return;
-  if (t.hasAttribute("data-uio-exp")) uioExport().catch(() => toast("Couldn't make the Excel file.")); else document.getElementById("uio-file")?.click(); });
-document.addEventListener("change", (ev) => { if (ev.target.id !== "uio-file") return; const f = ev.target.files?.[0]; ev.target.value = ""; if (f) uioImport(f).catch(() => toast("Couldn't read that file.")); });
-{ const st = document.createElement("style"); st.textContent = "#ac-msg{white-space:pre-line}"; document.head.appendChild(st); }
+  const btns = `<button class="btn btn-ghost btn-sm" data-uio-exp>${icon("download")}Export to Excel</button><button class="btn btn-ghost btn-sm" data-uio-imp aria-expanded="${S.uioOpen}">${icon("upload")}Import from Excel</button>`;
+  const panel = S.uioOpen ? `<div class="uio-panel">${dropZone("uio-file", ".xlsx,.xls,.csv", "Drag and drop the Users Excel file here")}<p class="t-muted" style="font-size:13px;margin:8px 0 0">Use a file from Export to Excel. Keep the User ID column; rows without one become invitations. <button class="link" data-uio-close>Close</button></p></div>` : "";
+  return h.replace(/(<h2>Users<\/h2>(?:<button[^>]*data-pu-add[^>]*>[\s\S]*?<\/button>)?)/, `$1${btns}`).replace(/(<h2>Users<\/h2>[\s\S]*?<\/div>\s*<label class="field"[\s\S]*?<\/label><\/div>)/, `$1${panel}`); }; }
+document.addEventListener("click", (ev) => { const t = ev.target.closest("[data-uio-exp],[data-uio-imp],[data-uio-close]"); if (!t || !isPermAdmin()) return;
+  if (t.hasAttribute("data-uio-exp")) { uioExport().catch(() => toast("Couldn't make the Excel file.")); return; }
+  S.uioOpen = t.hasAttribute("data-uio-imp") ? !S.uioOpen : false; render(); if (S.uioOpen) setTimeout(() => document.getElementById("uio-file-drop")?.focus(), 50); });
+document.addEventListener("change", (ev) => { if (ev.target.id !== "uio-file") return; const f = ev.target.files?.[0]; ev.target.value = ""; if (f) uioImport(f).then(() => { S.uioOpen = false; render(); }).catch(() => toast("Couldn't read that file.")); });
+document.addEventListener("drop", (ev) => { const z = ev.target.closest?.("#uio-file-drop"); if (!z) return; ev.preventDefault(); z.classList.remove("drag"); const f = ev.dataTransfer?.files?.[0]; if (f && isPermAdmin()) uioImport(f).then(() => { S.uioOpen = false; render(); }).catch(() => toast("Couldn't read that file.")); });
+{ const st = document.createElement("style"); st.textContent = "#ac-msg{white-space:pre-line}.uio-panel{margin:4px 0 14px}.uio-panel .io-drop{padding:22px}"; document.head.appendChild(st); }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {
