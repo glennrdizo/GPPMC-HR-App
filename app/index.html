@@ -13714,7 +13714,7 @@ async function m2Get(id) {
   try { const d = await S.db.doc(`m201/${id}`).get(); S.m2.set(id, d.exists ? d.data() || {} : {}); } catch { S.m2.set(id, {}); }
   S.m2Busy.delete(id); render();
 }
-const m2Filled = (e, m, sec) => { const f = M2.filter((x) => x[3] === sec && !M2_HIDE.has(x[1])); return [f.filter((x) => { const v = x[5] ? m2Core(e, x[1], m) : m[x[1]]; return v != null && v !== ""; }).length, f.length]; };
+const m2Filled = (e, m, sec) => { const f = M2.filter((x) => x[3] === sec && !M2_HIDE.has(x[1])); return [f.filter((x) => { const v = m2Val(e, x, m); return v != null && v !== ""; }).length, f.length]; };
 
 /* The full 201 file: every masterlist column, by section. */
 VIEWS.f201 = () => {
@@ -13722,6 +13722,7 @@ VIEWS.f201 = () => {
   const m = S.m2.get(e.id); if (!m) m2Get(e.id); const ed = S.canEdit && !!m; const editing = S.m2Edit?.id === e.id ? S.m2Edit.sec : null;
   const inp = (x, v) => { const [c, k, label, , t, core] = x; const id = `m2f-${k}`; const lab = `<label for="${id}">${esc(label)}</label>`;
     if (core) return `<div class="field">${lab}<input class="input" id="${id}" value="${esc(String(m2Core(e, k) ?? ""))}" disabled></div>`;
+    const ln = m2Link(e, k); if (ln) return m2LinkedField(id, label, ln);
     if (t === "l") return `<div class="field" style="grid-column:1/-1">${lab}<textarea class="input" id="${id}" name="${k}" rows="2">${esc(v ?? "")}</textarea></div>`;
     if (t === "d" && (!v || m2ISO(v))) return `<div class="field">${lab}<input class="input" id="${id}" name="${k}" type="date" value="${esc(v ?? "")}"></div>`;
     return `<div class="field">${lab}<input class="input" id="${id}" name="${k}" value="${esc(v ?? "")}" ${t === "m" ? 'list="m2-marks" placeholder="√, NA, x or pending"' : ""}></div>`; };
@@ -13730,7 +13731,7 @@ VIEWS.f201 = () => {
       ${f.some((x) => x[5]) ? '<p class="t-muted" style="font-size:13px;margin:10px 0 0">Grey fields come from the main 201 file. Change them with Edit 201 file.</p>' : ""}
       <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-ghost" data-m2-cancel="1">Cancel</button></div></form></section>`;
     return `<section class="card" id="${sid}"><div class="card-head"><h2>${esc(sec)}</h2><div style="display:flex;gap:10px;align-items:center"><span class="t-muted num" style="font-size:13px">${n} of ${of} filled</span>${ed && !editing ? `<button class="btn btn-ghost btn-sm" data-m2-edit="${esc(sec)}">Edit</button>` : ""}</div></div>
-      <dl class="facts">${f.map((x) => `<div><dt>${esc(x[2])}</dt><dd>${m2Show(x[5] ? m2Core(e, x[1], m) : m?.[x[1]], x[4])}</dd></div>`).join("")}</dl></section>`; };
+      <dl class="facts">${f.map((x) => `<div><dt>${esc(x[2])}</dt><dd>${m2Show(m2Val(e, x, m), x[4])}${m2Tag(e, x)}</dd></div>`).join("")}</dl></section>`; };
   return `<div class="no-print"><button class="link" style="color:#fff" data-emp="${e.id}">${icon("back", 16)} Back to profile</button></div>
     <section class="card" style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">${avatar(e, 80)}
       <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px"><span class="t-muted" style="font-size:13px;font-weight:700">EMPLOYEE 201 FILE · CONFIDENTIAL</span><h1 style="font-size:26px;font-weight:800">${esc(fullName(e))}</h1>
@@ -13896,7 +13897,7 @@ async function m2Export() {
   for (const [c, l] of Object.entries(M2_GROUPS)) r4[c] = l; for (const [c, , label] of M2) r5[c] = label;
   const emps = [...S.emps.values()].filter((e) => !e.sample).sort((a, b) => (a.separated ? 1 : 0) - (b.separated ? 1 : 0) || String(a.no).localeCompare(String(b.no), undefined, { numeric: true }));
   const rows = emps.map((e) => { const m = { ...(S.m2.get(e.id) || {}), ...(all.get(e.id) || {}) }; const r = blank();
-    for (const [c, k, , , t, core] of M2) { let v = core ? m2Core(e, k, m) : m[k]; if (v == null || v === "") continue; 
+    for (const [c, k, , , t, core] of M2) { let v = m2Val(e, [c, k, , , t, core], m); if (v == null || v === "") continue; 
       r[c] = m2ISO(v) && (t === "d" || k === "hire" || k === "birth") ? new Date(`${v}T00:00:00`) : v; }
     return r; });
   const ws = X.utils.aoa_to_sheet([r1, r2, blank(), r4, r5, ...rows], { cellDates: true, dateNF: "mm/dd/yyyy" }); ws["!cols"] = Array.from({ length: W }, (_, c) => ({ wch: c === 8 ? 30 : 16 }));
@@ -13969,6 +13970,7 @@ VIEWS.employeeForm = () => {
       case "bankAcct": return F("bank", "PAYROLL BANK", "text", false, "Metrobank, BDO, GCash") + F("bankAcct", label);
     }
     if (k === M2K.empStatus) return Sel("status", label, Object.entries(STATUS).map(([s, w]) => [s, w[0]]), null, true);
+    if (e) { const ln = m2Link(e, k); if (ln) return m2LinkedField(`ef-m2-${k}`, label, ln); }
     return extra(x); };
   const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
     ${Sel("shiftId", "SHIFT", SET().shifts.map((s) => [s.id, `${s.name} (${s.start} to ${s.end})`]), null)}</div>`;
@@ -14011,6 +14013,72 @@ VIEWS.employeeForm = () => {
       if (mc) { await S.db.doc(`m201/${e.id}`).set(JSON.parse(JSON.stringify(next))); S.m2.set(e.id, next); }
       if (ch || mc) render();
     } catch { toast("The main 201 file was saved, but some masterlist details weren't. Open Edit 201 file and save again."); }
+  }; }
+
+/* ---------- Glenn 2026-10-13: "review if there are redundant information and process and incorporate".
+   Masterlist columns that another module already records are filled from that module (one place to enter them), and onboarding steps tick themselves
+   when the 201 file shows they are done. The imported value is kept as the fallback for people the modules have no record of. ---------- */
+const m2Mark = (d) => (d ? (m2ISO(d) ? d : "√") : null);
+const m2F201 = (k) => (e) => { const x = typeof f201Status === "function" ? f201Status(e).find((y) => y.k === k) : null; return x?.done ? (m2ISO(x.done) ? x.done : "√") : null; };
+const m2Onb = (k) => (e) => S.onb?.get(e.id)?.items?.find((i) => i.k === k && i.done && !i.na)?.done || null;
+const m2Med = (kinds, f = "date") => (e) => { const r = listOf(S.meds || new Map()).filter((x) => x.empId === e.id && kinds.includes(x.kind) && (f !== "result" || x.result !== "PENDING")).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]; return r?.date || null; };
+const m2Case = (e) => listOf(S.cases || new Map()).filter((c) => c.empId === e.id).sort((a, b) => (b.nte || "").localeCompare(a.nte || ""))[0] || null;
+const m2Bal = (code) => (e) => { try { const r = balances(e, yearOf(todayISO())).find((t) => t.code === code); return r && r.left != null ? `${r.left} of ${r.credit} days left (${yearOf(todayISO())})` : null; } catch { return null; } };
+const m2Years = (from, to) => { if (!m2ISO(from)) return null; const a = new Date(from), b = new Date(to || todayISO()); let mo = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth(); if (b.getDate() < a.getDate()) mo--; return mo < 0 ? null : `${Math.floor(mo / 12)} yr ${mo % 12} mo`; };
+const M2_LINKS = {
+  65: ["201 checklist", "f201", m2F201("birth")], 68: ["201 checklist", "f201", (e) => m2F201("med")(e) || m2Med(["PRE_EMP"])(e)], 69: ["Medical history", "medical", m2Med(["DRUG"])], 70: ["201 checklist", "f201", m2F201("nbi")],
+  87: ["201 checklist", "f201", m2F201("prev2316")], 100: ["201 checklist", "f201", m2F201("edu")], 101: ["201 checklist", "f201", m2F201("edu")], 112: ["201 checklist", "f201", m2F201("pds")],
+  110: ["this system", null, (e) => "√"], 111: ["201 checklist", "f201", (e) => (typeof f201Pct === "function" && f201Pct(e) === 100 ? "√" : null)],
+  134: ["Orientation", "orient", (e) => listOf(S.orients || new Map()).filter((o) => o.status === "DONE" && (o.empIds || []).includes(e.id) && (o.att?.[e.id] ?? true)).map((o) => o.date || o.doneOn).sort().pop() || null],
+  157: ["Contracts", "contracts", (e) => listOf(S.ctrs || new Map()).filter((c) => c.empId === e.id && c.signed).map((c) => c.at).sort()[0] || null],
+  156: ["Job offers", "olr", (e) => { const a = listOf(S.apps || new Map()).find((x) => x.empId === e.id); return a?.olr?.accepted || (a?.offer?.status === "ACCEPTED" ? "√" : null); }],
+  164: ["main 201 file", null, (e) => e.hire || null],
+  165: ["Performance reviews", "perf", (e) => { const r = listOf(S.reviews || new Map()).filter((x) => x.empId === e.id && x.type === "REGULARIZATION" && x.reviewerId).sort((a, b) => (b.at || "").localeCompare(a.at || ""))[0]; const p = r && S.emps.get(r.reviewerId); return p ? fullName(p) : null; }],
+  178: ["Employment history", null, (e) => (e.history || []).filter((h) => h.kind === "Regularized").map((h) => h.d).sort().pop() || null],
+  179: ["Onboarding checklist", "lifecycle", (e) => m2Mark(m2Onb("passlet")(e))],
+  187: ["Onboarding checklist", "lifecycle", m2Onb("hmo")], 207: ["Onboarding checklist", "lifecycle", m2Onb("uniform")],
+  212: ["ID printing", "idprint", (e) => (typeof idInfo === "function" ? idInfo(e)?.prints?.[0]?.d : null) || m2Onb("id")(e)], 213: ["Onboarding checklist", "lifecycle", (e) => m2Mark(m2Onb("permid")(e))],
+  149: ["Onboarding checklist", "lifecycle", (e) => m2Mark(m2Onb("bio")(e))], 152: ["Onboarding checklist", "lifecycle", m2Onb("hris")], 153: ["Onboarding checklist", "lifecycle", m2Onb("login")],
+  198: ["Leave balances", "leave", m2Bal("VL")], 199: ["Leave balances", "leave", m2Bal("SL")],
+  226: ["Disciplinary cases", "cases", (e) => m2Case(e)?.incident || null], 228: ["Disciplinary cases", "cases", (e) => m2Case(e)?.details || null], 229: ["Disciplinary cases", "cases", (e) => m2Case(e)?.nte || null],
+  230: ["Disciplinary cases", "cases", (e) => m2Case(e)?.reply?.d || null], 234: ["Disciplinary cases", "cases", (e) => m2Case(e)?.hearing?.d || null],
+  232: ["Disciplinary cases", "cases", (e) => { const d = m2Case(e)?.decision; return d ? (PENALTY.find((p) => p[0] === d.penalty)?.[1] || d.penalty) + (d.days ? ` (${d.days} days)` : "") + (d.text ? `: ${d.text}` : "") : null; }],
+  233: ["Disciplinary cases", "cases", (e) => m2Case(e)?.decision?.d || null], 236: ["Disciplinary cases", "cases", (e) => { const c = m2Case(e); return c ? caseStatus(c)[0] : null; }],
+  283: ["Disciplinary cases", "cases", (e) => { const n = listOf(S.cases || new Map()).filter((c) => c.empId === e.id && ["VERBAL", "WRITTEN"].includes(c.decision?.penalty)).length; return n ? `${n} on record` : null; }],
+  284: ["Personnel actions", "paf", (e) => (e.history || []).filter((h) => /promotion|salary|pay change|raise/i.test(h.kind)).map((h) => h.d).sort().pop() || null],
+  249: ["Offboarding", "lifecycle", (e) => S.offb?.get(e.id)?.notice || null], 250: ["Offboarding", "lifecycle", (e) => e.separated?.date || S.offb?.get(e.id)?.last || null],
+  275: ["Offboarding", "lifecycle", (e) => m2Mark(S.offb?.get(e.id)?.items?.find((i) => i.k === "exit")?.done)], 271: ["Offboarding", "lifecycle", (e) => S.offb?.get(e.id)?.released || null],
+  273: ["main 201 file", null, (e) => m2Years(e.hire, e.separated?.date)],
+  286: ["Medical history", "medical", m2Med(["APE"])], 287: ["Medical history", "medical", m2Med(["APE"], "result")], 289: ["Medical history", "medical", m2Med(["DRUG"])],
+};
+const M2_LINK_BY_KEY = Object.fromEntries(Object.entries(M2_LINKS).map(([c, v]) => [m2Key(Number(c)), v]).filter(([k]) => k));
+function m2Link(e, k) { const L = M2_LINK_BY_KEY[k]; if (!L || !e) return null; let v = null; try { v = L[2](e); } catch {} return v == null || v === "" ? null : { v, from: L[0], go: L[1] }; }
+function m2Val(e, x, m) { const [, k, , , , core] = x; if (core) return m2Core(e, k, m); return m2Link(e, k)?.v ?? m?.[k]; }
+const m2Tag = (e, x) => { if (x[5]) return ""; const l = m2Link(e, x[1]); return l ? ` <span class="chip c-blue" style="font-size:11px" title="Recorded in ${esc(l.from)}">from ${esc(l.from)}</span>` : ""; };
+const m2LinkedField = (id, label, ln) => `<div class="field"><label for="${id}">${esc(label)}</label><input class="input" id="${id}" value="${esc(m2ISO(ln.v) ? fmtDate(ln.v) : ln.v)}" disabled><span class="t-muted" style="font-size:12px">From ${esc(ln.from)}. Change it there.</span></div>`;
+
+/* Importing the masterlist also ticks the matching items on the 201 checklist (√ in the masterlist = received). */
+const M2_TO_F201 = { 65: "birth", 68: "med", 70: "nbi", 87: "prev2316", 100: "edu", 101: "edu", 112: "pds" };
+{ const b = m2Run; m2Run = async () => {
+    const plan = m2Got ? m2Got.items : []; const scope = S.m2Scope || (window.__hosted ? "all" : "active"); const use = plan.filter((x) => scope === "all" || x.active);
+    await b(); if (m2Got) return; // m2Got is cleared only when the import finished
+    try { const items = JSON.parse(JSON.stringify(S.f201 || {})); let n = 0;
+      for (const x of use) { if (!x.active) continue; const e = [...S.emps.values()].find((y) => String(y.no).trim().toLowerCase() === x.no.toLowerCase()); if (!e) continue;
+        for (const [c, k] of Object.entries(M2_TO_F201)) { const v = String(x.m[m2Key(Number(c))] || "").trim().toLowerCase(); if ((v === "√" || v === "v" || v === "✓") && !items[e.id]?.[k]) { (items[e.id] ||= {})[k] = x.core.hire; n++; } } }
+      if (n) { await S.db.doc("org/f201").set({ items }); S.f201 = items; S.ver++; }
+    } catch {}
+  }; }
+
+/* Onboarding steps tick themselves when the 201 file shows them done; "Encode to HRIS" and "Encode to excel file masterlist" are done by this system. */
+const M2_ONB_PROOF = { bio: 149, email: 150, hris: 152, login: 153, uniform: 207, hmo: 187, permid: 213, passlet: 179, id: 212, tmpidprep: 212, orient: 134, contract: 157, docs: 111, offer: 156 };
+{ const b = syncOnboarding; syncOnboarding = async () => { await b();
+    if (!S.realEdit || !S.onb) return;
+    for (const o of listOf(S.onb)) { if (o.done) continue; const e = S.emps.get(o.empId); if (!e || e.separated) continue;
+      if (!S.m2.has(e.id)) { await m2Get(e.id); } const m = S.m2.get(e.id) || {};
+      let ch = false; const items = o.items.map((it) => { if (it.done) return it;
+        const col = M2_ONB_PROOF[it.k]; const v = col != null ? String(m[m2Key(col)] || "").trim() : ""; const sys = it.k === "hris" || it.k === "xls";
+        if (sys || (v && !/^(x|na|n\/a|pending)/i.test(v))) { ch = true; return { ...it, done: m2ISO(v) ? v : todayISO(), auto: true }; } return it; });
+      if (ch) { const all = items.every((it) => it.done); try { await put("onboard", { ...o, items, done: all ? todayISO() : null }); } catch {} } }
   }; }
 
 /* ---------- events ---------- */
