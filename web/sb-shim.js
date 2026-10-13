@@ -49,9 +49,15 @@
     if (error) throw error; return docSnap(path, data);
   }
   async function runQuery(c, o) {
-    const { data, error } = await sb.rpc("hr_query", { c, w: o.w || [], ob: o.ob || null, dir: o.dir || "asc", lim: o.n || 1000 });
-    if (error) throw error;
-    return { docs: (data || []).map((r) => docSnap(r.path, r)), size: (data || []).length, empty: !(data || []).length };
+    // The API returns at most 1000 rows per call, so larger reads (the 201 masterlist has 1,200+ people) come in pages.
+    const lim = o.n || 1000; let data = [];
+    for (let from = 0; from < lim; from += 1000) {
+      const to = Math.min(lim, from + 1000) - 1;
+      const { data: page, error } = await sb.rpc("hr_query", { c, w: o.w || [], ob: o.ob || null, dir: o.dir || "asc", lim }).range(from, to);
+      if (error) throw error; data = data.concat(page || []); if (!page || page.length < to - from + 1) break;
+    }
+    const seen = new Set(); data = data.filter((r) => !seen.has(r.path) && seen.add(r.path));
+    return { docs: data.map((r) => docSnap(r.path, r)), size: data.length, empty: !data.length };
   }
   const query = (c, o) => ({
     where: (f, op, v) => query(c, { ...o, w: [...(o.w || []), [f, op, v]] }),

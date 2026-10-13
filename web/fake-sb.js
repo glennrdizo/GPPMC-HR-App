@@ -16,7 +16,8 @@
   const parent = (p) => p.replace(/\/[^/]+$/, "");
   const denied = { data: null, error: { code: "42501", message: "new row violates row-level security policy" } };
   const cmp = (a, op, b) => ({ "==": a === b, "!=": a !== b, "<": a < b, "<=": a <= b, ">": a > b, ">=": a >= b }[op]);
-  const rpc = async (name, a) => {
+  const rpc = (name, a) => { const pr = rpcImpl(name, a); pr.range = (f, t) => pr.then((r) => (Array.isArray(r.data) ? { ...r, data: r.data.slice(f, t + 1) } : r)); return pr; };
+  const rpcImpl = async (name, a) => {
     if (name === "hr_claim") { const r = SU.find((x) => x.user_id === session?.user.id); return { data: { editor: isEd(), owner: !!U?.owner, email: U?.email, access: isEd() ? "approved" : r?.status || "none", hr_note: r?.hr_note || null } }; }
     if (name === "hr_request_access") { let r = SU.find((x) => x.user_id === session.user.id); if (!r) SU.push(r = { user_id: session.user.id, email: session.user.email }); Object.assign(r, { status: "pending", name: a.p_name, emp_no: a.p_emp_no, position: a.p_position, mobile: a.p_mobile, note: a.p_note, requested_at: new Date().toISOString() }); window.__writes.push(["request", a]); return { data: "pending" }; }
     if (name === "hr_signup_list") return { data: isEd() ? JSON.parse(JSON.stringify(SU)) : [] };
