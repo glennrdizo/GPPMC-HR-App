@@ -7,12 +7,18 @@ const M2_SECS = [...new Set(M2.map((x) => x[3]))];
 const M2_HIDE = new Set(["bankTemp", "bankAcct"]);
 const m2Key = (col) => M2.find((x) => x[0] === col)?.[1];
 const M2K = { area: m2Key(5), empStatus: m2Key(7), rank: m2Key(14), hiredRpms: m2Key(16), sepDate: m2Key(250), eoc: m2Key(274), payCard: m2Key(146) };
+for (const x of M2) if (x[0] === 7 || x[0] === 14) x[5] = 1;
+const M2_WORD = { PROJECT_BASED: "PROJECT", PROJECT_REGULAR: "PROJECT - REGULAR", PROBATIONARY: "PROBATIONARY", REGULAR: "REGULAR", CONTRACTUAL: "CONTRACTUAL", CASUAL: "CASUAL" };
+const M2_LEVELS = ["Executive", "Manager", "Officer", "Rank and File 4", "Rank and File 3", "Rank and File 2", "Rank and File 1"];
+const m2RankOf = (t, cur) => (/manager|executive/i.test(t) ? "MGR" : /officer|supervis/i.test(t) ? "SUP" : /rank/i.test(t) ? "RF" : cur || null);
 Object.assign(S, { m2: new Map(), m2Busy: new Set(), m2Edit: null });
 SECTION_OF.f201 = "employees";
 const m2ISO = (v) => /^\d{4}-\d{2}-\d{2}$/.test(String(v || ""));
 const m2Age = (b) => { if (!m2ISO(b)) return ""; const t = todayISO(); let a = Number(t.slice(0, 4)) - Number(b.slice(0, 4)); if (t.slice(5) < b.slice(5)) a--; return a >= 0 ? String(a) : ""; };
 const m2Proj = (e) => (e.projectId ? S.projects.get(e.projectId)?.code || "" : "HO");
-function m2Core(e, k) {
+function m2Core(e, k, m = S.m2.get(e?.id)) {
+  if (k === M2K.rank) return e.level || m?.[k] || "";
+  if (k === M2K.empStatus) return e.separated ? (m?.[k] && !/^(project|probation|regular)/i.test(m[k]) ? m[k] : String(e.separated.reason || "SEPARATED").toUpperCase()) : M2_WORD[e.status] || e.status || "";
   switch (k) {
     case "project": return m2Proj(e);
     case "active": return e.separated ? "INACTIVE" : "ACTIVE";
@@ -40,7 +46,7 @@ async function m2Get(id) {
   try { const d = await S.db.doc(`m201/${id}`).get(); S.m2.set(id, d.exists ? d.data() || {} : {}); } catch { S.m2.set(id, {}); }
   S.m2Busy.delete(id); render();
 }
-const m2Filled = (e, m, sec) => { const f = M2.filter((x) => x[3] === sec && !M2_HIDE.has(x[1])); return [f.filter((x) => { const v = x[5] ? m2Core(e, x[1]) : m[x[1]]; return v != null && v !== ""; }).length, f.length]; };
+const m2Filled = (e, m, sec) => { const f = M2.filter((x) => x[3] === sec && !M2_HIDE.has(x[1])); return [f.filter((x) => { const v = x[5] ? m2Core(e, x[1], m) : m[x[1]]; return v != null && v !== ""; }).length, f.length]; };
 
 /* The full 201 file: every masterlist column, by section. */
 VIEWS.f201 = () => {
@@ -56,7 +62,7 @@ VIEWS.f201 = () => {
       ${f.some((x) => x[5]) ? '<p class="t-muted" style="font-size:13px;margin:10px 0 0">Grey fields come from the main 201 file. Change them with Edit 201 file.</p>' : ""}
       <div style="display:flex;gap:10px;margin-top:14px"><button class="btn btn-primary">Save</button><button type="button" class="btn btn-ghost" data-m2-cancel="1">Cancel</button></div></form></section>`;
     return `<section class="card" id="${sid}"><div class="card-head"><h2>${esc(sec)}</h2><div style="display:flex;gap:10px;align-items:center"><span class="t-muted num" style="font-size:13px">${n} of ${of} filled</span>${ed && !editing ? `<button class="btn btn-ghost btn-sm" data-m2-edit="${esc(sec)}">Edit</button>` : ""}</div></div>
-      <dl class="facts">${f.map((x) => `<div><dt>${esc(x[2])}</dt><dd>${m2Show(x[5] ? m2Core(e, x[1]) : m?.[x[1]], x[4])}</dd></div>`).join("")}</dl></section>`; };
+      <dl class="facts">${f.map((x) => `<div><dt>${esc(x[2])}</dt><dd>${m2Show(x[5] ? m2Core(e, x[1], m) : m?.[x[1]], x[4])}</dd></div>`).join("")}</dl></section>`; };
   return `<div class="no-print"><button class="link" style="color:#fff" data-emp="${e.id}">${icon("back", 16)} Back to profile</button></div>
     <section class="card" style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">${avatar(e, 80)}
       <div style="flex:1;min-width:220px;display:flex;flex-direction:column;gap:6px"><span class="t-muted" style="font-size:13px;font-weight:700">EMPLOYEE 201 FILE · CONFIDENTIAL</span><h1 style="font-size:26px;font-weight:800">${esc(fullName(e))}</h1>
@@ -135,8 +141,9 @@ function m2Plan(got) {
     const core = { no, first: m2Title(first), middle: middle ? m2Title(middle) : null, last: m2Title(last), hire, birth: m2ISO(val(r, "birth")) ? val(r, "birth") : null, gender: /^f/i.test(g) ? "F" : /^m/i.test(g) ? "M" : null, civil,
       email: val(r, "email") || null, mobile: val(r, "mobile") || null, address: val(r, "address") || null, emergencyName: val(r, "emergencyName") || null, emergencyRelation: val(r, "emergencyRelation") || null, emergencyPhone: val(r, "emergencyPhone") || null,
       sss: val(r, "sss") || null, pagibig: val(r, "pagibig") || null, philhealth: val(r, "philhealth") || null, tin: val(r, "tin") || null, status: st, separated: active ? null : { date: sepDate, reason },
-      rank: /manager|executive/i.test(rk) ? "MGR" : /officer|supervis/i.test(rk) ? "SUP" : /rank/i.test(rk) ? "RF" : prev?.rank || null };
+      rank: m2RankOf(rk, prev?.rank), level: rk || prev?.level || null };
     const m = {}; for (const [, k, , , , isCore] of M2) { if (isCore) continue; const v = val(r, k); if (v !== "") m[k] = v; }
+    if (!active && raw) m[M2K.empStatus] = raw;
     items.push({ no, core, m, prev, active, posTitle: val(r, "position"), deptName: val(r, "dept"), proj: /^(ho|head office|-|n\/?a)?$/i.test(proj) ? "" : proj, bank, bankAcct });
   });
   return { items, skipped, sheet: got.sheet, mapped: Object.values(col).filter((c) => c >= 0).length };
@@ -221,7 +228,7 @@ async function m2Export() {
   for (const [c, l] of Object.entries(M2_GROUPS)) r4[c] = l; for (const [c, , label] of M2) r5[c] = label;
   const emps = [...S.emps.values()].filter((e) => !e.sample).sort((a, b) => (a.separated ? 1 : 0) - (b.separated ? 1 : 0) || String(a.no).localeCompare(String(b.no), undefined, { numeric: true }));
   const rows = emps.map((e) => { const m = { ...(S.m2.get(e.id) || {}), ...(all.get(e.id) || {}) }; const r = blank();
-    for (const [c, k, , , t, core] of M2) { let v = core ? m2Core(e, k) : m[k]; if (v == null || v === "") continue; 
+    for (const [c, k, , , t, core] of M2) { let v = core ? m2Core(e, k, m) : m[k]; if (v == null || v === "") continue; 
       r[c] = m2ISO(v) && (t === "d" || k === "hire" || k === "birth") ? new Date(`${v}T00:00:00`) : v; }
     return r; });
   const ws = X.utils.aoa_to_sheet([r1, r2, blank(), r4, r5, ...rows], { cellDates: true, dateNF: "mm/dd/yyyy" }); ws["!cols"] = Array.from({ length: W }, (_, c) => ({ wch: c === 8 ? 30 : 16 }));
@@ -255,3 +262,85 @@ document.addEventListener("submit", async (ev) => {
   try { await S.db.doc(`m201/${e.id}`).set(JSON.parse(JSON.stringify(next))); S.m2.set(e.id, next); S.m2Edit = null; logActivity(`Updated ${sec} in ${fullName(e)}'s 201 file`); toast("Saved."); render(); }
   catch { if (btn) btn.disabled = false; toast("Couldn't save. Check your connection and try again."); }
 }, true);
+
+/* ---------- Glenn 2026-10-13: "follow the all needed information format for the Employees (201 files)".
+   The New / Edit 201 file form, the Employees list and the profile follow the masterlist: same sections, same order, same headings. ---------- */
+const M2_OPEN = new Set(["Employment", "Personal information", "Government numbers", "Address and contact", "Emergency contact"]);
+VIEWS.employeeForm = () => {
+  const e = S.view.id ? S.emps.get(S.view.id) : null; if (e && !S.m2.has(e.id)) m2Get(e.id);
+  const m = (e && S.m2.get(e.id)) || {}; const v = e || { no: "", status: "PROBATIONARY", payType: "MONTHLY", hire: todayISO() };
+  const F = (k, label, type = "text", req = false, ph = "") => `<div class="field"><label for="ef-${k}">${esc(label)}${req ? ' <span class="req">*</span>' : ""}</label><input class="input" id="ef-${k}" name="${k}" type="${type}" value="${esc(v[k] ?? "")}" ${req ? "required" : ""} placeholder="${esc(ph)}"></div>`;
+  const Sel = (k, label, list, blank, req = false) => `<div class="field"><label for="ef-${k}">${esc(label)}${req ? ' <span class="req">*</span>' : ""}</label><select class="input" id="ef-${k}" name="${k}" ${req ? "required" : ""}>${opts(list, v[k] ?? "", blank)}</select></div>`;
+  const RO = (label, val) => `<div class="field"><label>${esc(label)}</label><input class="input" value="${esc(val || "")}" disabled placeholder="Filled in for you"></div>`;
+  const sups = active().filter((x) => x.id !== v.id && (["Project Manager", "General Manager", "HR Manager", "Finance Manager", "Site Engineer", "Foreman", "Property Manager"].includes(pos(x.posId)?.title) || active().some((r) => r.supervisorId === x.id))).sort((a, b) => a.last.localeCompare(b.last));
+  const projs = [...S.projects.values()].sort((a, b) => String(a.code).localeCompare(String(b.code)));
+  const extra = (x) => { const [, k, label, , t] = x; const id = `ef-m2-${k}`; const val = m[k] ?? ""; const lab = `<label for="${id}">${esc(label)}</label>`;
+    if (k === M2K.rank) return `<div class="field">${lab}<input class="input" id="${id}" name="m2__${k}" value="${esc(v.level || val)}" list="m2-levels" placeholder="Rank and File 1"></div>`;
+    if (t === "l") return `<div class="field" style="grid-column:1/-1">${lab}<textarea class="input" id="${id}" name="m2__${k}" rows="2">${esc(val)}</textarea></div>`;
+    if (t === "d" && (!val || m2ISO(val))) return `<div class="field">${lab}<input class="input" id="${id}" name="m2__${k}" type="date" value="${esc(val)}"></div>`;
+    return `<div class="field">${lab}<input class="input" id="${id}" name="m2__${k}" value="${esc(val)}" ${t === "m" ? 'list="m2-marks" placeholder="√, NA, x or pending"' : ""}></div>`; };
+  const field = (x) => { const [, k, label] = x;
+    switch (k) {
+      case "no": return F("no", label, "text", true, "Type the employee ID");
+      case "project": return `<div class="field"><label for="ef-projectId">${esc(label)}</label><select class="input" id="ef-projectId" name="projectId">${opts(projs.map((p) => [p.id, `${p.code}${p.name && p.name !== p.code ? " · " + p.name : ""}`]), v.projectId || "", "HO (head office)")}</select></div>`;
+      case "active": return RO(label, e ? (e.separated ? "INACTIVE" : "ACTIVE") : "ACTIVE");
+      case "fullname": return RO(label, e ? fullName(e) : "");
+      case "position": return Sel("posId", label, S.org.positions.slice().sort((a, b) => a.title.localeCompare(b.title)).map((p) => [p.id, p.title + (dept(p.deptId) ? ` (${dept(p.deptId).code})` : "")]), "—");
+      case "first": return F("first", label, "text", true); case "middle": return F("middle", label); case "last": return F("last", label, "text", true) + F("suffix", "SUFFIX", "text", false, "Jr., III");
+      case "dept": return Sel("deptId", label, S.org.departments.map((d) => [d.id, d.name]), "—") + F("title", "TITLE SHOWN ON CARDS", "text", false, "Engr., Arch.") + Sel("supervisorId", "IMMEDIATE SUPERVISOR", sups.map((s) => [s.id, `${fullName(s)}, ${pos(s.posId)?.title || ""}`]), "—");
+      case "hire": return F("hire", label, "date", true);
+      case "age": return RO(label, e ? m2Age(e.birth) : "");
+      case "birth": return F("birth", label, "date");
+      case "gender": return Sel("gender", label, [["M", "Male"], ["F", "Female"]], "—");
+      case "civil": return Sel("civil", label, ["Single", "Married", "Widowed", "Separated"].map((c) => [c, c]), "—");
+      case "sss": return F("sss", label, "text", false, "00-0000000-0"); case "pagibig": return F("pagibig", label, "text", false, "0000-0000-0000");
+      case "philhealth": return F("philhealth", label, "text", false, "00-000000000-0"); case "tin": return F("tin", label, "text", false, "000-000-000-000");
+      case "address": return F("address", label); case "mobile": return F("mobile", label, "tel", false, "09XX XXX XXXX"); case "email": return F("email", label, "email");
+      case "emergencyName": return F("emergencyName", label); case "emergencyRelation": return F("emergencyRelation", label); case "emergencyPhone": return F("emergencyPhone", label, "tel");
+      case "bankTemp": return "";
+      case "bankAcct": return F("bank", "PAYROLL BANK", "text", false, "Metrobank, BDO, GCash") + F("bankAcct", label);
+    }
+    if (k === M2K.empStatus) return Sel("status", label, Object.entries(STATUS).map(([s, w]) => [s, w[0]]), null, true);
+    return extra(x); };
+  const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
+    ${Sel("shiftId", "SHIFT", SET().shifts.map((s) => [s.id, `${s.name} (${s.start} to ${s.end})`]), null)}</div>`;
+  const section = (sec) => { const f = M2.filter((x) => x[3] === sec); const body = `<div class="form-grid">${f.map(field).join("")}</div>`; const isPay = sec === "Payroll and system setup";
+    const filled = e ? m2Filled(e, m, sec) : null;
+    return `<details class="card m2-sec" ${M2_OPEN.has(sec) || isPay ? "open" : ""}><summary style="cursor:pointer;list-style:none;display:flex;justify-content:space-between;gap:10px;align-items:center"><h2 style="margin:0">${esc(sec)}</h2>${filled ? `<span class="t-muted num" style="font-size:13px">${filled[0]} of ${filled[1]} filled</span>` : ""}</summary>
+      <div style="margin-top:14px">${isPay ? pay : ""}${body}</div></details>`; };
+  return `<div><button class="link" style="color:#fff" ${e ? `data-emp="${e.id}"` : 'data-go="employees"'}>${icon("back", 16)} ${e ? "Back to profile" : "Employees"}</button></div>` +
+    head(e ? "Edit 201 file" : "New 201 file", e ? esc(fullName(e)) : "Add employee") + `
+    <form id="emp-form" class="stack" novalidate>
+      <section class="card" style="display:flex;flex-wrap:wrap;gap:20px;align-items:center">
+        <span id="photo-preview">${v.photo ? avatar(v, 96) : `<span class="avatar" style="width:96px;height:96px;background:var(--blue-soft);color:var(--blue-deep)">${icon("camera", 30)}</span>`}</span>
+        <div class="field"><label for="ef-photo">Photo (JPG, PNG or WebP)</label>${S.assets ? `<input id="ef-photo" type="file" accept="image/jpeg,image/png,image/webp">` : `<span class="t-muted" style="font-size:14px">Photo uploads are available to editors on claude.ai.</span>`}</div>
+        <p class="t-muted" style="flex-basis:100%;margin:0;font-size:13px">Follows the GPPMC Employee 201 File Masterlist. Fields marked with a star are required; the rest can be filled in as documents come in.</p>
+      </section>
+      ${e && !S.m2.has(e.id) ? '<section class="card"><p class="t-muted" style="margin:0">Loading the 201 file…</p></section>' : M2_SECS.map(section).join("")}
+      <datalist id="m2-marks"><option value="√"><option value="NA"><option value="x"><option value="pending"></datalist><datalist id="m2-levels">${M2_LEVELS.map((l) => `<option value="${l}">`).join("")}</datalist>
+      <div class="card sticky-actions"><p class="err" id="ef-err" style="margin:0 auto 0 0" hidden></p>
+        <button type="button" class="btn btn-ghost" ${e ? `data-emp="${e.id}"` : 'data-go="employees"'}>Cancel</button><button class="btn btn-primary" id="ef-save">Save employee</button></div>
+    </form>`;
+};
+
+/* Saving the form: the main record as before, then project, level and the rest of the masterlist fields. */
+{ const b = submitEmployee; submitEmployee = async (form) => {
+    const prevId = S.view.id; const no = (form.elements.no?.value || "").trim(); const projectId = form.elements.projectId ? form.elements.projectId.value || null : undefined;
+    const m2v = {}; for (const el of form.elements) if (el.name?.startsWith("m2__")) m2v[el.name.slice(4)] = el.value.trim();
+    await b(form);
+    const e = prevId ? S.emps.get(prevId) : [...S.emps.values()].find((x) => String(x.no).trim().toLowerCase() === no.toLowerCase());
+    const err = $("#ef-err"); if (!e || (err && !err.hidden)) return;
+    try {
+      let n = { ...e }; let ch = false;
+      const lvl = m2v[M2K.rank]; if (lvl !== undefined && (lvl || null) !== (e.level || null)) { n.level = lvl || null; n.rank = m2RankOf(lvl, e.rank); ch = true; }
+      if (projectId !== undefined && projectId !== (e.projectId || null)) { const p = projectId ? S.projects.get(projectId) : null; const d = prevId ? todayISO() : e.hire;
+        n = { ...n, projectId, projectRole: p ? pos(e.posId)?.title || null : null, projectSince: p ? d : null, projectUntil: null, history: [...(n.history || []), { d, kind: "Project assignment", text: p ? `Assigned to ${p.code}${p.name && p.name !== p.code ? " (" + p.name + ")" : ""}` : "Moved to the head office" }] }; ch = true; }
+      if (ch) { await saveEmp(n); S.emps.set(n.id, n); }
+      delete m2v[M2K.rank];
+      const cur = S.m2.get(e.id) || (prevId ? null : {}); if (cur === null) await m2Get(e.id);
+      const next = { ...(S.m2.get(e.id) || {}) }; let mc = false;
+      for (const [k, val] of Object.entries(m2v)) { if (val) { if (next[k] !== val) { next[k] = val; mc = true; } } else if (k in next) { delete next[k]; mc = true; } }
+      if (mc) { await S.db.doc(`m201/${e.id}`).set(JSON.parse(JSON.stringify(next))); S.m2.set(e.id, next); }
+      if (ch || mc) render();
+    } catch { toast("The main 201 file was saved, but some masterlist details weren't. Open Edit 201 file and save again."); }
+  }; }
