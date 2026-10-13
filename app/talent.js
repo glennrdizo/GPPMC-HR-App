@@ -298,7 +298,7 @@ function hirePanel(a, j) {
   const proj = S.projects.get(j?.projectId);
   return `<section class="card" style="border:2px solid var(--gold)"><div class="card-head"><h2>Hire ${esc(a.first)}</h2></div>
     <form id="hire-form" class="stack" style="gap:12px" data-keep><div class="form-grid">
-      <div class="field"><label for="hf-no">Employee no.</label><input class="input" id="hf-no" required value="${nextEmpNo()}"></div>
+      <div class="field"><label for="hf-no">Employee ID no. <span class="req">*</span></label><input class="input" id="hf-no" required value="" placeholder="Type the employee ID"></div>
       <div class="field"><label for="hf-start">First day</label><input class="input" id="hf-start" type="date" required value="${a.offer?.start || todayISO()}"></div>
       <div class="field"><label for="hf-status">Employment status</label><select class="input" id="hf-status">${opts(Object.entries(STATUS).map(([k, x]) => [k, x[0]]), j?.empType || "PROBATIONARY")}</select></div>
       <div class="field"><label for="hf-pay">Basic pay (${j?.payType === "DAILY" ? "a day" : "a month"})</label><input class="input" id="hf-pay" type="number" min="0" step="0.01" value="${a.offer?.rate ?? j?.rate ?? ""}"></div>

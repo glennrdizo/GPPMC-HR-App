@@ -1466,7 +1466,7 @@ VIEWS.employees = () => {
         <div class="field"><label for="f-dept">Department</label><select class="input" id="f-dept" data-filter="dept">${opts(S.org.departments.map((d) => [d.id, d.name]), f.dept, "All")}</select></div>
         <div class="field"><label for="f-proj">Project</label><select class="input" id="f-proj" data-filter="project">${opts([["none", "Head office (no project)"], ...projs.map((p) => [p.id, p.name])], f.project, "All")}</select></div>
         <div class="field"><label for="f-status">Status</label><select class="input" id="f-status" data-filter="status">${opts(Object.entries(STATUS).map(([k, v]) => [k, v[0]]), f.status, "All")}</select></div>
-        <div class="field"><label for="f-show">Show</label><select class="input" id="f-show" data-filter="show">${opts([["active", "Active"], ["separated", "Separated"]], f.show)}</select></div>
+        <div class="field"><label for="f-show">Show</label><select class="input" id="f-show" data-filter="show">${opts([["active", "Active"], ["separated", "In-Active (Separated / Resigned)"], ["awol", "In-Active (AWOL)"]], f.show)}</select></div>
       </div>
       <div id="emp-rows">${employeeRows()}</div>
     </section>`;
@@ -1543,7 +1543,7 @@ VIEWS.employee = () => {
 VIEWS.employeeForm = () => {
   const e = S.view.id ? S.emps.get(S.view.id) : null;
   const nextNo = () => { const n = Math.max(0, ...[...S.emps.values()].map((x) => Number(String(x.no).replace(/\D/g, "")) || 0)); return `EMP-${String(n + 1).padStart(4, "0")}`; };
-  const v = e || { no: nextNo(), status: "PROBATIONARY", payType: "MONTHLY", hire: todayISO() };
+  const v = e || { no: "", status: "PROBATIONARY", payType: "MONTHLY", hire: todayISO() };
   const F = (k, label, type = "text", req = false, ph = "") => `<div class="field"><label for="ef-${k}">${label}${req ? ' <span class="req">*</span>' : ""}</label><input class="input" id="ef-${k}" name="${k}" type="${type}" value="${esc(v[k] ?? "")}" ${req ? "required" : ""} placeholder="${esc(ph)}"></div>`;
   const Sel = (k, label, list, blank, req = false) => `<div class="field"><label for="ef-${k}">${label}${req ? ' <span class="req">*</span>' : ""}</label><select class="input" id="ef-${k}" name="${k}" ${req ? "required" : ""}>${opts(list, v[k] ?? "", blank)}</select></div>`;
   const sups = active().filter((x) => x.id !== v.id && (["Project Manager", "General Manager", "HR Manager", "Finance Manager", "Site Engineer", "Foreman"].includes(pos(x.posId)?.title) || active().some((r) => r.supervisorId === x.id))).sort((a, b) => a.last.localeCompare(b.last));
@@ -1555,7 +1555,7 @@ VIEWS.employeeForm = () => {
         <div class="field"><label for="ef-photo">Photo (JPG, PNG or WebP)</label>${S.assets ? `<input id="ef-photo" type="file" accept="image/jpeg,image/png,image/webp">` : `<span class="t-muted" style="font-size:14px">Photo uploads are available to editors on claude.ai.</span>`}</div>
       </section>
       <section class="card"><div class="card-head"><h2>Name and contact</h2></div><div class="form-grid">
-        ${F("no", "Employee no.", "text", true)}${F("first", "First name", "text", true)}${F("middle", "Middle name")}${F("last", "Last name", "text", true)}${F("suffix", "Suffix", "text", false, "Jr., III")}
+        ${F("no", "Employee ID no.", "text", true, "Type the employee ID")}${F("first", "First name", "text", true)}${F("middle", "Middle name")}${F("last", "Last name", "text", true)}${F("suffix", "Suffix", "text", false, "Jr., III")}
         ${F("email", "Email", "email")}${F("mobile", "Mobile", "tel", false, "09XX XXX XXXX")}${F("address", "Address")}
       </div></section>
       <section class="card"><div class="card-head"><h2>Job</h2></div><div class="form-grid">
@@ -3007,7 +3007,7 @@ function hirePanel(a, j) {
   const proj = S.projects.get(j?.projectId);
   return `<section class="card" style="border:2px solid var(--gold)"><div class="card-head"><h2>Hire ${esc(a.first)}</h2></div>
     <form id="hire-form" class="stack" style="gap:12px" data-keep><div class="form-grid">
-      <div class="field"><label for="hf-no">Employee no.</label><input class="input" id="hf-no" required value="${nextEmpNo()}"></div>
+      <div class="field"><label for="hf-no">Employee ID no. <span class="req">*</span></label><input class="input" id="hf-no" required value="" placeholder="Type the employee ID"></div>
       <div class="field"><label for="hf-start">First day</label><input class="input" id="hf-start" type="date" required value="${a.offer?.start || todayISO()}"></div>
       <div class="field"><label for="hf-status">Employment status</label><select class="input" id="hf-status">${opts(Object.entries(STATUS).map(([k, x]) => [k, x[0]]), j?.empType || "PROBATIONARY")}</select></div>
       <div class="field"><label for="hf-pay">Basic pay (${j?.payType === "DAILY" ? "a day" : "a month"})</label><input class="input" id="hf-pay" type="number" min="0" step="0.01" value="${a.offer?.rate ?? j?.rate ?? ""}"></div>
@@ -13850,6 +13850,22 @@ document.addEventListener("click", async (ev) => {
   if (!await askConfirm("Remove this person's access to confidential payroll?", "Remove")) return;
   try { await cfWho(t.dataset.cfWhoOff, false); logActivity("Removed someone's access to confidential payroll"); toast("Access removed."); } catch { toast("Couldn't save. Only an Owner or Executive can change this."); } render();
 });
+
+/* ---------- Employee list options (Glenn 2026-10-13) ---------- */
+// Employment status "Project - Regular": a project employee who has become regular. Listed right after Project-based.
+{ const old = { ...STATUS }; for (const k of Object.keys(STATUS)) delete STATUS[k];
+  for (const [k, v] of Object.entries(old)) { STATUS[k] = v; if (k === "PROJECT_BASED") STATUS.PROJECT_REGULAR = ["Project - Regular", "c-ok"]; }
+  if (!STATUS.PROJECT_REGULAR) STATUS.PROJECT_REGULAR = ["Project - Regular", "c-ok"]; }
+STATUS_COLORS.PROJECT_REGULAR = "#0e7c86";
+// AWOL is its own separation reason, so the list can show In-Active (AWOL) apart from those who resigned or were separated.
+if (!SEP_REASONS.some((r) => /awol/i.test(r))) SEP_REASONS.splice(1, 0, "AWOL (absence without official leave)");
+const isAwol = (e) => !!e?.separated && /awol|abandon/i.test(e.separated.reason || "");
+{ const b = filteredEmployees; filteredEmployees = (...a) => {
+  const f = S.empFilter; const want = f.show;
+  if (want !== "awol" && want !== "separated") return b(...a);
+  f.show = "separated"; try { return b(...a).filter((e) => (want === "awol" ? isAwol(e) : !isAwol(e))); } finally { f.show = want; } }; }
+// Needs action sits right after the Dashboard in Overview.
+{ const ov = NAV.find(([n]) => n === "Overview"); if (ov) { const i = ov[1].findIndex(([v]) => v === "needs"); if (i > 0) { const [it] = ov[1].splice(i, 1); const d = ov[1].findIndex(([v]) => v === "dash"); ov[1].splice(d + 1, 0, it); } } }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {
