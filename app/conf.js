@@ -247,12 +247,13 @@ function cfAfter(hidden) {
 }
 { const b = VIEWS.paySetup; VIEWS.paySetup = () => (C.emp.has(S.view.id) && !canConf() ? head("Pay setup", "Confidential") + `<section class="card"><p style="margin:0">This person's pay is confidential. Only an Owner or Executive can see or change it.</p></section>` : b()); }
 
-/* Menu: Payroll > Confidential payroll, for Owners and Executives. */
+/* Menu: Payroll > Confidential payroll (right after Payroll), for Owners, Executives and chosen staff. */
 Object.assign(ICON, { lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>' });
 SECTION_OF.confpay = "confpay";
 { const b = renderNav; renderNav = (...a) => { const r = b(...a); if (S.selfMode || S.viewAs === "emp" || !S.realEdit || !canConf()) return r;
   const nav = $("#nav"); if (!nav || nav.querySelector('[data-go="confpay"]')) return r;
-  const after = nav.querySelector('[data-go="tax"]') || nav.querySelector('[data-go="contrib"]'); if (!after) return r;
+  const pay = nav.querySelector('.nav-sub > [data-go="payroll"], .nav-sub > .nav-row > [data-go="payroll"]'); if (!pay) return r;
+  let after = pay.parentElement.classList.contains("nav-row") ? pay.parentElement : pay; if (after.nextElementSibling?.classList.contains("nav-sub2")) after = after.nextElementSibling;
   after.insertAdjacentHTML("afterend", `<button class="nav-item" data-go="confpay" ${S.view?.name === "confpay" ? 'aria-current="page"' : ""}>${icon("lock")}Confidential payroll</button>`); return r; }; }
 
 /* The Confidential payroll page. */
