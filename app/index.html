@@ -13060,14 +13060,16 @@ let rlOwnerSet = false;
 // so HR still keeps their 201 file, leave and attendance. Owners and Executives get the two put back together when they load.
 // On the website the database itself refuses conf/ to everyone else (supabase/migrations/20261013_hr_confidential_pay.sql);
 // on claude.ai it is hidden on screen only.
-const CF_EMP = ["basicPay", "allow", "hdmfVol", "prev"];
+const CF_EMP = ["basicPay", "allow", "hdmfVol", "prev", "bank", "bankAcct"];
 const CF_ROW = ["bp", "comm", "adj", "adjN", "ded"];
 const CF_REC = new Set(["salinc", "paf", "flex", "fringe", "reimb", "loans", "loanposts"]);
 const CF_MAP = { payruns: "lines", t13: "emps" };
 const CF_COLS = new Set(["employees", "periods", "offboard", "empaudit", ...CF_REC, ...Object.keys(CF_MAP)]);
 const CF_VIEWS = new Set(["payroll", "payslips", "payslip", "t13", "finalpays", "finalpay", "wageinc", "reimb", "loans", "loanposts", "flex", "flexForm", "fringeForm", "contrib", "tax", "thirteenth", "salinc", "paf"]);
 const C = { emp: new Set(), store: new Map(), loaded: false, wait: null, started: false, live: new Set(), raw: null, lastT: {} };
-const canConf = () => !!S.isOwner || ["owner", "exec"].includes(S.access?.users?.[S.myId]?.role);
+// Owners and Executives, plus HR staff an Owner or Executive designated (org/access users[id].conf).
+const cfTop = () => !!S.isOwner || ["owner", "exec"].includes(S.access?.users?.[S.myId]?.role);
+const canConf = () => cfTop() || S.access?.users?.[S.myId]?.conf === true;
 const cfCanAct = () => canConf() && !!S.realEdit;
 const cfPath = (col, id) => `conf/${col}--${id}`;
 const cfPick = (o, ks) => { const r = {}; for (const k of ks) if (o && o[k] !== undefined) r[k] = o[k]; return r; };
@@ -13293,12 +13295,12 @@ function cfAfter(hidden) {
   if (n === "employee") {
     const h1 = main.querySelector("h1"); if (h1 && !main.querySelector(".cf-tag")) h1.insertAdjacentHTML("afterend", `<span class="chip c-gold cf-tag" title="Only Owners and Executives see this person's pay">${icon("lock", 13)}Confidential pay</span>`);
     if (!mine) {
-      for (const dt of main.querySelectorAll("dt")) if (/^Basic pay$/.test(dt.textContent.trim())) dt.nextElementSibling.innerHTML = cfLock();
+      for (const dt of main.querySelectorAll("dt")) if (/^(Basic pay|Bank account)$/.test(dt.textContent.trim())) dt.nextElementSibling.innerHTML = cfLock();
       for (const h2 of main.querySelectorAll(".card-head h2")) if (/^Pay setup$/.test(h2.textContent.trim())) { const card = h2.closest(".card"); card.innerHTML = `<div class="card-head"><h2>Pay setup</h2>${cfLock()}</div><p class="t-muted" style="margin:0">This person's pay, allowances, loans, payslips and tax figures are confidential. Only an Owner or Executive can see or change them.</p>`; }
       main.querySelector("#mv-pay")?.closest(".field")?.remove();
     }
   }
-  if (n === "employeeForm" && !mine) { const i = main.querySelector("#ef-basicPay"); if (i) { i.value = ""; i.disabled = true; i.placeholder = "Confidential"; } }
+  if (n === "employeeForm" && !mine) for (const k of ["basicPay", "bank", "bankAcct"]) { const i = main.querySelector("#ef-" + k); if (i) { i.value = ""; i.disabled = true; i.placeholder = "Confidential"; } }
 }
 { const b = VIEWS.paySetup; VIEWS.paySetup = () => (C.emp.has(S.view.id) && !canConf() ? head("Pay setup", "Confidential") + `<section class="card"><p style="margin:0">This person's pay is confidential. Only an Owner or Executive can see or change it.</p></section>` : b()); }
 
@@ -13313,7 +13315,7 @@ SECTION_OF.confpay = "confpay";
 /* The Confidential payroll page. */
 S.cfAdd = "";
 VIEWS.confpay = () => {
-  if (!canConf()) return head("Payroll", "Confidential payroll") + `<section class="card"><div class="empty-state"><span class="es-ic">${icon("lock", 22)}</span><p>Only Owners and Executives can open this page.</p></div></section>`;
+  if (!canConf()) return head("Payroll", "Confidential payroll") + `<section class="card"><div class="empty-state"><span class="es-ic">${icon("lock", 22)}</span><p>Only Owners, Executives and the HR staff they choose can open this page.</p></div></section>`;
   if (!C.loaded) { cfStart(); return head("Payroll", "Confidential payroll") + '<section class="card"><p class="t-muted" style="margin:0">Loading…</p></section>'; }
   const act = cfCanAct(); const list = cfEmps(); const id = S.periodId || curPeriod(); const p = PAY.period(id); const run = cfRun(id);
   const pids = []; for (let i = 1; i > -10; i--) pids.push(PAY.shiftPeriod(curPeriod(), i));
@@ -13327,15 +13329,16 @@ VIEWS.confpay = () => {
   const gt = {}; for (const k of ["sss", "sssEr", "ec", "ph", "phEr", "hd", "hdEr", "tax"]) gt[k] = PAY.r2(gov.reduce((a, g) => a + g[k], 0));
   const mFinal = mruns.length && mruns.every(({ r }) => r.final);
   return head("Payroll", "Confidential payroll", `<button class="btn btn-ghost" data-cf-csv="register"${lines.length ? "" : " disabled"}>Download register (CSV)</button>`) + `
-    <div class="notice">${cfLock("Owners and Executives only")}<span>HR and Payroll staff still see these people's 201 files, leave and attendance, but their pay, payslips, loans, 13th month and tax and contribution lines are hidden from them.${S.realEdit ? "" : " You can view only."}</span></div>
+    <div class="notice">${cfLock("Owners, Executives and chosen staff only")}<span>Other HR and Payroll staff still see these people's 201 files, leave and attendance, but their pay, payslips, loans, 13th month and tax and contribution lines are hidden from them.${S.realEdit ? "" : " You can view only."}</span></div>
     <section class="card"><div class="card-head"><h2>People with confidential pay</h2><span class="chip c-gray">${list.length}</span></div>
       ${list.length ? `<div class="table-wrap"><table><thead><tr><th>Employee</th><th>Position</th><th class="num">Basic pay</th><th></th></tr></thead><tbody>
         ${list.map((e) => `<tr><td>${empCell(e, e.no)}</td><td>${esc(pos(e.posId)?.title || "")}</td><td class="num">${esc(payLabel(e.basicPay, e.payType)) || '<span class="chip c-warn">Not set</span>'}</td>
           <td style="white-space:nowrap;text-align:right">${act ? `<button class="btn btn-ghost btn-sm" data-pay-setup="${e.id}">Pay setup</button> <button class="btn btn-ghost btn-sm" data-edit-emp="${e.id}">Edit 201 file</button> <button class="btn btn-ghost btn-sm" data-cf-off="${e.id}">Remove</button>` : ""}</td></tr>`).join("")}
       </tbody></table></div>` : '<p class="t-muted" style="margin:0">No one yet. Add the people whose pay should be confidential, for example executives and managers.</p>'}
       ${act ? `<form id="cf-add" class="stack" style="gap:8px;margin-top:14px"><div style="display:flex;gap:10px;flex-wrap:wrap"><select class="input" id="cf-emp" style="flex:1;min-width:220px" aria-label="Employee">${opts(others.map((e) => [e.id, `${fullName(e)} · ${pos(e.posId)?.title || e.no}`]), S.cfAdd, "Choose an employee")}</select><button class="btn btn-primary">Make pay confidential</button></div>
-        <p class="t-muted" style="margin:0;font-size:13px">Their current pay, past payslips, loans and pay history move to the confidential side. Basic pay is set in their 201 file (Edit 201 file), and allowances in Pay setup.</p></form>` : ""}
+        <p class="t-muted" style="margin:0;font-size:13px">Their current pay, bank account, past payslips, loans and pay history move to the confidential side. Basic pay and bank account are set in their 201 file (Edit 201 file), and allowances in Pay setup.</p></form>` : ""}
     </section>
+    ${cfWhoCard()}
     <section class="card"><div class="card-head"><h2>Payroll</h2><select class="input" style="width:auto" data-period-pick="1" aria-label="Pay period">${opts(pids.map((x) => [x, PAY.period(x).label]), id)}</select></div>
       <div class="chips" style="margin-bottom:12px">${run.final ? `<span class="chip c-ok">Confidential payroll final${run.at ? " · " + esc(fmtDate(run.at.slice(0, 10))) : ""}</span>` : '<span class="chip c-warn">Confidential payroll not final</span>'}<span class="chip ${hrFinal ? "c-ok" : "c-gray"}">HR payroll ${hrFinal ? "final" : "open"}</span></div>
       <section class="stats" style="margin:0 0 14px">
@@ -13446,6 +13449,40 @@ document.addEventListener("change", (ev) => { if (ev.target.id === "cf-emp") S.c
 const cfFinalAt = (start) => canConf() && [...C.store.entries()].some(([k, v]) => k.startsWith("conf/payruns--") && v?.start === start && v.lines);
 { const b = slipHTML; slipHTML = (e, l, p, final) => b(e, l, p, final || (C.emp.has(e?.id) && cfFinalAt(p?.start))); }
 { const b = cfAfter; cfAfter = (hidden) => { b(hidden); if (S.view?.name === "payslip" && C.emp.has(S.view.emp) && cfFinalAt(PAY.period(S.view.pid).start)) { const h1 = $("#main h1"); if (h1) h1.innerHTML = h1.innerHTML.replace(" · draft", ""); } }; }
+
+/* Who may handle confidential pay: Owners and Executives always; they can add trusted HR staff. */
+function cfWhoCard() {
+  const a = S.access || {}; const users = a.users || {}; const P = S.profiles || {}; const top = cfTop() && S.realEdit;
+  const nm = (id) => users[id]?.name || P[id]?.name || (id === S.myId ? "You" : "Someone");
+  const auto = Object.keys(users).filter((id) => ["owner", "exec"].includes(users[id]?.role));
+  const chosen = Object.keys(users).filter((id) => users[id]?.conf === true && !auto.includes(id));
+  const pool = [...new Set([...Object.keys(users), ...Object.keys(a.seen || {})])].filter((id) => !auto.includes(id) && !chosen.includes(id) && id !== S.myId);
+  const rn = (id) => ROLES[users[id]?.role || a.defaultRole || "admin"]?.name || "";
+  return `<section class="card"><div class="card-head"><h2>Who can do confidential payroll</h2></div>
+    <p class="t-muted" style="margin:0 0 10px;font-size:14px">Owners and Executives always can. They can also choose HR staff to encode these people's salaries, allowances and bank details and run their payroll.</p>
+    <div class="table-wrap"><table><thead><tr><th>Person</th><th>Role</th><th>Access</th><th></th></tr></thead><tbody>
+      ${S.isOwner && !auto.includes(S.myId) ? `<tr><td>${esc(nm(S.myId))}</td><td>Owner</td><td><span class="chip c-ok">Always</span></td><td></td></tr>` : ""}
+      ${auto.map((id) => `<tr><td>${esc(nm(id))}</td><td>${esc(rn(id))}</td><td><span class="chip c-ok">Always</span></td><td></td></tr>`).join("")}
+      ${chosen.map((id) => `<tr><td>${esc(nm(id))}</td><td>${esc(rn(id))}</td><td><span class="chip c-gold">Chosen</span></td><td style="text-align:right">${top ? `<button class="btn btn-ghost btn-sm" data-cf-who-off="${esc(id)}">Remove</button>` : ""}</td></tr>`).join("")}
+    </tbody></table></div>
+    ${top ? (pool.length ? `<form id="cf-who" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px"><select class="input" id="cf-who-id" style="flex:1;min-width:220px" aria-label="Staff member">${opts(pool.map((id) => [id, `${nm(id)}${rn(id) ? " · " + rn(id) : ""}`]), "", "Choose a staff member")}</select><button class="btn btn-primary">Give access</button></form>` : '<p class="t-muted" style="margin:12px 0 0;font-size:13px">Everyone else who uses the app is listed in Users &amp; permissions. Add them there first.</p>')
+      : '<p class="t-muted" style="margin:12px 0 0;font-size:13px">Only an Owner or Executive can change this list.</p>'}
+  </section>`;
+}
+async function cfWho(id, on) {
+  if (!cfTop() || !S.realEdit || !id) return; const a = cfClone(S.access || {}); a.users = a.users || {};
+  const u = { ...(a.users[id] || {}) }; if (on) u.conf = true; else delete u.conf; a.users[id] = u;
+  await S.db.doc("org/access").set(a); S.access = a; applyPerm();
+}
+document.addEventListener("submit", async (ev) => {
+  if (ev.target.id !== "cf-who") return; ev.preventDefault(); const id = $("#cf-who-id").value; if (!id) { toast("Choose a staff member."); return; }
+  try { await cfWho(id, true); logActivity("Gave someone access to confidential payroll"); toast("Access given."); } catch { toast("Couldn't save. Only an Owner or Executive can change this."); } render();
+});
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-cf-who-off]"); if (!t) return;
+  if (!await askConfirm("Remove this person's access to confidential payroll?", "Remove")) return;
+  try { await cfWho(t.dataset.cfWhoOff, false); logActivity("Removed someone's access to confidential payroll"); toast("Access removed."); } catch { toast("Couldn't save. Only an Owner or Executive can change this."); } render();
+});
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {
