@@ -1236,7 +1236,7 @@ document.addEventListener("click", (ev) => {
 function renderNav() {
   if (S.selfMode) { $("#nav").innerHTML = selfNav(); $("#nav").dataset.open = String(S.navOpen); $("#menu-toggle").setAttribute("aria-expanded", String(S.navOpen)); $("#company-name").textContent = CO_DEFAULT; return; }
   if (S.viewAs === "emp" && S.realEdit) { $("#nav").innerHTML = essNav(); $("#nav").dataset.open = String(S.navOpen); $("#menu-toggle").setAttribute("aria-expanded", String(S.navOpen)); return; }
-  const cur = SECTION_OF[S.view.name];
+  const cur = NAV.some(([, its]) => its.some(([v]) => v === S.view.name)) ? S.view.name : SECTION_OF[S.view.name];
   if (S.navLast !== cur) { S.navLast = cur; for (const [g, items] of NAV) for (const [v, , , kids] of items) { if (v === cur || (kids || []).some(([kv]) => kv === cur)) { S.navState["g:" + g] = true; if (kids) S.navState["i:" + v] = true; } } }
   const isOpen = (k, def) => (k in S.navState ? S.navState[k] : def);
   const kidsCur = (kids) => (kids || []).some(([kv]) => kv === cur);
@@ -14709,6 +14709,11 @@ document.addEventListener("submit", async (ev) => {
   const next = { ...(S.doctpl || {}), [k.key]: { body: body.slice(0, 60000), at: todayISO(), by: S.myId || null } };
   try { await S.db.doc("org/doctpl").set(JSON.parse(JSON.stringify(next))); S.doctpl = next; S.dtEdit = null; logActivity(`Saved the ${k.short} format`); toast("Format saved."); render(); } catch { toast("Couldn't save. Try again."); }
 }, true);
+
+// Menu link check (2026-10-14): pages that reuse another page's screen get the title of the menu item that opened them.
+{ const T = { joboffer: "Job offers", discipline: "Disciplinary", evaluation: "Evaluation", onboarding: "New hire checklist", offboarding: "Exit clearance", chsched: "Change schedule", obreq: "Official business", utreq: "Undertime", trprog: "Training program", emptraining: "Training history", orgho: "Head Office organization" };
+  for (const [v, t] of Object.entries(T)) { const base = VIEWS[v]; if (!base) continue;
+    VIEWS[v] = (...a) => { const h = base(...a); return S.view.name === v && typeof h === "string" ? h.replace(/(<h1[^>]*>)([^<]*)(<\/h1>)/, (m, o, x, c) => o + esc(t) + c) : h; }; } }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {

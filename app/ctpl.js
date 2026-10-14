@@ -215,3 +215,8 @@ document.addEventListener("submit", async (ev) => {
   const next = { ...(S.doctpl || {}), [k.key]: { body: body.slice(0, 60000), at: todayISO(), by: S.myId || null } };
   try { await S.db.doc("org/doctpl").set(JSON.parse(JSON.stringify(next))); S.doctpl = next; S.dtEdit = null; logActivity(`Saved the ${k.short} format`); toast("Format saved."); render(); } catch { toast("Couldn't save. Try again."); }
 }, true);
+
+// Menu link check (2026-10-14): pages that reuse another page's screen get the title of the menu item that opened them.
+{ const T = { joboffer: "Job offers", discipline: "Disciplinary", evaluation: "Evaluation", onboarding: "New hire checklist", offboarding: "Exit clearance", chsched: "Change schedule", obreq: "Official business", utreq: "Undertime", trprog: "Training program", emptraining: "Training history", orgho: "Head Office organization" };
+  for (const [v, t] of Object.entries(T)) { const base = VIEWS[v]; if (!base) continue;
+    VIEWS[v] = (...a) => { const h = base(...a); return S.view.name === v && typeof h === "string" ? h.replace(/(<h1[^>]*>)([^<]*)(<\/h1>)/, (m, o, x, c) => o + esc(t) + c) : h; }; } }
