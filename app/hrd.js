@@ -156,7 +156,7 @@ function hrdRegPage(v) {
 function hrdAreaPage(n) {
   const a = hrdAreaOf(n); const [name, , main, , subs] = HRD_AREAS[n]; const ed = S.canEdit; const st = S.hrd?.resp?.[n] || {};
   const done = a.resp.filter((_, i) => st[i] === "OK" || st[i] === "NA").length; const pct = a.resp.length ? Math.round((done / a.resp.length) * 100) : 0;
-  const delivs = subs.filter((s) => !info0(s)).map((s) => { const [lab, to] = s.split("="); const v = to || `hrdr_${n}_${hrdSlug(lab)}`; const cnt = HRD_REG[v] ? hrdRows(v).length : null; return { lab, v, cnt }; });
+  const delivs = subs.filter((s) => !info0(s) && !HRD_EXTRA[s]).map((s) => { const [lab, to] = s.split("="); const v = to || `hrdr_${n}_${hrdSlug(lab)}`; const cnt = HRD_REG[v] ? hrdRows(v).length : null; return { lab, v, cnt }; });
   const regs = Object.keys(HRD_REG).filter((v) => HRD_REG[v].n === n); const openN = regs.reduce((s, v) => s + hrdRows(v).filter((r) => r.status !== "DONE").length, 0); const lateN = regs.reduce((s, v) => s + hrdRows(v).filter(hrdOverdue).length, 0);
   return head(esc(hrdCatOf(n)), esc(name), main ? `<button class="btn btn-ghost btn-sm" data-go="${main}">${icon("back", 16)}Open ${esc(labelOf(main))}</button>` : "") + `
     <section class="stats kpis">
