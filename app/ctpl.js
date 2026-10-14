@@ -10,6 +10,10 @@ const DT_KINDS = {
 { const g = NAV.find(([n]) => n === "Employees");
   for (const [parent, ho, prj] of [["contracts", "contracts_ho", "contracts_prj"], ["joboffer", "joboffer_ho", "joboffer_prj"]]) {
     const it = g?.[1].find(([v]) => v === parent); if (it) it[3] = [[ho, DT_KINDS[ho].label, "building"], [prj, DT_KINDS[prj].label, "project"]]; }
+  // Glenn 2026-10-14: Contracts and Job offers sit in People, right before Offer letter requests.
+  const ppl = NAV.find(([n]) => n === "People");
+  if (g && ppl) { const moved = ["contracts", "joboffer"].map((v) => { const i = g[1].findIndex(([x]) => x === v); return i >= 0 ? g[1].splice(i, 1)[0] : null; }).filter(Boolean);
+    const at = ppl[1].findIndex(([v]) => v === "olr"); ppl[1].splice(at >= 0 ? at : ppl[1].length, 0, ...moved); }
   Object.assign(SECTION_OF, { contracts_ho: "contracts_ho", contracts_prj: "contracts_prj", joboffer_ho: "joboffer_ho", joboffer_prj: "joboffer_prj" }); }
 S.doctpl = null; S.dtPick = {}; S.dtVals = {}; S.dtEdit = null;
 { const b = bootIO; bootIO = (db) => { b(db); db.doc("org/doctpl").onSnapshot((d) => { S.doctpl = d.exists ? d.data() : {}; refresh(); }, () => {}); }; }
