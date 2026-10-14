@@ -14456,6 +14456,12 @@ const M2_ONB_PROOF = { bio: 149, email: 150, hris: 152, login: 153, uniform: 207
       if (ch) { const all = items.every((it) => it.done); try { await put("onboard", { ...o, items, done: all ? todayISO() : null }); } catch {} } }
   }; }
 
+/* Menu (Glenn 2026-10-14): Performance and Company Assets move from Recruitment to People, right after Organization.
+   Same pages and view names, so saved roles and links keep working. */
+{ const ppl = NAV.find(([g]) => g === "People"); const tal = NAV.find(([g]) => g === "Talent");
+  if (ppl && tal) { const moved = ["perf", "property"].map((v) => { const i = tal[1].findIndex(([x]) => x === v); return i >= 0 ? tal[1].splice(i, 1)[0] : null; }).filter(Boolean);
+    const o = ppl[1].findIndex(([v]) => v === "org"); ppl[1].splice(o >= 0 ? o + 1 : ppl[1].length, 0, ...moved); } }
+
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {
   const t = ev.target.closest("[data-go],[data-emp],[data-project],[data-dashproj],[data-page],[data-edit-emp],[data-edit-project],[data-new-project],[data-release],[data-filter-pos],[data-export],[data-remove-doc],[data-dept-filter],#menu-toggle,#clear-sample,#imp-go,#company-save");
