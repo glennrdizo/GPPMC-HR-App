@@ -287,7 +287,7 @@
       <div class="sb-msg ${kind || ""}" role="status">${msg || ""}</div>
       <div class="links">${mode === "verify" || mode === "wait" ? `${mode === "wait" && acc?.status !== "rejected" ? `<a data-sb-edit>Edit my details</a>` : ""}<a data-sb-out>Sign out</a>` : mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
       <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
-      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button></div></div>`;
+      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button> · <a href="/careers">Job openings</a></div></div>`;
     g.querySelector("input")?.focus();
   }
   document.addEventListener("click", (ev) => {
@@ -328,6 +328,8 @@
   let acc = null;
   async function start(session, again) {
     const u = session.user; const name = u.user_metadata?.full_name || u.user_metadata?.name || "";
+    // Applicant accounts (made on the careers page) belong on /careers; /?staff=1 lets a hired applicant ask for employee access.
+    if (u.user_metadata?.applicant && !/[?&]staff=1/.test(location.search) && location.protocol !== "file:") { location.replace("/careers?view=mine"); return; }
     if (u.user_metadata?.dpa_v !== DPA_V) { if (dpaNow) dpaSave(); else { held = session; mode = "dpa"; gate(); return; } }
     const { data, error } = await sb.rpc("hr_claim", { display_name: name || null });
     if (error) { gate("Couldn't reach the HR database. Check your connection and reload.", "err"); return; }

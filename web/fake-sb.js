@@ -36,6 +36,26 @@
     }
     if (name === "hr_people") return { data: isEd() ? (window.__PEOPLE || []).filter((p) => !a.q || p.name.toLowerCase().includes(a.q.toLowerCase())) : [] };
     if (name === "hr_set_editor") { window.__writes.push(["editor", a.target, a.allow]); if (a.allow) editors.add(a.target); else editors.delete(a.target); return { data: null }; }
+    // Applicant portal (mirrors supabase/migrations/20261014_hr_applicant_portal.sql).
+    if (name === "hr_careers") { const t = D["org/talent"] || {}; return { data: { company: D["org/main"]?.companyName || "GD Prime", how: t.applyHow || null, reqs: t.portalReqs || null, forms: t.portalForms || [],
+      jobs: Object.keys(D).filter((k) => parent(k) === "jobs" && D[k].status === "OPEN" && !D[k].sample && !D[k].careersHide).map((k) => { const j = D[k]; const p = D["projects/" + j.projectId]; return { id: k.split("/")[1], title: j.title, desc: j.desc || null, empType: j.empType || null, payType: j.payType || null, rate: t.careersHidePay ? null : j.rate ?? null, slots: j.slots ?? null, opened: j.opened || null, site: p?.name || null, location: p?.location || t.hoAddress || "Head Office" }; }) } }; }
+    if (!session && /^hr_(apply|my_apps|portal)/.test(name)) return denied;
+    const me = session?.user.id; const myApps = () => Object.keys(D).filter((k) => parent(k) === "applicants" && D[k].portalUid === me);
+    if (name === "hr_portal_link") { let n = 0; for (const k of Object.keys(D)) if (parent(k) === "applicants" && !D[k].portalUid && (D[k].email || "").toLowerCase() === session.user.email.toLowerCase() && !["HIRED", "REJECTED", "WITHDRAWN"].includes(D[k].stage)) { D[k].portalUid = me; n++; } return { data: n }; }
+    if (name === "hr_apply") { const j = D["jobs/" + a.p_job], p = a.p; if (!j || j.status !== "OPEN") return { error: { message: "job_closed" } }; if (!p.consent) return { error: { message: "consent_required" } }; if (!p.first || !p.last || !p.mobile) return { error: { message: "missing_fields" } };
+      const src = { linkedin: "LinkedIn", facebook: "Facebook", jobstreet: "JobStreet", indeed: "Indeed", referral: "Referral" }[(p.src || "").toLowerCase()] || "Company website";
+      const d = { first: p.first, middle: p.middle || null, last: p.last, mobile: p.mobile, email: session.user.email, address: p.address || null, birth: p.birth || null, gender: p.gender || null, expRate: Number(p.expRate) || null, notes: p.notes || null, ...(p.resume && String(p.resume.id).startsWith(`apply/${me}/`) ? { resume: { id: p.resume.id, name: p.resume.name } } : {}) };
+      const cur = myApps().find((k) => D[k].jobId === a.p_job); if (cur) { if (D[cur].stage === "APPLIED") Object.assign(D[cur], d); fire(cur); return { data: cur.split("/")[1] }; }
+      const id = "ap" + Math.random().toString(36).slice(2, 10); const day = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+      D["applicants/" + id] = { ...d, id, jobId: a.p_job, stage: "APPLIED", stageAt: day, applied: day, source: src, ivs: [], reqs: {}, portalUid: me, portal: { via: "careers", consent: { v: p.dpaV, at: new Date().toISOString() } } }; V["applicants/" + id] = 1; window.__writes.push(["apply", id, src]); fire("applicants/" + id); return { data: id }; }
+    if (name === "hr_my_apps") return { data: myApps().map((k) => { const x = D[k], j = D["jobs/" + x.jobId] || {}, p = D["projects/" + j.projectId] || {}; return { id: k.split("/")[1], jobId: x.jobId, job: j.title, site: p.name || null, location: p.location || null, stage: x.stage, applied: x.applied, stageAt: x.stageAt, first: x.first, middle: x.middle, last: x.last, mobile: x.mobile, address: x.address, birth: x.birth, gender: x.gender, expRate: x.expRate, resume: x.resume || null,
+      ivs: (x.ivs || []).map((i) => ({ d: i.d, t: i.t, kind: i.kind, result: i.result })), offer: ["SENT", "ACCEPTED", "DECLINED"].includes(x.offer?.status) ? { status: x.offer.status, rate: x.offer.rate, start: x.offer.start, payType: j.payType } : null, reqs: x.reqs || {}, portal: x.portal || {} }; }) };
+    if (name === "hr_portal_put") { const k = "applicants/" + a.p_app, x = D[k]; if (!x || x.portalUid !== me) return { error: { code: "P0002", message: "not_found" } }; if (["HIRED", "REJECTED", "WITHDRAWN"].includes(x.stage)) return { error: { message: "application_closed" } };
+      x.portal = x.portal || {}; const v = a.p_val || {}; if (v.file && !String(v.file).startsWith(`apply/${me}/`)) return { error: { message: "bad_file" } };
+      if (a.p_kind === "withdraw") { x.stage = "WITHDRAWN"; x.portal.withdrawn = new Date().toISOString(); }
+      else if (a.p_kind === "req") { if (x.portal.reqs?.[a.p_key]?.status === "ACCEPTED") return { error: { message: "already_accepted" } }; x.portal.reqs = { ...(x.portal.reqs || {}), [a.p_key]: { ...(v.file ? { file: v.file, name: v.name } : {}), num: v.num || null, at: new Date().toISOString(), status: "SUBMITTED" } }; }
+      else if (a.p_kind === "back") { if (!(x.portal.shared || []).some((s) => s.id === a.p_key)) return { error: { code: "P0002", message: "not_found" } }; x.portal.back = { ...(x.portal.back || {}), [a.p_key]: { file: v.file, name: v.name, at: new Date().toISOString() } }; }
+      window.__writes.push(["portal", a.p_kind, a.p_key]); fire(k); return { data: null }; }
     return { error: { message: "unknown rpc " + name } };
   };
   const from = (t) => {
@@ -57,12 +77,12 @@
       getUser: async () => ({ data: { user: session?.user || null } }),
       onAuthStateChange: (cb) => { authCbs.push(cb); setTimeout(() => cb("INITIAL_SESSION", session), 0); return { data: { subscription: { unsubscribe() {} } } }; },
       signInWithPassword: async ({ email }) => { const u = window.__LOGIN?.[email]; if (!u) return { error: { message: "Invalid login credentials" } }; session = { access_token: "tok", user: { id: u.id, email, user_metadata: { full_name: u.name } } }; if (u.editor) editors.add(u.id); authCbs.forEach((cb) => cb("SIGNED_IN", session)); return { data: { session }, error: null }; },
-      signUp: async () => ({ data: { session: null }, error: null }),
+      signUp: async (o) => { window.__writes.push(["signup", o.email, o.options?.data?.applicant || false, o.options?.emailRedirectTo || ""]); return { data: { session: null, user: { identities: [{}] } }, error: null }; },
       resetPasswordForEmail: async () => ({ error: null }),
       updateUser: async () => ({ error: null }),
       signOut: async () => { session = null; authCbs.forEach((cb) => cb("SIGNED_OUT", null)); },
     },
-    storage: { from: () => ({ upload: async (id) => { window.__writes.push(["upload", id]); return { error: null }; }, remove: async () => ({ error: null }), list: async () => ({ data: [] }) }) },
+    storage: { from: () => ({ upload: async (id) => { window.__writes.push(["upload", id]); return { error: null }; }, download: async (id) => ({ data: new Blob(["file " + id], { type: "text/plain" }), error: null }), remove: async () => ({ error: null }), list: async () => ({ data: [] }) }) },
     channel: () => { const ch = { on: (_e, _f, cb) => { subs.push(cb); return ch; }, subscribe: () => ch }; return ch; },
     realtime: { setAuth() {} },
   };

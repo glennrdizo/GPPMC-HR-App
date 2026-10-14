@@ -17,6 +17,15 @@ out = os.path.join(W, '..', 'public'); os.makedirs(out, exist_ok=True)
 open(os.path.join(out, 'index.html'), 'w').write(head + app + '</body></html>')
 shutil.copy(os.path.join(W, 'sw.js'), os.path.join(out, 'sw.js'))
 open(os.path.join(out, 'supabase.js'), 'w').write(sbjs)
+# Careers page and applicant portal (/careers): a light page of its own, sharing the same Supabase project and sign-in.
+car = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+       '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
+       '<title>Careers · GD Prime</title><meta name="description" content="Job openings at GD Prime Property Management Corporation. Apply online and follow your application.">'
+       '<meta property="og:title" content="Careers at GD Prime"><meta property="og:description" content="Job openings at GD Prime Property Management Corporation. Apply online.">'
+       '<meta name="theme-color" content="#0D1729"><link rel="icon" href="' + logo + '">'
+       '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Playfair+Display:ital,wght@0,700;1,700&display=swap">'
+       '<script src="supabase.js"></script></head><body><div id="app"></div><script>window.CO_LOGO_URL="' + logo + '";\n' + open(os.path.join(W, 'careers.js')).read() + '</script></body></html>')
+open(os.path.join(out, 'careers.html'), 'w').write(car)
 m = re.findall(r'<script[^>]*>(.*?)</script>', head + app, re.S)
 open('/tmp/chk-shim.js', 'w').write(m[1]); open('/tmp/chk-app.js', 'w').write(m[-1])
 print('built', os.path.getsize(os.path.join(out, 'index.html')))

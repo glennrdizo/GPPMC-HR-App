@@ -17,7 +17,7 @@ self.addEventListener("fetch", (e) => {
     const c = await loadCfg();
     if (!c?.token) return new Response("Sign in to see this file.", { status: 401, headers: { "content-type": "text/plain" } });
     const id = decodeURIComponent(u.pathname.slice(7));
-    const r = await fetch(`${c.url}/storage/v1/object/authenticated/${c.bucket}/${encodeURIComponent(id)}`, { headers: { authorization: `Bearer ${c.token}`, apikey: c.key } });
+    const r = await fetch(`${c.url}/storage/v1/object/authenticated/${c.bucket}/${id.split("/").map(encodeURIComponent).join("/")}`, { headers: { authorization: `Bearer ${c.token}`, apikey: c.key } });
     if (!r.ok) return new Response("File not found or not allowed.", { status: r.status, headers: { "content-type": "text/plain" } });
     return new Response(r.body, { status: 200, headers: { "content-type": r.headers.get("content-type") || "application/octet-stream", "cache-control": "private, max-age=3600" } });
   })());

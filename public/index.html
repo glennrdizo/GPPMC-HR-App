@@ -288,7 +288,7 @@
       <div class="sb-msg ${kind || ""}" role="status">${msg || ""}</div>
       <div class="links">${mode === "verify" || mode === "wait" ? `${mode === "wait" && acc?.status !== "rejected" ? `<a data-sb-edit>Edit my details</a>` : ""}<a data-sb-out>Sign out</a>` : mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
       <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
-      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button></div></div>`;
+      <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button> · <a href="/careers">Job openings</a></div></div>`;
     g.querySelector("input")?.focus();
   }
   document.addEventListener("click", (ev) => {
@@ -329,6 +329,8 @@
   let acc = null;
   async function start(session, again) {
     const u = session.user; const name = u.user_metadata?.full_name || u.user_metadata?.name || "";
+    // Applicant accounts (made on the careers page) belong on /careers; /?staff=1 lets a hired applicant ask for employee access.
+    if (u.user_metadata?.applicant && !/[?&]staff=1/.test(location.search) && location.protocol !== "file:") { location.replace("/careers?view=mine"); return; }
     if (u.user_metadata?.dpa_v !== DPA_V) { if (dpaNow) dpaSave(); else { held = session; mode = "dpa"; gate(); return; } }
     const { data, error } = await sb.rpc("hr_claim", { display_name: name || null });
     if (error) { gate("Couldn't reach the HR database. Check your connection and reload.", "err"); return; }
@@ -14672,6 +14674,101 @@ document.addEventListener("click", async (ev) => {
     for (const el of m.querySelectorAll("p,small,span")) { if (el.children.length) continue; const t = el.textContent; let q = t; for (const [rx, to] of swap) q = q.replace(rx, to); if (q !== t) el.textContent = q; } };
   new MutationObserver(fix).observe(document.body, { childList: true, subtree: true });
   const b = toast; toast = (msg) => b(/isn't available in this view|hindi available dito/.test(String(msg)) ? off() : msg); }
+/* ---------- Applicant portal (Glenn 2026-10-14): careers page at /careers, online applications, requirements and documents ---------- */
+const CAREERS = location.origin + "/careers";
+const careersLink = (j, src) => `${CAREERS}?job=${encodeURIComponent(j.id)}${src ? `&src=${encodeURIComponent(src)}` : ""}`;
+const prExt = (f) => (f.name.match(/\.([a-z0-9]{1,5})$/i)?.[1] || "bin").toLowerCase();
+const prRand = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+const blobUrl = (id) => "/_blob/" + String(id).split("/").map(encodeURIComponent).join("/");
+// Every job ad carries the online apply link; each site's Post button tags it with that site so the applicant's source is recorded.
+{ const b = jobAd; jobAd = (j) => b(j).replace("\nHow to apply:\n", `\nHow to apply:\nApply online: ${careersLink(j)}\n`); }
+window.addEventListener("click", (ev) => {
+  const t = ev.target.closest?.("[data-jp-post]"); if (!t) return; const [id, k] = t.dataset.jpPost.split("|"); const ta = document.getElementById("jp-text"); const j = S.jobs.get(id); if (!ta || !j) return;
+  const line = `Apply online: ${careersLink(j, k)}`; ta.value = /^Apply online: .*$/m.test(ta.value) ? ta.value.replace(/^Apply online: .*$/m, line) : ta.value.replace("\nHow to apply:\n", `\nHow to apply:\n${line}\n`);
+}, true);
+
+// Recruitment page: the careers page link, channel links, forms applicants can download.
+function careersCard() {
+  const T = TSET(); const forms = T.portalForms || []; const ed = S.canEdit; const open = listOf(S.jobs).filter((j) => j.status === "OPEN" && !j.sample);
+  const online = listOf(S.apps).filter((a) => a.portalUid); const waiting = online.filter((a) => Object.values(a.portal?.reqs || {}).some((r) => r.status === "SUBMITTED")).length;
+  return `<section class="card" id="careers-card"><div class="card-head"><h2>Careers page and applicant portal</h2>${waiting ? `<span class="chip c-warn">${waiting} with requirements to check</span>` : ""}</div>
+    <p class="t-muted" style="margin:0 0 12px;font-size:14px;max-width:95ch">Open jobs show on your careers page. Applicants apply online with their resume, follow their application, see interview schedules, send requirements and sign documents. Online applications appear in the job's applicant list with the site they came from. Add the link to gd-prime.com and your social pages.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center"><a class="btn btn-primary btn-sm" href="${CAREERS}" target="_blank" rel="noopener">${icon("door", 16)}Open the careers page</a><button class="btn btn-ghost btn-sm" data-cr-copy="${CAREERS}">Copy link</button>
+      <span class="t-muted" style="font-size:13px">${open.length} open job${open.length === 1 ? "" : "s"} listed · ${online.length} online applicant${online.length === 1 ? "" : "s"}</span></div>
+    ${ed ? `<label class="check" style="margin-top:12px"><input type="checkbox" data-cr-hidepay ${T.careersHidePay ? "checked" : ""}><span>Hide pay rates on the careers page</span></label>` : ""}
+    <h3 style="font-size:16px;margin:16px 0 6px">Forms applicants can download</h3>
+    ${forms.length ? `<ul class="list">${forms.map((f) => `<li style="display:flex;gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px"><span><a class="link" href="${blobUrl(f.file)}" target="_blank" rel="noopener">${esc(f.name)}</a>${f.note ? ` <span class="t-muted" style="font-size:13px">${esc(f.note)}</span>` : ""}</span>${ed ? `<button class="link danger" data-cr-delform="${esc(f.id)}">Remove</button>` : ""}</li>`).join("")}</ul>` : '<p class="t-muted" style="margin:0;font-size:14px">None yet. Add your application form, ATM authorization, confidentiality agreement and other forms.</p>'}
+    ${ed ? `<form id="cr-form" class="form-grid" style="margin-top:12px;align-items:end" data-keep><div class="field"><label for="cr-name">Form name</label><input class="input" id="cr-name" required placeholder="Application form"></div>
+      <div class="field"><label for="cr-note">Note <span class="t-muted">(optional)</span></label><input class="input" id="cr-note" placeholder="Fill in and bring on your first day"></div>
+      <div class="field"><label for="cr-file">File (PDF or Word)</label><input class="input" id="cr-file" type="file" accept="application/pdf,.doc,.docx,image/*" required></div><div><button class="btn btn-ghost">Add form</button></div></form>` : ""}</section>`;
+}
+{ const b = VIEWS.hiring; VIEWS.hiring = (...x) => { const h = b(...x); return S.view.name === "hiring" ? h + careersCard() : h; }; }
+async function saveTalent(patch, msg) { const next = JSON.parse(JSON.stringify({ ...TSET(), ...patch })); await S.db.doc("org/talent").set(next); S.talent = next; if (msg) logActivity(msg); }
+
+// Applicant page: what the applicant sent online, HR's review, and documents shared with them.
+function portalCard(a) {
+  const P = a.portal || {}; const R = P.reqs || {}; const ed = S.canEdit; const live = inProcess(a);
+  if (!a.portalUid) return `<section class="card" id="ap-portal"><div class="card-head"><h2>Applicant portal</h2><span class="chip c-gray">Not linked</span></div><p class="t-muted" style="margin:0;font-size:14px">To let ${esc(a.first)} follow this application and send requirements online, ask them to create an account on the careers page${a.email ? ` with <b>${esc(a.email)}</b>` : " with the email on this record"}.</p>
+    <div style="margin-top:10px"><button class="btn btn-ghost btn-sm" data-cr-copy="${CAREERS}">Copy careers page link</button></div></section>`;
+  const keys = [...PRE_REQS.map(([k, l]) => [k, l]), ...Object.keys(R).filter((k) => !PRE_REQS.some(([x]) => x === k)).map((k) => [k, k])];
+  const ST = { SUBMITTED: ["To check", "c-warn"], ACCEPTED: ["Accepted", "c-ok"], REDO: ["Asked to send again", "c-bad"] };
+  const rows = keys.map(([k, l]) => { const r = R[k]; const acc = r?.status === "ACCEPTED" || (!!a.reqs?.[k] && !r);
+    return `<tr><td><b>${esc(l)}</b></td><td>${r ? `${r.file ? `<a class="link" href="${blobUrl(r.file)}" target="_blank" rel="noopener">${esc(r.name || "Open file")}</a>` : ""}${r.num ? `<div>${esc(r.num)}</div>` : ""}<div class="t-muted" style="font-size:12px">Sent ${fmtDate(manilaDay(r.at))}</div>` : '<span class="t-muted">Not sent</span>'}</td>
+      <td>${r ? `<span class="chip ${ST[r.status]?.[1] || "c-gray"}">${ST[r.status]?.[0] || ""}</span>${r.status === "REDO" && r.note ? `<div class="t-muted" style="font-size:12px">${esc(r.note)}</div>` : ""}` : acc ? '<span class="chip c-ok">Received</span>' : ""}</td>
+      <td class="num" style="white-space:nowrap">${ed && live && r && r.status !== "ACCEPTED" ? `<button class="btn btn-primary btn-sm" data-pr-ok="${a.id}:${k}">Accept</button>` : ""}${ed && live && r && r.status === "SUBMITTED" ? ` <input class="input" data-pr-note="${k}" placeholder="What to fix" aria-label="What to fix for ${esc(l)}" style="width:150px;padding:6px 8px;font-size:13px"> <button class="btn btn-ghost btn-sm" data-pr-redo="${a.id}:${k}">Ask to send again</button>` : ""}</td></tr>`; }).join("");
+  const shared = P.shared || [];
+  return `<section class="card" id="ap-portal"><div class="card-head"><h2>Applicant portal</h2><span class="chip c-ok">${P.via === "careers" ? "Applied online" : "Linked to their account"}</span></div>
+    ${P.withdrawn ? `<p class="t-bad" style="margin:0 0 10px">Withdrew online on ${fmtDate(manilaDay(P.withdrawn))}.</p>` : ""}
+    <p class="t-muted" style="margin:0 0 10px;font-size:14px">${esc(a.first)} sees the stage, interview schedules, the job offer once it is Sent, and the documents below. Accepting a requirement ticks it in the checklist; on hire, the files go to the 201 file.</p>
+    <h3 style="font-size:16px;margin:6px 0">Requirements sent online</h3>
+    <div class="table-wrap"><table><thead><tr><th>Requirement</th><th>Sent</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    <h3 style="font-size:16px;margin:16px 0 6px">Documents for ${esc(a.first)}</h3>
+    ${shared.length ? `<ul class="list">${shared.map((s) => { const bk = P.back?.[s.id]; return `<li style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line);padding-bottom:8px"><span><a class="link" href="${blobUrl(s.file)}" target="_blank" rel="noopener">${esc(s.name)}</a> ${s.sign ? (bk ? `<span class="chip c-ok">Signed copy received</span> <a class="link" href="${blobUrl(bk.file)}" target="_blank" rel="noopener">Open signed copy</a>` : '<span class="chip c-warn">Waiting for signature</span>') : '<span class="chip c-gray">For their information</span>'}</span>${ed ? `<button class="link danger" data-pr-unshare="${a.id}:${esc(s.id)}">Remove</button>` : ""}</li>`; }).join("")}</ul>` : '<p class="t-muted" style="margin:0;font-size:14px">Nothing shared yet. Share the offer letter, contract or other papers for them to download and sign.</p>'}
+    ${ed && live ? `<form class="form-grid pr-share" data-app-id="${a.id}" style="margin-top:12px;align-items:end" data-keep><div class="field"><label for="pr-sname">Document name</label><input class="input" id="pr-sname" required placeholder="Job offer letter"></div>
+      <div class="field"><label for="pr-sfile">File</label><input class="input" id="pr-sfile" type="file" accept="application/pdf,.doc,.docx,image/*" required></div>
+      <label class="check" style="align-self:center"><input type="checkbox" id="pr-ssign" checked><span>Needs their signature</span></label><div><button class="btn btn-ghost">Share with ${esc(a.first)}</button></div></form>` : ""}</section>`;
+}
+{ const b = VIEWS.applicant; VIEWS.applicant = (...x) => { const h = b(...x); const a = S.apps.get(S.view.id); if (!a) return h; const i = h.indexOf('<div class="two">'); const c = portalCard(a); return i >= 0 ? h.slice(0, i) + c + h.slice(i) : h + c; }; }
+async function prUpdate(a, patch) { await S.db.doc(`applicants/${a.id}`).update(JSON.parse(JSON.stringify(patch)));
+  const deep = (x, y) => { const o = { ...(x || {}) }; for (const k in y) o[k] = y[k] && typeof y[k] === "object" && !Array.isArray(y[k]) && o[k] && typeof o[k] === "object" && !Array.isArray(o[k]) ? deep(o[k], y[k]) : y[k]; return o; };
+  S.apps.set(a.id, deep(a, patch)); S.ver++; }
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest("[data-cr-copy],[data-cr-delform],[data-pr-ok],[data-pr-redo],[data-pr-unshare]"); if (!t) return; ev.preventDefault();
+  if (t.dataset.crCopy) { try { await navigator.clipboard.writeText(t.dataset.crCopy); toast("Link copied."); } catch { toast(t.dataset.crCopy); } return; }
+  if (!S.canEdit) return;
+  try {
+    if (t.dataset.crDelform) { const f = (TSET().portalForms || []).find((x) => x.id === t.dataset.crDelform); if (!f || !await askConfirm(`Remove ${f.name} from the careers page?`, "Remove", true)) return;
+      await saveTalent({ portalForms: (TSET().portalForms || []).filter((x) => x.id !== f.id) }, `Removed the ${f.name} form from the careers page`); window.__sb?.storage.from("hr-files").remove([f.file]).catch(() => {}); toast("Removed."); render(); return; }
+    const [id, k] = (t.dataset.prOk || t.dataset.prRedo || t.dataset.prUnshare).split(":"); const a = S.apps.get(id); if (!a) return;
+    if (t.dataset.prOk) { const l = PRE_REQS.find(([x]) => x === k)?.[1] || k; await prUpdate(a, { portal: { reqs: { [k]: { status: "ACCEPTED", note: null, by: S.myId || null, d: todayISO() } } }, reqs: { [k]: a.reqs?.[k] || todayISO() } }); logActivity(`Accepted ${appName(a)}'s ${l}`); toast("Accepted."); render(); return; }
+    if (t.dataset.prRedo) { const note = document.querySelector(`[data-pr-note="${k}"]`)?.value.trim(); if (!note) { toast("Say what to fix, like \"Photo is blurry\"."); document.querySelector(`[data-pr-note="${k}"]`)?.focus(); return; }
+      await prUpdate(a, { portal: { reqs: { [k]: { status: "REDO", note: note.slice(0, 200) } } } }); logActivity(`Asked ${appName(a)} to send a requirement again`); toast(`${a.first} will see your note on the careers page.`); render(); return; }
+    if (t.dataset.prUnshare) { const s = (a.portal?.shared || []).find((x) => x.id === k); if (!s || !await askConfirm(`Stop sharing ${s.name} with ${a.first}?`, "Remove", true)) return;
+      await prUpdate(a, { portal: { shared: (a.portal?.shared || []).filter((x) => x.id !== k) } }); window.__sb?.storage.from("hr-files").remove([s.file]).catch(() => {}); toast("Removed."); render(); return; }
+  } catch { toast("Couldn't save. Try again."); }
+});
+document.addEventListener("change", async (ev) => { if (!ev.target.matches?.("[data-cr-hidepay]") || !S.canEdit) return; try { await saveTalent({ careersHidePay: ev.target.checked }, `${ev.target.checked ? "Hid" : "Showed"} pay rates on the careers page`); toast("Saved."); } catch { toast("Couldn't save. Try again."); } });
+document.addEventListener("submit", async (ev) => {
+  const f = ev.target; if (!(f.id === "cr-form" || f.classList?.contains("pr-share"))) return; ev.preventDefault(); ev.stopImmediatePropagation(); if (!S.canEdit || !window.__sb) return;
+  const file = f.querySelector("input[type=file]")?.files?.[0]; if (!file) { toast("Choose the file."); return; } if (file.size > 20 * 1048576) { toast("That file is over 20 MB."); return; }
+  const btn = f.querySelector("button"); btn.disabled = true; toast("Uploading…");
+  try {
+    if (f.id === "cr-form") { const name = $("#cr-name").value.trim(); if (!name) throw new Error("name"); const path = `forms/${prRand()}.${prExt(file)}`;
+      const { error } = await window.__sb.storage.from("hr-files").upload(path, file, { contentType: file.type || "application/octet-stream" }); if (error) throw error;
+      await saveTalent({ portalForms: [...(TSET().portalForms || []), { id: prRand(), name: name.slice(0, 120), note: $("#cr-note").value.trim().slice(0, 200) || null, file: path }] }, `Added the ${name} form to the careers page`); toast("Form added."); render(); return; }
+    const a = S.apps.get(f.dataset.appId); const name = $("#pr-sname").value.trim(); if (!a?.portalUid || !name) throw new Error("name");
+    const path = `share/${a.portalUid}/${prRand()}.${prExt(file)}`; const { error } = await window.__sb.storage.from("hr-files").upload(path, file, { contentType: file.type || "application/octet-stream" }); if (error) throw error;
+    await prUpdate(a, { portal: { shared: [...(a.portal?.shared || []), { id: prRand(), name: name.slice(0, 120), file: path, sign: $("#pr-ssign").checked, at: todayISO() }] } });
+    logActivity(`Shared ${name} with applicant ${appName(a)}`); toast(`Shared. ${a.first} can download it on the careers page.`); render();
+  } catch (x) { btn.disabled = false; toast(x?.message === "name" ? "Enter the name." : "Couldn't upload. Try again."); }
+}, true);
+// Hiring carries what the applicant sent online into the 201 file: documents, signed copies and government numbers.
+{ const b = hireApplicant; hireApplicant = async () => { const aid = S.view.id; await b(); const a = S.apps.get(aid); const e = a?.empId && S.emps.get(a.empId); if (!e || !a.portalUid) return;
+    const P = a.portal || {}; const docs = [...(e.docs || [])]; const have = new Set(docs.map((d) => d.id)); const n = { ...e };
+    for (const [k, r] of Object.entries(P.reqs || {})) { if (r.file && !have.has(r.file)) docs.push({ id: r.file, kind: PRE_REQS.find(([x]) => x === k)?.[1] || k, name: r.name || k, at: todayISO(), exp: null });
+      if (r.num && ["sss", "philhealth", "pagibig", "tin"].includes(k) && !n[k]) n[k] = r.num; }
+    for (const s of P.shared || []) { const bk = P.back?.[s.id]; if (bk?.file && !have.has(bk.file)) docs.push({ id: bk.file, kind: "Signed document", name: `${s.name} (signed)`, at: todayISO(), exp: null }); }
+    n.docs = docs; try { await saveEmp(n); S.emps.set(n.id, n); } catch {} }; }
 
 boot();
 })();
