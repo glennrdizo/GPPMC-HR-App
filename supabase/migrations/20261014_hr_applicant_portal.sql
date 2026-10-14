@@ -129,6 +129,7 @@ begin
 end $$;
 
 revoke execute on function public.hr_careers(), public.hr_portal_link(), public.hr_apply(text, jsonb), public.hr_my_apps(), public.hr_portal_put(text, text, text, jsonb) from public;
+revoke execute on function public.hr_portal_link(), public.hr_apply(text, jsonb), public.hr_my_apps(), public.hr_portal_put(text, text, text, jsonb) from anon;
 grant execute on function public.hr_careers() to anon, authenticated;
 grant execute on function public.hr_portal_link(), public.hr_apply(text, jsonb), public.hr_my_apps(), public.hr_portal_put(text, text, text, jsonb) to authenticated;
 
