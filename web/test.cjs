@@ -29,7 +29,7 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   const t0 = Date.now(); for (const v of views) { await p.evaluate((v) => document.querySelector(`#nav [data-go="${v}"]`)?.click(), v); await p.waitForTimeout(250); }
   console.log('visited', views.length, 'pages in', Date.now() - t0, 'ms; errors so far', errs.length);
   // a write: add a project code/edit org? Use activity log via saving settings: change dash scope not db. Do an employee edit save.
-  await p.evaluate(() => document.querySelector('#nav [data-go="perms"]')?.click()); await p.waitForTimeout(500);
+  await p.evaluate(() => { const b = document.createElement('button'); b.dataset.go = 'perms'; document.querySelector('#main').appendChild(b); b.click(); }); await p.waitForTimeout(500);
   await p.screenshot({ path: W + '/t-perms.png', fullPage: false });
   console.log('perms text has claude.ai:', /claude\.ai/.test(await p.locator('#main').innerText()));
   console.log('writes', JSON.stringify(await p.evaluate(() => window.__writes.slice(0, 10))));
@@ -57,7 +57,7 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   const emp = Object.values(D).find((x) => x && x.no === 'EMP-0157');
   p = await mk(D, { id: 'u-glenn', email: 'glennrdizo@gmail.com', name: 'Glenn Dizo', editor: true, owner: true, dpa: '2026-10-12' }, { signups: [{ user_id: 'u-new', status: 'pending', name: emp ? `${emp.first} ${emp.last}` : 'Juan Cruz', email: 'new@x.com', emp_no: 'EMP-0157', position: 'Guard', mobile: '0917 123 4567', requested_at: new Date().toISOString() }, { user_id: 'u-x', status: 'pending', name: 'Someone Else', email: 'x@x.com', emp_no: 'EMP-9999', position: 'Guard', mobile: '0918', requested_at: new Date().toISOString() }] });
   await p.waitForTimeout(1500); console.log('dash alert:', await p.locator('.su-alert').innerText().catch(() => 'none'));
-  await p.evaluate(() => document.querySelector('#nav [data-go="perms"]')?.click()); await p.waitForTimeout(1200);
+  await p.evaluate(() => { const b = document.createElement('button'); b.dataset.go = 'perms'; document.querySelector('#main').appendChild(b); b.click(); }); await p.waitForTimeout(1200);
   console.log('requests card:', (await p.locator('#su-card').innerText().catch(() => 'none')).replace(/\n+/g, ' | ').slice(0, 400));
   await p.locator('#su-card').screenshot({ path: W + '/t-requests.png' });
   await p.click('[data-su-ok="u-new"]'); await p.waitForTimeout(300); await p.click('[data-ac="1"]'); await p.waitForTimeout(800);
