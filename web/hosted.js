@@ -2,8 +2,10 @@
 // HR editor access in the database follows the Users list: giving someone a role lets them see records; Delete takes it away.
 { const b = saveAccess; saveAccess = async (patch, msg) => {
     const before = { ...(S.access?.users || {}) }; await b(patch, msg); const after = S.access?.users || {};
-    for (const id of Object.keys(after)) if (after[id]?.role && !before[id]?.role) window.__sb?.rpc("hr_set_editor", { target: id, allow: true });
-    for (const id of Object.keys(before)) if (!after[id]) window.__sb?.rpc("hr_set_editor", { target: id, allow: false });
+    // "No access" keeps someone off the records in the database too, not just off the menu.
+    const has = (u) => !!u?.role && u.role !== "none";
+    for (const id of Object.keys(after)) if (has(after[id]) !== has(before[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: has(after[id]) });
+    for (const id of Object.keys(before)) if (!after[id] && has(before[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: false });
   }; }
 // Invitations are claimed by the email the person signed up with (or, as before, by name).
 claimInvite = async () => {

@@ -456,6 +456,7 @@ async function submitOffboard(f) {
   const err = $("#ob-err"); const fail = (m) => { err.textContent = m; err.hidden = false; };
   const e = S.emps.get($("#ob-emp").value); const last = $("#ob-last").value; const reason = $("#ob-reason").value;
   if (!e) return fail("Choose the employee."); if (!last) return fail("Enter the last working day."); if (last < e.hire) return fail("The last day is before the hire date.");
+  if (reason === "End of project / contract" && !["PROJECT_BASED", "CONTRACTUAL", "CASUAL"].includes(e.status)) return fail(`${STATUS[e.status]?.[0] || "This"} employees have no fixed end date, so "End of project / contract" can't be used. Choose a just or authorized cause instead, so separation pay is worked out.`);
   if (reason === "Did not meet probationary standards" && last >= regDue(e)) return fail(`Probation ends on ${fmtDate(regDue(e))}. After that the employee is regular by law, so this reason can't be used. Choose a just or authorized cause instead.`);
   const o = { id: e.id, empId: e.id, notice: $("#ob-notice").value || todayISO(), last, reason, cause: reason === "Termination for authorized cause" ? $("#ob-cause").value : null, notes: $("#ob-notes").value.trim() || null,
     items: TSET().offboard.map(({ k, label, who }) => ({ k, label, who, done: null })), pay: {}, released: null, closed: null };

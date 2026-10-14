@@ -21,7 +21,7 @@ function annFor(a, e) {
   const [k, id] = t.split(":"); return k === "p" ? e.projectId === id : k === "d" ? e.deptId === id : true;
 }
 const annReach = (a) => active().filter((e) => annFor(a, e));
-const annSort = (x, y) => (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || (y.from || y.at || "").localeCompare(x.from || x.at || "");
+const annSort = (x, y) => (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || String(y.from || y.at || "").localeCompare(String(x.from || x.at || ""));
 function annText(a) { return `📢 ${a.title.toUpperCase()}\n\n${a.body}\n\n— ${S.org?.companyName || "HR"}${a.until ? ` (until ${fmtDate(a.until)})` : ""}`; }
 function annCard(a, full = true) {
   const c = annCat(a.cat); const st = annState(a); const ed = S.canEdit; const reach = annReach(a).length; const acks = Object.keys(a.acks || {}).length;

@@ -107,7 +107,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
 .sec h2{font-size:22px;margin-bottom:6px}.sub{color:var(--muted);margin:0;font-size:14.5px}.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .iv{display:flex;gap:12px;align-items:center;padding:12px 14px;border-radius:12px;background:var(--bluebg)}.iv b{display:block}
 .empty{text-align:center;padding:36px 16px;color:var(--muted)}
-footer{max-width:1080px;margin:0 auto;padding:22px 16px 40px;color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between}footer a,footer button{color:#8A6A1F;font-weight:700;background:none;border:0;padding:0;text-decoration:underline}
+@media (max-width:600px){body footer a,body footer button{display:inline-block;padding:10px 0;min-height:40px}}footer{max-width:1080px;margin:0 auto;padding:22px 16px 40px;color:var(--muted);font-size:13px;display:flex;flex-wrap:wrap;gap:8px 16px;justify-content:space-between}footer a,footer button{color:#8A6A1F;font-weight:700;background:none;border:0;padding:0;text-decoration:underline}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--navy);color:#fff;padding:12px 18px;border-radius:12px;z-index:50;font-size:14.5px;max-width:calc(100% - 32px);box-shadow:0 10px 30px rgba(0,0,0,.3)}
 .modal{position:fixed;inset:0;z-index:40;background:rgba(6,11,22,.7);display:grid;place-items:center;padding:16px}.modal>div{background:#FFFDF8;max-width:640px;width:100%;max-height:86vh;overflow:auto;border-radius:18px;padding:24px;font-size:14.5px}
 .modal h2{font-size:24px;margin-bottom:6px}.modal h3{font-size:15px;margin:14px 0 4px;font-family:inherit}.modal ul{padding-left:20px;margin:0 0 8px}
@@ -264,7 +264,7 @@ footer{max-width:1080px;margin:0 auto;padding:22px 16px 40px;color:var(--muted);
     if (d.auth) { e.preventDefault(); flash = null; view = { ...view, v: "auth", mode: d.auth }; render(); $("#auth input")?.focus(); return; }
     if (d.apply || d.editApp) { const id = d.apply || d.editApp; pending.set({ ...(pending.get() || {}), job: id }); S.file = null; if (!session) { view = { v: "auth", mode: "up" }; render(); return; } go({ v: "apply", id }); return; }
     if (d.share) { const u = `${location.origin}/careers?job=${encodeURIComponent(d.share)}`; try { await navigator.clipboard.writeText(u); toast("Link copied."); } catch { toast(u); } return; }
-    if (d.out !== undefined) { await sb.auth.signOut({ scope: "local" }).catch(() => {}); session = null; apps = null; go({ v: "jobs" }); return; }
+    if (d.out !== undefined) { await sb.auth.signOut({ scope: "local" }).catch(() => {}); try { navigator.serviceWorker?.controller?.postMessage({ hrToken: null }); } catch {} session = null; apps = null; go({ v: "jobs" }); return; }
     if (d.dl) { await download(d.dl, d.name); return; }
     if (d.saveNum) { const [aid, k] = d.saveNum.split(":"); const v = $(`[data-num="${d.saveNum}"]`)?.value.trim(); if (!v) { toast("Type the number first."); return; }
       t.disabled = true; const { error } = await sb.rpc("hr_portal_put", { p_app: aid, p_kind: "req", p_key: k, p_val: { num: v, ...(curReq(aid, k)?.file ? { file: curReq(aid, k).file, name: curReq(aid, k).name } : {}) } });

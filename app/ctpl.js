@@ -29,10 +29,10 @@ function dtCommon() {
   return { "Date today": fmtDate(todayISO()), "Company name": S.org?.companyName && !/^hr system$/i.test(S.org.companyName) ? S.org.companyName : CO_DEFAULT, "Company address": T.hoAddress || "", "HR Manager": hr ? fullName(hr) : "" };
 }
 function dtEmpFields(e) {
-  const p = e.projectId ? S.projects.get(e.projectId) : null; const c = typeof ctrOf === "function" ? ctrOf(e) : {}; const allow = Array.isArray(e.allow) ? e.allow.reduce((s, x) => s + (Number(x.amt ?? x.amount) || 0), 0) : Number(e.allow) || 0;
+  const p = e.projectId ? S.projects.get(e.projectId) : null; const c = typeof ctrOf === "function" ? ctrOf(e) : {}; const allow = 2 * (Array.isArray(e.allow) ? e.allow.reduce((s, x) => s + (Number(x.amt ?? x.amount) || 0), 0) : Number(e.allow) || 0); // per cutoff → a month
   return { ...dtCommon(), "Employee name": fullName(e), "First name": e.first, "Middle name": e.middle || "", "Last name": e.last, "Employee no": e.no, "Position": pos(e.posId)?.title || e.projectRole || "",
     "Department": dept(e.deptId)?.name || "", "Project": p?.name || "", "Project code": p?.code || "", "Work location": p ? [p.name, p.location].filter(Boolean).join(", ") : TSET().hoAddress || "Head Office", "Address": e.address || "",
-    "Employment status": STATUS[e.status]?.[0] || "", "Start date": fmtDate(e.hire), "End date": c?.end ? fmtDate(c.end) : e.projectUntil ? fmtDate(e.projectUntil) : "",
+    "Employment status": STATUS[e.status]?.[0] || "", "Start date": fmtDate(c?.start || e.hire), "Hire date": fmtDate(e.hire), "End date": c?.end ? fmtDate(c.end) : e.projectUntil ? fmtDate(e.projectUntil) : "",
     "Basic pay": dtMoney(e.basicPay), "Pay basis": dtPayWord(e.payType), "Daily rate": e.payType === "DAILY" ? dtMoney(e.basicPay) : "", "Monthly rate": e.payType === "DAILY" ? "" : dtMoney(e.basicPay), "Allowance": allow ? dtMoney(allow) : "",
     "Civil status": e.civil || "", "Birth date": fmtDate(e.birth), "SSS": e.sss || "", "PhilHealth": e.philhealth || "", "Pag-IBIG": e.pagibig || "", "TIN": e.tin || "", "Supervisor": e.supervisorId && S.emps.get(e.supervisorId) ? fullName(S.emps.get(e.supervisorId)) : "" };
 }
@@ -175,8 +175,8 @@ function dtPage(v) {
   const fillCard = `<section class="card"><div class="card-head"><h2>Fill in for ${d.kind === "ctr" ? "an employee" : "an applicant"}</h2></div>
     <div class="form-grid" style="align-items:end"><div class="field" style="grid-column:1/-1"><label for="dt-who">${d.kind === "ctr" ? `${d.scope === "prj" ? "Project" : "Head Office"} employee` : `${d.scope === "prj" ? "Project" : "Head Office"} applicant`}</label>
       <select class="input" id="dt-who" data-dt-who="${v}">${opts(people, pick, people.length ? "Choose…" : d.kind === "ctr" ? "No employees here yet" : "No applicants here yet")}</select></div>
-      ${missing.map((s) => `<div class="field"><label>${esc(s)}</label><input class="input" data-dt-val="${v}|${esc(s)}" value="${esc(typed[s] || "")}" placeholder="Type it here"></div>`).join("")}</div>
-    ${pick ? `<div class="dt-doc" style="margin-top:14px">${dtHtml(dtFill(body, { ...auto, ...typed })) || ""}</div>
+      ${missing.map((s, i) => `<div class="field"><label for="dt-in-${v}-${i}">${esc(s)}</label><input class="input" id="dt-in-${v}-${i}" data-dt-val="${v}|${esc(s)}" value="${esc(typed[s] || "")}" placeholder="Type it here"></div>`).join("")}</div>
+    ${pick ? `<div class="dt-doc" id="dt-prev" style="margin-top:14px">${dtHtml(dtFill(body, { ...auto, ...typed })) || ""}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-gold" data-dt-dl="${v}">${icon("download", 16)}Download ${d.kind === "ctr" ? "contract" : "job offer"}</button>
         ${missing.filter((s) => !typed[s]).length ? `<span class="t-muted" style="font-size:13px;align-self:center">${missing.filter((s) => !typed[s]).length} blank${missing.filter((s) => !typed[s]).length === 1 ? "" : "s"} still empty</span>` : ""}</div>` : ""}</section>`;
   const list = (() => {
@@ -206,9 +206,10 @@ document.addEventListener("click", async (ev) => {
     await saveLetter(`${k.kind === "ctr" ? "Contract" : "JobOffer"}-${nm}.html`, `${k.short} ${who ? `${who.first} ${who.last}` : ""}`, dtHtml(dtFill(dtBody(k.key), vals)));
     logActivity(`Prepared the ${k.short} for ${who ? `${who.first} ${who.last}` : "someone"}`); }
 });
-document.addEventListener("change", (ev) => { const v = ev.target.dataset?.dtWho; if (!v) return; S.dtPick[v] = ev.target.value; S.dtVals[v] = {}; render(); });
-document.addEventListener("input", (ev) => { const k = ev.target.dataset?.dtVal; if (!k) return; const [v, s] = k.split("|"); S.dtVals[v] = { ...(S.dtVals[v] || {}), [s]: ev.target.value }; });
-document.addEventListener("focusout", (ev) => { if (ev.target.dataset?.dtVal) render(); });
+document.addEventListener("change", (ev) => { const v = ev.target.dataset?.dtWho; if (!v) return; S.dtPick[v] = ev.target.value; render(); }); // typed blanks stay; the new person's record fills the rest
+// Typing updates the preview in place, so focus and Tab order stay where they are.
+document.addEventListener("input", (ev) => { const k = ev.target.dataset?.dtVal; if (!k) return; const [v, s] = k.split("|"); S.dtVals[v] = { ...(S.dtVals[v] || {}), [s]: ev.target.value };
+  const pv = document.getElementById("dt-prev"); const d = DT_KINDS[v]; if (pv && d && S.dtPick[v]) pv.innerHTML = dtHtml(dtFill(dtBody(d.key), { ...dtValsFor(d, S.dtPick[v]), ...S.dtVals[v] })); });
 document.addEventListener("submit", async (ev) => {
   const f = ev.target.closest?.(".dt-form"); if (!f) return; ev.preventDefault(); ev.stopImmediatePropagation(); if (!S.canEdit) return;
   const v = f.dataset.dt; const k = DT_KINDS[v]; const body = $("#dt-body").value.replace(/\r/g, "").trim(); if (!body) { toast("The format is empty."); return; }

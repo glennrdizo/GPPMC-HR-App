@@ -761,7 +761,7 @@ const parseISO = (s) => (s ? new Date(s + "T00:00:00") : null);
 const dFmt = new Intl.DateTimeFormat("en-PH", { day: "numeric", month: "short", year: "numeric" });
 const fmtDate = (s) => (s ? dFmt.format(parseISO(s)) : "");
 const peso = new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP" });
-const addMonths = (iso, m) => { const d = parseISO(iso); d.setMonth(d.getMonth() + m); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+const addMonths = (iso, m) => { const d = parseISO(iso); const day = d.getDate(); d.setDate(1); d.setMonth(d.getMonth() + m); d.setDate(Math.min(day, new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate())); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const daysBetween = (a, b) => Math.round((parseISO(b) - parseISO(a)) / 864e5);
 
 const STATUS = { PROBATIONARY: ["Probationary", "c-warn"], REGULAR: ["Regular", "c-ok"], PROJECT_BASED: ["Project-based", "c-blue"], CONTRACTUAL: ["Contractual", "c-gray"], CASUAL: ["Casual", "c-gray"] };
@@ -2800,6 +2800,7 @@ async function submitOffboard(f) {
   const err = $("#ob-err"); const fail = (m) => { err.textContent = m; err.hidden = false; };
   const e = S.emps.get($("#ob-emp").value); const last = $("#ob-last").value; const reason = $("#ob-reason").value;
   if (!e) return fail("Choose the employee."); if (!last) return fail("Enter the last working day."); if (last < e.hire) return fail("The last day is before the hire date.");
+  if (reason === "End of project / contract" && !["PROJECT_BASED", "CONTRACTUAL", "CASUAL"].includes(e.status)) return fail(`${STATUS[e.status]?.[0] || "This"} employees have no fixed end date, so "End of project / contract" can't be used. Choose a just or authorized cause instead, so separation pay is worked out.`);
   if (reason === "Did not meet probationary standards" && last >= regDue(e)) return fail(`Probation ends on ${fmtDate(regDue(e))}. After that the employee is regular by law, so this reason can't be used. Choose a just or authorized cause instead.`);
   const o = { id: e.id, empId: e.id, notice: $("#ob-notice").value || todayISO(), last, reason, cause: reason === "Termination for authorized cause" ? $("#ob-cause").value : null, notes: $("#ob-notes").value.trim() || null,
     items: TSET().offboard.map(({ k, label, who }) => ({ k, label, who, done: null })), pay: {}, released: null, closed: null };
@@ -3478,7 +3479,9 @@ async function clearComplySample() {
 const REGIONS = ["NCR", "CAR", "Region I", "Region II", "Region III", "Region IV-A", "Region IV-B", "Region V", "Region VI", "Region VII", "Region VIII", "Region IX", "Region X", "Region XI", "Region XII", "Region XIII", "BARMM"];
 function wageFor(e) {
   const Sx = SET(); const region = S.projects.get(e.projectId)?.region || S.org?.region || "NCR";
-  return Number((Sx.regionWages || []).find((w) => w.region === region)?.wage) || Sx.minWage;
+  const w = Number((Sx.regionWages || []).find((x) => x.region === region)?.wage); if (w) return w;
+  // The general minimum wage stands for the company's own region only; elsewhere an unknown wage means nobody is treated as a minimum wage earner.
+  return region === (S.org?.region || "NCR") ? Sx.minWage : 0;
 }
 function wageCard() {
   const Sx = SET(); const ed = S.canEdit; const used = new Set([...S.projects.values()].map((p) => p.region).filter(Boolean));
@@ -7366,7 +7369,7 @@ function annFor(a, e) {
   const [k, id] = t.split(":"); return k === "p" ? e.projectId === id : k === "d" ? e.deptId === id : true;
 }
 const annReach = (a) => active().filter((e) => annFor(a, e));
-const annSort = (x, y) => (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || (y.from || y.at || "").localeCompare(x.from || x.at || "");
+const annSort = (x, y) => (y.pinned ? 1 : 0) - (x.pinned ? 1 : 0) || String(y.from || y.at || "").localeCompare(String(x.from || x.at || ""));
 function annText(a) { return `📢 ${a.title.toUpperCase()}\n\n${a.body}\n\n— ${S.org?.companyName || "HR"}${a.until ? ` (until ${fmtDate(a.until)})` : ""}`; }
 function annCard(a, full = true) {
   const c = annCat(a.cat); const st = annState(a); const ed = S.canEdit; const reach = annReach(a).length; const acks = Object.keys(a.acks || {}).length;
@@ -10509,7 +10512,8 @@ window.addEventListener("submit", async (ev) => {
 { const b = hireApplicant; hireApplicant = async () => { const aid = S.view.id; await b(); const a = S.apps.get(aid); const e = a?.empId && S.emps.get(a.empId); if (!e) return;
     const j = S.jobs.get(a.jobId); const end = e.status === "PROBATIONARY" ? regDue(e) : e.status === "PROJECT_BASED" ? e.projectUntil || null : null;
     try { const id = uid(); const rec = { empId: e.id, type: e.status, start: e.hire, end, notes: "First contract, from hiring", at: todayISO(), by: S.myId || null }; await S.db.doc(`contracts/${id}`).set(JSON.parse(JSON.stringify(rec))); S.ctrs?.set(id, { id, ...rec }); } catch {}
-    if (a.olr?.allow && !e.allow && Array.isArray(a.olr.allow)) { const n = { ...e, allow: a.olr.allow }; await saveEmp(n); S.emps.set(n.id, n); }
+    const oa = a.olr?.allow; if (oa && !(Array.isArray(e.allow) ? e.allow.length : e.allow)) { const t = (SET().allowTypes || []).find((x) => !x.cap);
+      const allow = Array.isArray(oa) ? oa : t ? [{ code: t.code, amt: PAY.r2(Number(oa) / 2) }] : null; if (allow) { const n = { ...e, allow }; await saveEmp(n); S.emps.set(n.id, n); } }
     const m = j?.mprId && S.mpr?.get(j.mprId); if (m && m.status !== "FILLED" && (S.jobs.get(j.id)?.status === "FILLED")) { try { await put("mpr", { ...m, status: "FILLED", filled: todayISO() }); } catch {} } }; }
 if (typeof MPR_STATUS === "object" && !MPR_STATUS.FILLED) MPR_STATUS.FILLED = ["Filled", "c-ok"];
 
@@ -11598,7 +11602,7 @@ function opsReport() {
 function opsRules() {
   const O = OPS(); const ids = opUserIds(); const sel = (name, cur, any = "Anyone with access") => `<select class="input" name="${name}"><option value="">${any}</option>${ids.map((id) => `<option value="${id}" ${id === cur ? "selected" : ""}>${esc(personName(id))}</option>`).join("")}</select>`;
   const kinds = [...OPK.map((k) => [k[0], k[1], !!k[4]]), ["ask", "Ask HR question", false]];
-  return `<form id="ops-rules"><section class="card"><div class="card-head"><h2>Target days and endorsements</h2></div>
+  return `<form id="ops-rules" data-keep><section class="card"><div class="card-head"><h2>Target days and endorsements</h2></div>
     <p class="t-muted" style="margin:0 0 10px;font-size:14px">Target: days from filing to a decision. Endorsements: who must endorse before the final Approve button works. Leave a level name blank for none.</p>
     <div class="table-wrap"><table><thead><tr><th>Request type</th><th class="num">Target days</th><th>Endorsement 1</th><th>Endorsed by</th><th>Endorsement 2</th><th>Endorsed by</th></tr></thead><tbody>
     ${kinds.map(([k, l, can]) => { const ch = O.chains[k] || []; return `<tr><td>${esc(l)}</td><td class="num"><input class="input" type="number" min="1" max="60" name="sla-${k}" value="${O.sla[k]}" style="width:76px"></td>
@@ -11679,10 +11683,11 @@ const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return 
   const out = e.separated?.date || S.offb?.get(e.id)?.last || null; const stop = out && out < cut ? out : cut;
   if (e.hire && e.hire > stop) return 0; return base({ ...e, separated: { ...(e.separated || {}), date: stop } }, t, year); }; }
 /* Carry-over: unused VL and SL from last year, up to the cap, are added to this year's credits. */
-{ const base = balances; balances = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
-  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { prev = base(e, String(Number(year) - 1)); } catch {}
+{ const base = balances; const carried = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
+  // Last year's balance includes what it carried in itself (from 2026, when the app started), so carry-over chains year to year.
+  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
   return rows.map((t) => { const cap = Number(P.carry[t.code]) || 0; if (!cap || t.left == null) return t; const p = prev.find((x) => x.code === t.code); const c = Math.min(cap, Math.max(0, p?.left || 0)); if (!c) return t;
-    return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; }
+    return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; balances = carried; }
 const dailyOf = (e) => (e.payType === "DAILY" ? e.basicPay || 0 : ((e.basicPay || 0) * 12) / (SET().factor || 313));
 function lvYearEnd(year) { const P = LVP(); const rows = [];
   for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > `${year}-12-31`) continue; if (e.separated?.date && e.separated.date < `${year}-01-01`) continue; let b = []; try { b = balances(e, year); } catch { continue; }
@@ -11690,7 +11695,7 @@ function lvYearEnd(year) { const P = LVP(); const rows = [];
     const gone = !!e.separated?.date && e.separated.date <= `${year}-12-31`;
     const cVL = gone ? 0 : Math.min(Number(P.carry.VL) || 0, vl), cSL = gone ? 0 : Math.min(Number(P.carry.SL) || 0, sl);
     const conv = (P.conv.VL ? vl - cVL : 0) + (P.conv.SL ? sl - cSL : 0); const daily = dailyOf(e);
-    rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: PAY.r2(conv * daily), gone }); }
+    rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: gone ? 0 : PAY.r2(conv * daily), gone }); }
   return rows.sort((a, b) => fullName(a.e).localeCompare(fullName(b.e))); }
 Object.assign(S, { lvye: new Map(), lvyeY: String(Number(todayISO().slice(0, 4)) - (todayISO().slice(5, 7) < "07" ? 1 : 0)), shortN: {} });
 VIEWS.lvye = () => {
@@ -14148,10 +14153,10 @@ function dtCommon() {
   return { "Date today": fmtDate(todayISO()), "Company name": S.org?.companyName && !/^hr system$/i.test(S.org.companyName) ? S.org.companyName : CO_DEFAULT, "Company address": T.hoAddress || "", "HR Manager": hr ? fullName(hr) : "" };
 }
 function dtEmpFields(e) {
-  const p = e.projectId ? S.projects.get(e.projectId) : null; const c = typeof ctrOf === "function" ? ctrOf(e) : {}; const allow = Array.isArray(e.allow) ? e.allow.reduce((s, x) => s + (Number(x.amt ?? x.amount) || 0), 0) : Number(e.allow) || 0;
+  const p = e.projectId ? S.projects.get(e.projectId) : null; const c = typeof ctrOf === "function" ? ctrOf(e) : {}; const allow = 2 * (Array.isArray(e.allow) ? e.allow.reduce((s, x) => s + (Number(x.amt ?? x.amount) || 0), 0) : Number(e.allow) || 0); // per cutoff → a month
   return { ...dtCommon(), "Employee name": fullName(e), "First name": e.first, "Middle name": e.middle || "", "Last name": e.last, "Employee no": e.no, "Position": pos(e.posId)?.title || e.projectRole || "",
     "Department": dept(e.deptId)?.name || "", "Project": p?.name || "", "Project code": p?.code || "", "Work location": p ? [p.name, p.location].filter(Boolean).join(", ") : TSET().hoAddress || "Head Office", "Address": e.address || "",
-    "Employment status": STATUS[e.status]?.[0] || "", "Start date": fmtDate(e.hire), "End date": c?.end ? fmtDate(c.end) : e.projectUntil ? fmtDate(e.projectUntil) : "",
+    "Employment status": STATUS[e.status]?.[0] || "", "Start date": fmtDate(c?.start || e.hire), "Hire date": fmtDate(e.hire), "End date": c?.end ? fmtDate(c.end) : e.projectUntil ? fmtDate(e.projectUntil) : "",
     "Basic pay": dtMoney(e.basicPay), "Pay basis": dtPayWord(e.payType), "Daily rate": e.payType === "DAILY" ? dtMoney(e.basicPay) : "", "Monthly rate": e.payType === "DAILY" ? "" : dtMoney(e.basicPay), "Allowance": allow ? dtMoney(allow) : "",
     "Civil status": e.civil || "", "Birth date": fmtDate(e.birth), "SSS": e.sss || "", "PhilHealth": e.philhealth || "", "Pag-IBIG": e.pagibig || "", "TIN": e.tin || "", "Supervisor": e.supervisorId && S.emps.get(e.supervisorId) ? fullName(S.emps.get(e.supervisorId)) : "" };
 }
@@ -14294,8 +14299,8 @@ function dtPage(v) {
   const fillCard = `<section class="card"><div class="card-head"><h2>Fill in for ${d.kind === "ctr" ? "an employee" : "an applicant"}</h2></div>
     <div class="form-grid" style="align-items:end"><div class="field" style="grid-column:1/-1"><label for="dt-who">${d.kind === "ctr" ? `${d.scope === "prj" ? "Project" : "Head Office"} employee` : `${d.scope === "prj" ? "Project" : "Head Office"} applicant`}</label>
       <select class="input" id="dt-who" data-dt-who="${v}">${opts(people, pick, people.length ? "Choose…" : d.kind === "ctr" ? "No employees here yet" : "No applicants here yet")}</select></div>
-      ${missing.map((s) => `<div class="field"><label>${esc(s)}</label><input class="input" data-dt-val="${v}|${esc(s)}" value="${esc(typed[s] || "")}" placeholder="Type it here"></div>`).join("")}</div>
-    ${pick ? `<div class="dt-doc" style="margin-top:14px">${dtHtml(dtFill(body, { ...auto, ...typed })) || ""}</div>
+      ${missing.map((s, i) => `<div class="field"><label for="dt-in-${v}-${i}">${esc(s)}</label><input class="input" id="dt-in-${v}-${i}" data-dt-val="${v}|${esc(s)}" value="${esc(typed[s] || "")}" placeholder="Type it here"></div>`).join("")}</div>
+    ${pick ? `<div class="dt-doc" id="dt-prev" style="margin-top:14px">${dtHtml(dtFill(body, { ...auto, ...typed })) || ""}</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px"><button class="btn btn-gold" data-dt-dl="${v}">${icon("download", 16)}Download ${d.kind === "ctr" ? "contract" : "job offer"}</button>
         ${missing.filter((s) => !typed[s]).length ? `<span class="t-muted" style="font-size:13px;align-self:center">${missing.filter((s) => !typed[s]).length} blank${missing.filter((s) => !typed[s]).length === 1 ? "" : "s"} still empty</span>` : ""}</div>` : ""}</section>`;
   const list = (() => {
@@ -14325,9 +14330,10 @@ document.addEventListener("click", async (ev) => {
     await saveLetter(`${k.kind === "ctr" ? "Contract" : "JobOffer"}-${nm}.html`, `${k.short} ${who ? `${who.first} ${who.last}` : ""}`, dtHtml(dtFill(dtBody(k.key), vals)));
     logActivity(`Prepared the ${k.short} for ${who ? `${who.first} ${who.last}` : "someone"}`); }
 });
-document.addEventListener("change", (ev) => { const v = ev.target.dataset?.dtWho; if (!v) return; S.dtPick[v] = ev.target.value; S.dtVals[v] = {}; render(); });
-document.addEventListener("input", (ev) => { const k = ev.target.dataset?.dtVal; if (!k) return; const [v, s] = k.split("|"); S.dtVals[v] = { ...(S.dtVals[v] || {}), [s]: ev.target.value }; });
-document.addEventListener("focusout", (ev) => { if (ev.target.dataset?.dtVal) render(); });
+document.addEventListener("change", (ev) => { const v = ev.target.dataset?.dtWho; if (!v) return; S.dtPick[v] = ev.target.value; render(); }); // typed blanks stay; the new person's record fills the rest
+// Typing updates the preview in place, so focus and Tab order stay where they are.
+document.addEventListener("input", (ev) => { const k = ev.target.dataset?.dtVal; if (!k) return; const [v, s] = k.split("|"); S.dtVals[v] = { ...(S.dtVals[v] || {}), [s]: ev.target.value };
+  const pv = document.getElementById("dt-prev"); const d = DT_KINDS[v]; if (pv && d && S.dtPick[v]) pv.innerHTML = dtHtml(dtFill(dtBody(d.key), { ...dtValsFor(d, S.dtPick[v]), ...S.dtVals[v] })); });
 document.addEventListener("submit", async (ev) => {
   const f = ev.target.closest?.(".dt-form"); if (!f) return; ev.preventDefault(); ev.stopImmediatePropagation(); if (!S.canEdit) return;
   const v = f.dataset.dt; const k = DT_KINDS[v]; const body = $("#dt-body").value.replace(/\r/g, "").trim(); if (!body) { toast("The format is empty."); return; }
@@ -14339,6 +14345,11 @@ document.addEventListener("submit", async (ev) => {
 { const T = { joboffer: "Job offers", discipline: "Disciplinary", evaluation: "Evaluation", onboarding: "New hire checklist", offboarding: "Exit clearance", chsched: "Change schedule", obreq: "Official business", utreq: "Undertime", trprog: "Training program", emptraining: "Training history", orgho: "Head Office organization" };
   for (const [v, t] of Object.entries(T)) { const base = VIEWS[v]; if (!base) continue;
     VIEWS[v] = (...a) => { const h = base(...a); return S.view.name === v && typeof h === "string" ? h.replace(/(<h1[^>]*>)([^<]*)(<\/h1>)/, (m, o, x, c) => o + esc(t) + c) : h; }; } }
+
+/* ---------- Audit fixes, 2026-10-14 (frontend) ---------- */
+{ const st = document.createElement("style"); st.textContent = `
+@media (max-width:480px){.card > .btn,.card-head .btn,.page-actions .btn{white-space:normal;height:auto;min-height:44px;text-align:left}}
+:root:not([data-theme="dark"]) .dsec{color:#7a5a20}`; document.head.appendChild(st); }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {

@@ -18,15 +18,26 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "Bad request" }, 400); }
   if (body?.ping) return json({ ok: !!key });
   if (!key) return json({ error: "The assistant isn't set up yet." }, 503);
+  // Only approved accounts (HR staff and employees HR let in) may use the company's key; applicants and new sign-ups may not.
+  const auth = req.headers.get("authorization") || "";
+  const rpc = async (fn: string) => {
+    const base = Deno.env.get("SUPABASE_URL"), anon = Deno.env.get("SUPABASE_ANON_KEY");
+    if (!base || !anon || !/^Bearer .+/.test(auth)) return false;
+    const r = await fetch(`${base}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: anon, authorization: auth, "content-type": "application/json" }, body: "{}" }).catch(() => null);
+    return !!r?.ok && (await r.json().catch(() => false)) === true;
+  };
+  if (!(await rpc("hr_is_approved"))) return json({ error: "Your account can't use the assistant." }, 403);
   const messages = Array.isArray(body?.messages) ? body.messages : null;
-  if (!messages?.length || JSON.stringify(messages).length > 3_000_000) return json({ error: "Bad request" }, 400);
-  const tools = Array.isArray(body.tools) && body.tools.length ? body.tools.slice(0, 20) : undefined;
+  if (!messages?.length || JSON.stringify(messages).length > 1_500_000) return json({ error: "Bad request" }, 400);
+  // Only the app's own page tools; server tools (web search, code execution and the like) would bill extra.
+  const tools = Array.isArray(body.tools) && body.tools.length ? body.tools.slice(0, 20).filter((t: any) => t && typeof t.name === "string" && (t.type == null || t.type === "custom")) : undefined;
+  const tier = body.tier === "complex" && !(await rpc("hr_is_editor")) ? "default" : body.tier;
   const payload: Record<string, unknown> = {
-    model: MODELS[body.tier] || MODELS.default,
+    model: MODELS[tier] || MODELS.default,
     max_tokens: 4096,
     messages,
   };
-  if (tools) { payload.tools = tools; if (body.last) payload.tool_choice = { type: "none" }; }
+  if (tools?.length) { payload.tools = tools; if (body.last) payload.tool_choice = { type: "none" }; }
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },

@@ -48,7 +48,8 @@ window.addEventListener("submit", async (ev) => {
 { const b = hireApplicant; hireApplicant = async () => { const aid = S.view.id; await b(); const a = S.apps.get(aid); const e = a?.empId && S.emps.get(a.empId); if (!e) return;
     const j = S.jobs.get(a.jobId); const end = e.status === "PROBATIONARY" ? regDue(e) : e.status === "PROJECT_BASED" ? e.projectUntil || null : null;
     try { const id = uid(); const rec = { empId: e.id, type: e.status, start: e.hire, end, notes: "First contract, from hiring", at: todayISO(), by: S.myId || null }; await S.db.doc(`contracts/${id}`).set(JSON.parse(JSON.stringify(rec))); S.ctrs?.set(id, { id, ...rec }); } catch {}
-    if (a.olr?.allow && !e.allow && Array.isArray(a.olr.allow)) { const n = { ...e, allow: a.olr.allow }; await saveEmp(n); S.emps.set(n.id, n); }
+    const oa = a.olr?.allow; if (oa && !(Array.isArray(e.allow) ? e.allow.length : e.allow)) { const t = (SET().allowTypes || []).find((x) => !x.cap);
+      const allow = Array.isArray(oa) ? oa : t ? [{ code: t.code, amt: PAY.r2(Number(oa) / 2) }] : null; if (allow) { const n = { ...e, allow }; await saveEmp(n); S.emps.set(n.id, n); } }
     const m = j?.mprId && S.mpr?.get(j.mprId); if (m && m.status !== "FILLED" && (S.jobs.get(j.id)?.status === "FILLED")) { try { await put("mpr", { ...m, status: "FILLED", filled: todayISO() }); } catch {} } }; }
 if (typeof MPR_STATUS === "object" && !MPR_STATUS.FILLED) MPR_STATUS.FILLED = ["Filled", "c-ok"];
 

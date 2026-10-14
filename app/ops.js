@@ -126,7 +126,7 @@ function opsReport() {
 function opsRules() {
   const O = OPS(); const ids = opUserIds(); const sel = (name, cur, any = "Anyone with access") => `<select class="input" name="${name}"><option value="">${any}</option>${ids.map((id) => `<option value="${id}" ${id === cur ? "selected" : ""}>${esc(personName(id))}</option>`).join("")}</select>`;
   const kinds = [...OPK.map((k) => [k[0], k[1], !!k[4]]), ["ask", "Ask HR question", false]];
-  return `<form id="ops-rules"><section class="card"><div class="card-head"><h2>Target days and endorsements</h2></div>
+  return `<form id="ops-rules" data-keep><section class="card"><div class="card-head"><h2>Target days and endorsements</h2></div>
     <p class="t-muted" style="margin:0 0 10px;font-size:14px">Target: days from filing to a decision. Endorsements: who must endorse before the final Approve button works. Leave a level name blank for none.</p>
     <div class="table-wrap"><table><thead><tr><th>Request type</th><th class="num">Target days</th><th>Endorsement 1</th><th>Endorsed by</th><th>Endorsement 2</th><th>Endorsed by</th></tr></thead><tbody>
     ${kinds.map(([k, l, can]) => { const ch = O.chains[k] || []; return `<tr><td>${esc(l)}</td><td class="num"><input class="input" type="number" min="1" max="60" name="sla-${k}" value="${O.sla[k]}" style="width:76px"></td>

@@ -11,10 +11,11 @@ const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return 
   const out = e.separated?.date || S.offb?.get(e.id)?.last || null; const stop = out && out < cut ? out : cut;
   if (e.hire && e.hire > stop) return 0; return base({ ...e, separated: { ...(e.separated || {}), date: stop } }, t, year); }; }
 /* Carry-over: unused VL and SL from last year, up to the cap, are added to this year's credits. */
-{ const base = balances; balances = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
-  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { prev = base(e, String(Number(year) - 1)); } catch {}
+{ const base = balances; const carried = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
+  // Last year's balance includes what it carried in itself (from 2026, when the app started), so carry-over chains year to year.
+  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
   return rows.map((t) => { const cap = Number(P.carry[t.code]) || 0; if (!cap || t.left == null) return t; const p = prev.find((x) => x.code === t.code); const c = Math.min(cap, Math.max(0, p?.left || 0)); if (!c) return t;
-    return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; }
+    return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; balances = carried; }
 const dailyOf = (e) => (e.payType === "DAILY" ? e.basicPay || 0 : ((e.basicPay || 0) * 12) / (SET().factor || 313));
 function lvYearEnd(year) { const P = LVP(); const rows = [];
   for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > `${year}-12-31`) continue; if (e.separated?.date && e.separated.date < `${year}-01-01`) continue; let b = []; try { b = balances(e, year); } catch { continue; }
@@ -22,7 +23,7 @@ function lvYearEnd(year) { const P = LVP(); const rows = [];
     const gone = !!e.separated?.date && e.separated.date <= `${year}-12-31`;
     const cVL = gone ? 0 : Math.min(Number(P.carry.VL) || 0, vl), cSL = gone ? 0 : Math.min(Number(P.carry.SL) || 0, sl);
     const conv = (P.conv.VL ? vl - cVL : 0) + (P.conv.SL ? sl - cSL : 0); const daily = dailyOf(e);
-    rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: PAY.r2(conv * daily), gone }); }
+    rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: gone ? 0 : PAY.r2(conv * daily), gone }); }
   return rows.sort((a, b) => fullName(a.e).localeCompare(fullName(b.e))); }
 Object.assign(S, { lvye: new Map(), lvyeY: String(Number(todayISO().slice(0, 4)) - (todayISO().slice(5, 7) < "07" ? 1 : 0)), shortN: {} });
 VIEWS.lvye = () => {

@@ -28,7 +28,9 @@ async function clearComplySample() {
 const REGIONS = ["NCR", "CAR", "Region I", "Region II", "Region III", "Region IV-A", "Region IV-B", "Region V", "Region VI", "Region VII", "Region VIII", "Region IX", "Region X", "Region XI", "Region XII", "Region XIII", "BARMM"];
 function wageFor(e) {
   const Sx = SET(); const region = S.projects.get(e.projectId)?.region || S.org?.region || "NCR";
-  return Number((Sx.regionWages || []).find((w) => w.region === region)?.wage) || Sx.minWage;
+  const w = Number((Sx.regionWages || []).find((x) => x.region === region)?.wage); if (w) return w;
+  // The general minimum wage stands for the company's own region only; elsewhere an unknown wage means nobody is treated as a minimum wage earner.
+  return region === (S.org?.region || "NCR") ? Sx.minWage : 0;
 }
 function wageCard() {
   const Sx = SET(); const ed = S.canEdit; const used = new Set([...S.projects.values()].map((p) => p.region).filter(Boolean));
