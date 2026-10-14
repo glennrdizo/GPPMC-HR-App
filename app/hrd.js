@@ -91,11 +91,14 @@ const HRD_LABEL = {}; // view -> menu name of new pages
   for (const n of Object.keys(HRD_AREAS)) SECTION_OF[`hrd_${n}`] = `hrd_${n}`;
   SECTION_OF.geofence = "geofence"; // now its own item under Timekeeping
 }
-/* Access: each page keeps its old module, so roles built on modules and the ticked pages of custom roles mean the same as before. */
+/* Access: the tick boxes follow the menu (g = module, d = 0 sub-module, 1 sub-sub-module, 2 the level below; Glenn 2026-10-14).
+   og keeps each page's old module, so built-in roles (made of old modules) and saved ticks open the same pages as before. */
 navKeys = function () {
-  const out = []; const g0 = (v) => HRD_PERM[v] || "People";
-  for (const [g, items] of NAV) for (const [v, l, ic, kids] of items) { if (!v || v === "perms") { if (v === "perms") continue; } out.push({ g: g === "Overview" ? "Overview" : g0(v), v, l, ic });
-    for (const [kv, kl, ki, gk] of kids || []) { if (/^perms/.test(kv)) continue; out.push({ g: g === "Overview" ? "Overview" : g0(kv), v: kv, l: kl, ic: ki, parent: v }); for (const [gv, gl, gi] of gk || []) out.push({ g: g0(gv), v: gv, l: `${kl} · ${gl}`, ic: gi, parent: kv }); } }
+  const out = []; const seen = new Set(); const g0 = (v) => HRD_PERM[v] || "People";
+  const add = (k) => { if (seen.has(k.v)) return; seen.add(k.v); out.push(k); };
+  for (const [g, items] of NAV) for (const [v, l, ic, kids] of items) { if (v === "perms") continue; const og = (x) => (g === "Overview" ? "Overview" : g0(x));
+    add({ g, og: og(v), v, l, ic, d: 0 });
+    for (const [kv, kl, ki, gk] of kids || []) { if (/^perms/.test(kv)) continue; add({ g, og: og(kv), v: kv, l: kl, ic: ki, parent: v, d: 1 }); for (const [gv, gl, gi] of gk || []) add({ g, og: og(gv), v: gv, l: gl, ic: gi, parent: kv, d: 2 }); } }
   return out;
 };
 viewGroup = function (name) { const v = SECTION_OF[name] || SECTION_OF[baseView(name)] || name; if (NAV[0]?.[0] === "Overview" && NAV[0][1].some(([x]) => x === v)) return "Overview"; return HRD_PERM[v] || null; };

@@ -103,24 +103,24 @@ document.addEventListener("input", (ev) => { const f = ev.target.closest?.("#pu-
 document.addEventListener("change", (ev) => { const f = ev.target.closest?.("#pu-form"); if (!f) return; S.puDraft = { id: f.dataset.id, name: $("#pu-name")?.value, role: $("#pu-role")?.value, emp: $("#pu-emp")?.value, email: $("#pu-email")?.value }; }, true);
 // The modules and sub-modules a user can open, as tick boxes (same boxes as the Access table; a change saves at once and makes the role Custom).
 function puState(id, owner) { const a = S.access || {}; const u = a.users?.[id] || {}; const key = owner ? "admin" : u.role || a.defaultRole || "admin";
-  return { key, views: owner || key === "admin" ? null : viewsOf(u, key), edit: owner ? true : key === "custom" ? u.edit !== false : !!ROLES[key]?.edit }; }
-function puMods(id, owner) { const st = puState(id, owner); if (!st.views) return '<span class="chip c-ok">All modules</span>'; const m = modsOf(st.views);
+  return { key, views: owner || key === "admin" || key === "owner" ? null : viewsOf(u, key), edit: owner ? true : key === "custom" ? u.edit !== false : !!ROLES[key]?.edit }; }
+function puMods(id, owner) { const st = puState(id, owner); if (!st.views) return '<span class="chip c-ok">All modules</span>'; const m = menuModsOf(st.views);
   return m.length ? `<span class="chips">${m.map((g) => `<span class="chip c-blue">${esc(GL(g))}</span>`).join("")}</span>${st.edit ? "" : '<div class="t-muted" style="font-size:12px">View only</div>'}` : '<span class="t-muted" style="font-size:13px">Dashboard only</span>'; }
 function puAccess(id, owner) {
   const st = puState(id, owner); const keys = navKeys(); const groups = [...new Set(keys.map((k) => k.g))]; const has = (v) => !st.views || st.views.has(v);
   const box = (attr, val, on, label, dis, extra = "") => `<label class="pu-tick"><input type="checkbox" data-${attr}="${esc(id)}|${esc(val)}" ${on ? "checked" : ""} ${dis ? "disabled" : ""} ${extra}> <span>${label}</span></label>`;
-  return `<div class="pu-acc"><div class="pu-acc-head"><b>Access</b><span class="t-muted" style="font-size:13px">${owner ? "The owner always has full access." : "Tick the modules and sub-modules this person can open. Changes save right away and make the role Custom."}</span>
+  return `<div class="pu-acc"><div class="pu-acc-head"><b>Access</b><span class="t-muted" style="font-size:13px">${owner ? "The owner always has full access." : "Tick the modules, sub-modules and sub-sub-modules this person can open. Changes save right away and make the role Custom."}</span>
       <label class="pu-tick"><input type="checkbox" data-pe="${esc(id)}" ${st.edit ? "checked" : ""} ${owner ? "disabled" : ""}> <span><b>Can change records</b></span></label></div>
     <div class="pu-grid">${groups.map((g) => { const ks = keys.filter((k) => k.g === g); const free = ks.filter((k) => !ALWAYS.has(k.v)); const n = free.filter((k) => has(k.v)).length;
       return `<fieldset class="pu-g"><legend>${box("pg", g, free.length && n === free.length, `<b>${esc(GL(g))}</b>`, owner || !free.length, n && n < free.length ? 'data-mixed="1"' : "")}</legend>
-        ${ks.map((k) => `<div class="${k.parent ? "pu-l2" : ""}">${box("pv", k.v, has(k.v), esc(k.l) + (ALWAYS.has(k.v) ? ' <span class="t-muted">(everyone)</span>' : ""), owner || ALWAYS.has(k.v))}</div>`).join("")}</fieldset>`; }).join("")}</div></div>`;
+        ${ks.map((k) => `<div class="pu-d${k.d ?? (k.parent ? 1 : 0)}">${box("pv", k.v, has(k.v), esc(k.l) + (ALWAYS.has(k.v) ? ' <span class="t-muted">(everyone)</span>' : ""), owner || ALWAYS.has(k.v))}</div>`).join("")}</fieldset>`; }).join("")}</div></div>`;
 }
 { const st = document.createElement("style"); st.textContent = `.pu-acc{margin-top:16px;border-top:1px solid var(--line,#E5E7EB);padding-top:12px}
 .pu-acc-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:10px}
 .pu-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
 .pu-g{border:1px solid var(--line,#E5E7EB);border-radius:10px;padding:8px 12px;margin:0;min-width:0}
 .pu-g legend{padding:0 4px}.pu-tick{display:inline-flex;gap:8px;align-items:center;font-size:14px;padding:3px 0;cursor:pointer}
-.pu-l2{padding-left:22px}.pu-tick input{width:18px;height:18px}`; document.head.appendChild(st); }
+.pu-l2,.pu-d1{padding-left:22px}.pu-d2{padding-left:44px;font-size:13.5px}.pu-tick input{width:18px;height:18px}`; document.head.appendChild(st); }
 { const prev = after.perms; after.perms = () => { prev?.(); document.querySelectorAll(".pu-acc [data-mixed]").forEach((x) => (x.indeterminate = true)); }; }
 function usersTable() {
   const a = S.access || {}; const users = a.users || {}; const P = S.profiles || {};

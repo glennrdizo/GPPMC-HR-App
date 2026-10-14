@@ -26,9 +26,15 @@ function viewsOf(u, key) {
   const r = ROLES[key] || ROLES.admin;
   if (key === "custom" && Array.isArray(u?.views)) return new Set([...u.views, ...ALWAYS]);
   const mods = key === "custom" ? u?.mods || [] : r.mods;
-  return new Set([...navKeys().filter((k) => (k.g === "Overview" && key !== "none" && (k.v !== "hrbot" || mods.includes("People"))) || mods.includes(k.g)).map((k) => k.v), ...ALWAYS]);
+  return new Set([...navKeys().filter((k) => ((k.og ?? k.g) === "Overview" && key !== "none" && (k.v !== "hrbot" || mods.includes("People"))) || mods.includes(k.og ?? k.g)).map((k) => k.v), ...ALWAYS]);
 }
-const modsOf = (views) => PERM_MODS.filter((g) => navKeys().some((k) => k.g === g && views.has(k.v)));
+// Old access modules (saved with each user, and read by the website's database rules).
+const modsOf = (views) => PERM_MODS.filter((g) => navKeys().some((k) => (k.og ?? k.g) === g && views.has(k.v)));
+// Menu modules a set of pages covers, for display. Sub-pages tick with their page; a page ticks with its parents.
+const menuModsOf = (views) => [...new Set(navKeys().filter((k) => k.g !== "Overview" && views.has(k.v)).map((k) => k.g))];
+const descOf = (keys, v) => { const out = []; const walk = (p, n) => { if (n > 4) return; for (const k of keys) if (k.parent === p && !out.includes(k.v)) { out.push(k.v); walk(k.v, n + 1); } }; walk(v, 0); return out; };
+const ancOf = (keys, v) => { const out = []; let p = keys.find((k) => k.v === v)?.parent; while (p && !out.includes(p)) { out.push(p); p = keys.find((k) => k.v === p)?.parent; } return out; };
+const pmLvl = (k) => `pm-l${(k.d ?? (k.parent ? 1 : 0)) + 1}`;
 /* What this viewer may do, from org/access. The owner is always HR Admin. */
 function myRole() {
   if (S.isOwner) return { key: "admin", ...ROLES.admin, views: null };
@@ -76,7 +82,7 @@ VIEWS.perms = () => {
   const roleOpts = (cur) => Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(r.name)}</option>`).join("");
   const row = (id) => {
     const u = users[id] || {}; const key = u.role || a.defaultRole || "admin"; const listed = !!users[id]; const me = id === S.myId;
-    const mods = me && S.isOwner ? PERM_MODS : modsOf(viewsOf(u, key));
+    const mods = me && S.isOwner || key === "admin" ? ["All modules"] : menuModsOf(viewsOf(u, key));
     return `<tr><td><span class="person" style="gap:10px">${P[id]?.avatarUrl ? `<img src="${esc(P[id].avatarUrl)}" alt="" width="34" height="34" style="border-radius:50%">` : `<span class="avatar" style="width:34px;height:34px;font-size:13px;background:var(--blue-soft);color:var(--blue)">?</span>`}<span class="who"><span class="name" style="font-size:14px" data-pname="${esc(id)}">${esc(nm(id))}${me ? " (you)" : ""}</span><span class="sub">${listed || (me && S.isOwner) ? "" : "Not set, uses the default · "}${seen[id] ? `last opened ${esc(fmtDate(seen[id]))}` : "hasn't opened the app yet"}</span></span></span></td>
       <td>${me && S.isOwner ? '<b>Owner</b><div class="t-muted" style="font-size:12px">Always full access</div>' : `<select class="input" data-perm-role="${esc(id)}" aria-label="Role" style="min-width:180px">${roleOpts(listed ? key : "")}${listed ? "" : `<option value="" selected>Default (${esc(ROLES[a.defaultRole || "admin"].name)})</option>`}</select>`}</td>
       <td>${`<span class="chips">${mods.length ? mods.map((m) => `<span class="chip c-blue">${esc(GL(m))}</span>`).join("") : '<span class="t-muted" style="font-size:13px">Dashboard only</span>'}</span>${(key === "custom" ? u.edit === false : ROLES[key] && !ROLES[key].edit) ? '<div class="t-muted" style="font-size:12px;margin-top:4px">View only</div>' : ""}${key === "custom" ? '<div class="t-muted" style="font-size:12px;margin-top:4px">Pages ticked in the table below</div>' : ""}`}</td>
@@ -99,7 +105,7 @@ VIEWS.perms = () => {
       ${usersTable()}
     </section>
     <section class="card"><div class="card-head"><h2>Roles</h2></div><div class="table-wrap"><table><thead><tr><th>Role</th><th>Modules</th><th>Can change records</th><th>For</th></tr></thead><tbody>
-      ${Object.values(ROLES).map((r) => `<tr><td><b>${esc(r.name)}</b></td><td>${r.mods.length === PERM_MODS.length ? "All modules" : r.mods.length ? r.mods.map(GL).join(", ") : r.name === "Custom" ? "You choose" : "Dashboard only"}</td><td>${r.edit ? "Yes" : "No"}</td><td class="t-muted" style="font-size:13px">${esc(r.note)}</td></tr>`).join("")}</tbody></table></div></section>`;
+      ${Object.entries(ROLES).map(([rk, r]) => { const all = NAV.filter(([g]) => g !== "Overview" && g !== "Users & Permissions").map(([g]) => g); const ms = rk === "custom" ? [] : rk === "admin" || rk === "owner" ? all : menuModsOf(viewsOf({}, rk)); return `<tr><td><b>${esc(r.name)}</b></td><td>${rk === "custom" ? "You choose" : ms.length >= all.length ? "All modules" : ms.length ? `${ms.length} of ${all.length} modules: ${esc(ms.map(GL).join(", "))}` : "Dashboard only"}</td><td>${r.edit ? "Yes" : "No"}</td><td class="t-muted" style="font-size:13px">${esc(r.note)}</td></tr>`; }).join("")}</tbody></table></div></section>`;
 };
 document.addEventListener("input", async (ev) => {
   const t = ev.target; if (t.id !== "perm-q") return; S.permQ = t.value;
@@ -142,7 +148,7 @@ function permMatrix(ids, users, a, nm) {
       <tr><th class="pm-k">Can change records</th>${cols.map((c) => `<td class="pm-c"><input type="checkbox" data-pe="${esc(c.id)}" ${c.edit ? "checked" : ""} ${c.owner ? "disabled" : ""} aria-label="Can change records for ${esc(nm(c.id))}"></td>`).join("")}</tr>
     </thead><tbody>
       ${groups.map((g) => `<tr class="pm-g"><th class="pm-k"><span class="pm-gl">${icon(MOD_ICON[g] || "dash", 16)}${esc(GL(g))}</span></th>${cols.map((c) => gcell(c, g)).join("")}</tr>
-        ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${k.parent ? "pm-l2" : "pm-l1"}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${cols.map((c) => cell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
+        ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${pmLvl(k)}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${cols.map((c) => cell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
       <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users & permissions</th>${cols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
     <p class="t-muted" style="margin:10px 0 0;font-size:13px">Users & permissions is only for HR Admins. The dashboard is open to everyone, and shows only the sections of the modules a person has.</p></section>`;
@@ -153,8 +159,8 @@ document.addEventListener("change", async (ev) => {
   const u = users[id] || {}; const key = u.role || a.defaultRole || "admin";
   const views = viewsOf(u, key); const edit = key === "custom" ? u.edit !== false : !!ROLES[key]?.edit; const keys = navKeys();
   let what;
-  if (t.dataset.pv) { const v = t.dataset.pv.slice(id.length + 1); const kids = keys.filter((k) => k.parent === v).map((k) => k.v); const par = keys.find((k) => k.v === v)?.parent;
-    for (const x of [v, ...kids]) t.checked ? views.add(x) : views.delete(x); if (t.checked && par) views.add(par); what = `${t.checked ? "Gave" : "Removed"} access to ${keys.find((k) => k.v === v)?.l || v}`; }
+  if (t.dataset.pv) { const v = t.dataset.pv.slice(id.length + 1);
+    for (const x of [v, ...descOf(keys, v)]) t.checked ? views.add(x) : views.delete(x); if (t.checked) for (const p of ancOf(keys, v)) views.add(p); what = `${t.checked ? "Gave" : "Removed"} access to ${keys.find((k) => k.v === v)?.l || v}`; }
   else if (t.dataset.pg) { const g = t.dataset.pg.slice(id.length + 1); for (const k of keys) if (k.g === g && !ALWAYS.has(k.v)) t.checked ? views.add(k.v) : views.delete(k.v); what = `${t.checked ? "Gave" : "Removed"} access to all of ${GL(g)}`; }
   else what = t.checked ? "Allowed someone to change records" : "Made someone view only";
   users[id] = { ...u, role: "custom", views: [...views].filter((v) => !ALWAYS.has(v)), mods: modsOf(views), edit: t.dataset.pe ? t.checked : edit };

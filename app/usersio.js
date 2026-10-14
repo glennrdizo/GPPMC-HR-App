@@ -3,7 +3,9 @@
 // Export: one row per user and invitation. Import: rows with a User ID update that user; rows without one become invitations (matched by name).
 const UIO_COLS = ["User ID", "Name", "Status", "Role", "Can change records", "Access", "Email", "Employee no.", "Position", "Last signed in"];
 const uioRoleKey = (v) => { const n = normH(v); if (!n) return ""; return Object.entries(ROLES).find(([k, r]) => normH(k) === n || normH(r.name) === n)?.[0] || null; };
-const uioGroup = (v) => { const n = normH(v); return PERM_MODS.find((g) => normH(g) === n || normH(GL(g)) === n) || null; };
+// A module name from the file: a menu module (current menu) or an old access module (older files).
+const uioMenu = () => [...new Set(navKeys().map((k) => k.g))].filter((g) => g !== "Overview");
+const uioGroup = (v) => { const n = normH(v); return uioMenu().find((g) => normH(g) === n || normH(GL(g)) === n) || PERM_MODS.find((g) => normH(g) === n || normH(GL(g)) === n) || null; };
 function uioRows() {
   const a = S.access || {}; const users = a.users || {}; const P = S.profiles || {};
   const ids = [...new Set([...Object.keys(users), ...Object.keys(a.seen || {}), ...(S.myId ? [S.myId] : [])])];
@@ -11,7 +13,7 @@ function uioRows() {
   const out = ids.map((id) => { const u = users[id] || {}; const owner = id === S.myId && S.isOwner; const st = puState(id, owner); const e = empOf(u.empId);
     const t = a.seenAt?.[id] || a.seen?.[id] || "";
     return { "User ID": id, Name: u.name || P[id]?.name || "", Status: "Active", Role: owner ? "Owner" : ROLES[st.key]?.name || "", "Can change records": st.edit ? "Yes" : "No",
-      Access: st.views ? modsOf(st.views).map(GL).join(", ") || "Dashboard only" : "All modules", Email: u.email || P[id]?.email || e?.email || "", "Employee no.": e?.no || "",
+      Access: st.views ? menuModsOf(st.views).map(GL).join(", ") || "Dashboard only" : "All modules", Email: u.email || P[id]?.email || e?.email || "", "Employee no.": e?.no || "",
       Position: e ? pos(e.posId)?.title || "" : "", "Last signed in": t ? String(t).slice(0, 16).replace("T", " ") : "Not yet" }; });
   for (const [, v] of Object.entries(a.invites || {})) { const e = empOf(v.empId);
     out.push({ "User ID": "", Name: v.name || "", Status: "Invited", Role: ROLES[v.role]?.name || "", "Can change records": ROLES[v.role]?.edit ? "Yes" : "No", Access: "", Email: v.email || e?.email || "",
@@ -22,7 +24,7 @@ async function uioExport() {
   const X = await loadLib("xlsx"); const rows = uioRows(); const ws = X.utils.json_to_sheet(rows, { header: UIO_COLS });
   ws["!cols"] = [14, 26, 10, 22, 12, 46, 30, 14, 24, 18].map((w) => ({ wch: w }));
   const help = X.utils.aoa_to_sheet([["How to import"], ["Keep the User ID column as it is. It tells the app which person a row belongs to."], ["Rows without a User ID become invitations: the person gets the role the first time they open the app."],
-    ["Role: " + Object.values(ROLES).map((r) => r.name).join(", ") + "."], ["Access and Can change records are used only when Role is Custom. List modules separated by commas: " + PERM_MODS.map(GL).join(", ") + "."],
+    ["Role: " + Object.values(ROLES).map((r) => r.name).join(", ") + "."], ["Access and Can change records are used only when Role is Custom. List modules separated by commas: " + uioMenu().map(GL).join(", ") + "."],
     ["Employee no. links the person to their employee record. The owner's role cannot be changed."]]); help["!cols"] = [{ wch: 120 }];
   const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, "Users"); X.utils.book_append_sheet(wb, help, "How to import");
   if (await saveBlob(`Users and permissions ${todayISO()}.xlsx`, new Blob([X.write(wb, { bookType: "xlsx", type: "array" })], { type: XLSX_TYPE }))) toast("Users list downloaded.");
@@ -51,7 +53,7 @@ async function uioImport(file) {
       if (!owner && rk) { u.role = rk;
         if (rk === "custom") { const acc = col(row, "Access"); const gs = acc && !/^(all modules|dashboard only)$/i.test(acc) ? acc.split(/[,;]/).map((x) => x.trim()).filter(Boolean) : [];
           const miss = gs.filter((g) => !uioGroup(g)); if (miss.length) { bad.push(`Row ${ln}: unknown module ${miss.join(", ")}`); continue; }
-          const mods = gs.map(uioGroup); if (acc || !Array.isArray(u.views)) { u.mods = mods; u.views = navKeys().filter((k) => mods.includes(k.g) || (k.g === "Overview" && mods.length)).map((k) => k.v).filter((v) => !ALWAYS.has(v)); }
+          const mods = gs.map(uioGroup); if (acc || !Array.isArray(u.views)) { u.views = navKeys().filter((k) => mods.includes(k.g) || mods.includes(k.og) || (k.g === "Overview" && mods.length)).map((k) => k.v).filter((v) => !ALWAYS.has(v)); u.mods = modsOf(new Set(u.views)); }
           const ce = col(row, "Can change records"); if (ce) u.edit = !/^(no|n|false|0)$/i.test(ce); }
         else { delete u.views; delete u.mods; delete u.edit; } }
       users[id] = u; upd++;
