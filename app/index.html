@@ -14087,7 +14087,9 @@ const M2_ONB_PROOF = { bio: 149, email: 150, hris: 152, login: 153, uniform: 207
    Same pages and view names, so saved roles and links keep working. */
 { const ppl = NAV.find(([g]) => g === "People"); const tal = NAV.find(([g]) => g === "Talent");
   if (ppl && tal) { const moved = ["perf", "property"].map((v) => { const i = tal[1].findIndex(([x]) => x === v); return i >= 0 ? tal[1].splice(i, 1)[0] : null; }).filter(Boolean);
-    const o = ppl[1].findIndex(([v]) => v === "org"); ppl[1].splice(o >= 0 ? o + 1 : ppl[1].length, 0, ...moved); } }
+    const o = ppl[1].findIndex(([v]) => v === "org"); ppl[1].splice(o >= 0 ? o + 1 : ppl[1].length, 0, ...moved);
+    // Offer letter requests (Glenn 2026-10-14): People, just before Projects & Manpower.
+    const k = tal[1].findIndex(([v]) => v === "olr"); if (k >= 0) { const [it] = tal[1].splice(k, 1); const pj = ppl[1].findIndex(([v]) => v === "projects"); ppl[1].splice(pj >= 0 ? pj : ppl[1].length, 0, it); } } }
 
 /* Project hiring by level (Glenn 2026-10-14): Officers and Managers, and Rank and File, as indented pages under Project hiring.
    A job's level is set on the job form; jobs without one are sorted by their title. */
