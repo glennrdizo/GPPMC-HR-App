@@ -14842,13 +14842,13 @@ if (typeof modAnalysis === "function") { const b = modAnalysis; modAnalysis = (.
 /* ---------- data: register entries, responsibility checklists, KPI actuals, report submissions ---------- */
 S.hrdreg = new Map(); S.hrd = {}; S.hrdForm = null; S.hrdQ = {};
 { const b = bootIO; bootIO = (db) => { b(db);
-  db.collection("hrdreg").limit(5000).onSnapshot((snap) => { S.hrdreg = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }])); S.ver++; refresh(); }, () => {});
+  db.collection("hrdreg").limit(5000).onSnapshot((snap) => { S.hrdreg = new Map(snap.docs.filter((d) => /^[A-Za-z0-9_-]{1,60}$/.test(d.id)).map((d) => [d.id, { id: d.id, ...d.data() }])); S.ver++; refresh(); }, () => {});
   db.doc("org/hrd").onSnapshot((d) => { S.hrd = d.exists ? d.data() : {}; refresh(); }, () => {}); }; }
 const HRD_ST = { PLANNED: ["Planned", "c-gray"], OPEN: ["Open", "c-blue"], PROGRESS: ["In progress", "c-warn"], REVIEW: ["For approval", "c-warn"], DONE: ["Done", "c-ok"] };
 const HRD_RS = { "": ["Not started", "c-gray"], WIP: ["In progress", "c-warn"], OK: ["In place", "c-ok"], NA: ["Not applicable", "c-gray"] };
 const hrdRows = (reg) => listOf(S.hrdreg).filter((r) => r.reg === reg).sort((a, b) => String(b.d || b.at || "").localeCompare(String(a.d || a.at || "")));
 const hrdOverdue = (r) => r.due && r.status !== "DONE" && r.due < todayISO();
-async function hrdSaveOrg(patch, msg) { const next = { ...(S.hrd || {}), ...patch }; await S.db.doc("org/hrd").set(JSON.parse(JSON.stringify(next))); S.hrd = next; if (msg) logActivity(msg); }
+async function hrdSaveOrg(patch, msg) { let cur = S.hrd || {}; try { const d = await S.db.doc("org/hrd").get(); if (d.exists) cur = d.data() || {}; } catch {} const next = { ...cur }; for (const [k, v] of Object.entries(patch)) next[k] = typeof v === "function" ? v(cur[k] || {}) : v; await S.db.doc("org/hrd").set(JSON.parse(JSON.stringify(next))); S.hrd = next; if (msg) logActivity(msg); }
 const hrdScope = (r) => (r.scope === "ho" ? "Head Office" : r.scope ? S.projects.get(r.scope)?.name || "Project" : "Company-wide");
 const hrdTitle = (n) => (n > 30 ? hrdPropOf(n)?.title : HRD_AREAS[n]?.[0]) || "";
 
@@ -14857,7 +14857,8 @@ function hrdRegister(reg, n, label) {
   const shown = rows.filter((r) => (!st || r.status === st || (st === "LATE" && hrdOverdue(r))) && (!q || [r.title, r.notes, r.owner, r.empId ? empNm(r.empId) : "", hrdScope(r)].join(" ").toLowerCase().includes(q)));
   const f = S.hrdForm?.reg === reg ? S.hrdForm : null; const fr = f?.id ? S.hrdreg.get(f.id) || {} : {};
   const projOpts = [["", "Company-wide"], ["ho", "Head Office"], ...listOf(S.projects).sort((a, b) => a.name.localeCompare(b.name)).map((p) => [p.id, p.name])];
-  const empOpts = active().sort((a, b) => fullName(a).localeCompare(fullName(b))).map((e) => [e.id, `${fullName(e)} · ${e.no || ""}`]);
+  const empOpts = [...S.emps.values()].sort((a, b) => !!a.separated - !!b.separated || fullName(a).localeCompare(fullName(b))).map((e) => [e.id, `${fullName(e)} · ${e.no || ""}${e.separated ? " (separated)" : ""}`]);
+  if (fr.scope && !projOpts.some(([v]) => v === fr.scope)) projOpts.push([fr.scope, "Project (removed)"]);
   const late = rows.filter(hrdOverdue).length; const done = rows.filter((r) => r.status === "DONE").length;
   return `<section class="stats kpis">
       <div class="card stat"><span class="label">Entries</span><span class="value">${rows.length}</span></div>
@@ -14865,7 +14866,7 @@ function hrdRegister(reg, n, label) {
       <div class="card stat"><span class="label">Overdue</span><span class="value">${late}</span><span class="note ${late ? "t-bad" : "t-muted"}">${late ? "past the due date" : "none"}</span></div>
       <div class="card stat"><span class="label">Done</span><span class="value">${done}</span></div></section>
     <section class="card" style="margin-top:16px"><div class="card-head"><h2>${esc(label)}</h2>${ed && !f ? `<button class="btn btn-primary btn-sm" data-hrd-new="${reg}">${icon("plus", 16)}Add entry</button>` : ""}</div>
-    ${f ? `<form class="hrd-form form-grid" data-reg="${reg}" data-id="${f.id || ""}" data-keep style="margin-bottom:16px">
+    ${f ? `<form class="hrd-form form-grid" data-reg="${reg}" data-id="${esc(f.id || "")}" data-keep style="margin-bottom:16px">
         <div class="field" style="grid-column:1/-1"><label for="hf-title-${reg}">Title or description</label><input class="input" id="hf-title-${reg}" name="title" required maxlength="200" value="${esc(fr.title || "")}"></div>
         <div class="field"><label for="hf-d-${reg}">Date</label><input class="input" type="date" id="hf-d-${reg}" name="d" value="${esc(fr.d || todayISO())}"></div>
         <div class="field"><label for="hf-due-${reg}">Due date</label><input class="input" type="date" id="hf-due-${reg}" name="due" value="${esc(fr.due || "")}"></div>
@@ -14877,10 +14878,10 @@ function hrdRegister(reg, n, label) {
         <div style="grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary">${f.id ? "Save changes" : "Add entry"}</button><button type="button" class="btn btn-ghost" data-hrd-cancel>Cancel</button></div></form>` : ""}
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"><input class="input" style="max-width:260px" placeholder="Search" aria-label="Search ${esc(label)}" data-hrd-q="${reg}" value="${esc(S.hrdQ[reg] || "")}">
       <select class="input" style="max-width:180px" aria-label="Show" data-hrd-st="${reg}">${opts([["", "All statuses"], ["LATE", "Overdue"], ...Object.entries(HRD_ST).map(([k, v]) => [k, v[0]])], st)}</select></div>
-    ${shown.length ? `<div class="table-wrap"><table><thead><tr><th>Title</th><th>Date</th><th>Covers</th><th>Employee</th><th>In charge</th><th>Due</th><th>Status</th>${ed ? "<th></th>" : ""}</tr></thead><tbody>
-      ${shown.map((r) => `<tr><td><b>${esc(r.title)}</b>${r.notes ? `<div class="t-muted" style="font-size:13px;white-space:pre-wrap">${esc(r.notes)}</div>` : ""}</td><td>${fmtDate(r.d)}</td><td>${esc(hrdScope(r))}</td><td>${r.empId ? `<button class="link" data-emp="${esc(r.empId)}">${esc(empNm(r.empId))}</button>` : ""}</td><td>${esc(r.owner || "")}</td>
-        <td>${r.due ? `<span class="${hrdOverdue(r) ? "t-bad" : ""}">${fmtDate(r.due)}</span>` : ""}</td><td><span class="chip ${HRD_ST[r.status]?.[1] || "c-gray"}">${esc(HRD_ST[r.status]?.[0] || r.status || "")}</span></td>
-        ${ed ? `<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-hrd-edit="${esc(r.id)}">Edit</button> <button class="btn btn-ghost btn-sm" data-hrd-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}">Delete</button></td>` : ""}</tr>`).join("")}
+    ${shown.length ? `<div class="table-wrap"><table class="hrd-tbl"><thead><tr><th>Title</th><th>Date</th><th>Covers</th><th>Employee</th><th>In charge</th><th>Due</th><th>Status</th>${ed ? "<th></th>" : ""}</tr></thead><tbody>
+      ${shown.map((r) => `<tr><td><b>${esc(r.title)}</b>${r.notes ? `<div class="t-muted" style="font-size:13px;white-space:pre-wrap">${esc(r.notes)}</div>` : ""}<div class="t-muted hrd-m">${esc([hrdDate(r.d), hrdScope(r), r.empId ? empNm(r.empId) : "", r.owner || ""].filter(Boolean).join(" · "))}</div></td><td>${hrdDate(r.d)}</td><td>${esc(hrdScope(r))}</td><td>${r.empId ? `<button class="link" data-emp="${esc(r.empId)}">${esc(empNm(r.empId))}</button>` : ""}</td><td>${esc(r.owner || "")}</td>
+        <td>${r.due ? `<span class="${hrdOverdue(r) ? "t-bad" : ""}">${hrdDate(r.due)}</span>` : ""}</td><td><span class="chip ${HRD_ST[r.status]?.[1] || "c-gray"}">${esc(HRD_ST[r.status]?.[0] || r.status || "")}</span></td>
+        ${ed ? `<td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-hrd-edit="${esc(r.id)}" aria-label="Edit ${esc(r.title)}">Edit</button> <button class="btn btn-ghost btn-sm" data-hrd-del="${esc(r.id)}" aria-label="Delete ${esc(r.title)}">Delete</button></td>` : ""}</tr>`).join("")}
       </tbody></table></div>` : `<div class="empty-state"><span class="es-ic">${icon("sheet", 22)}</span><p>${rows.length ? "Nothing matches." : `No entries yet.${ed ? " Add the first one, or attach the existing file with Attachments above." : ""}`}</p></div>`}</section>`;
 }
 function hrdRegPage(v) {
@@ -14897,13 +14898,13 @@ function hrdAreaPage(n) {
   return head(esc(hrdCatOf(n)), esc(name), main ? `<button class="btn btn-ghost btn-sm" data-go="${main}">${icon("back", 16)}Open ${esc(labelOf(main))}</button>` : "") + `
     <section class="stats kpis">
       <div class="card stat"><span class="label">Responsibilities in place</span><span class="value">${pct}%</span><span class="note">${done} of ${a.resp.length}</span></div>
-      <div class="card stat"><span class="label">Deliverables</span><span class="value">${delivs.length}</span><span class="note">${delivs.filter((d) => !HRD_REG[d.v] || d.cnt).length} with records</span></div>
+      <div class="card stat"><span class="label">Deliverables</span><span class="value">${delivs.length}</span><span class="note">${delivs.filter((d) => HRD_REG[d.v] && d.cnt).length} of ${delivs.filter((d) => HRD_REG[d.v]).length} registers have entries</span></div>
       <div class="card stat"><span class="label">Open entries</span><span class="value">${openN}</span><span class="note ${lateN ? "t-bad" : "t-muted"}">${lateN} overdue</span></div></section>
     <section class="card" style="margin-top:16px"><div class="card-head"><h2>Objective</h2></div><p style="margin:0">${esc(a.obj)}</p>${a.note.map((x) => `<p class="panel" style="margin:12px 0 0;font-size:14px">${esc(x)}</p>`).join("")}</section>
     <section class="card" style="margin-top:16px"><div class="card-head"><h2>Key deliverables</h2></div><div class="hrd-dl">
       ${delivs.map((d) => `<button class="hrd-dc" data-go="${esc(d.v)}">${icon(HRD_REG[d.v] ? "sheet" : "file", 18)}<span><b>${esc(d.lab)}</b><span class="t-muted">${HRD_REG[d.v] ? `${d.cnt} entr${d.cnt === 1 ? "y" : "ies"}` : `in ${esc(labelOf(d.v))}`}</span></span></button>`).join("")}</div></section>
     <section class="card" style="margin-top:16px"><div class="card-head"><h2>Functions and responsibilities</h2><span class="t-muted" style="font-size:13px">Mark each one as it is put in place</span></div>
-      <ol class="hrd-resp">${a.resp.map((x, i) => `<li><span>${esc(x)}</span>${ed ? `<select class="input" aria-label="Status of: ${esc(x)}" data-hrd-rs="${n}|${i}">${opts(Object.entries(HRD_RS).map(([k, v]) => [k, v[0]]), st[i] || "")}</select>` : `<span class="chip ${HRD_RS[st[i] || ""][1]}">${HRD_RS[st[i] || ""][0]}</span>`}</li>`).join("")}</ol></section>`;
+      <ol class="hrd-resp">${a.resp.map((x, i) => `<li><span>${esc(x)}</span>${ed ? `<select class="input" aria-label="Status of: ${esc(x)}" data-hrd-rs="${n}|${i}">${opts(Object.entries(HRD_RS).map(([k, v]) => [k, v[0]]), st[i] || "")}</select>` : `<span class="chip ${(HRD_RS[st[i]] || HRD_RS[""])[1]}">${HRD_RS[st[i] || ""][0]}</span>`}</li>`).join("")}</ol></section>`;
 }
 const info0 = (s) => !s.includes("=") && !HRD_EXTRA[s] && navHas(s);
 const navHas = (v) => NAV.some(([, items]) => items.some(([x, , , kids]) => x === v || (kids || []).some(([k, , , gk]) => k === v || (gk || []).some(([g]) => g === v))));
@@ -14911,11 +14912,11 @@ function labelOf(v) { for (const [, items] of NAV) for (const [x, l, , kids] of 
 
 /* ---------- KPI scorecard, reports calendar, divisions, authority matrix ---------- */
 const HRD_KPI_AUTO = {
-  "Employee 201 File Completeness": () => { const a = active(); if (!a.length) return null; const ok = a.filter((e) => e.sss && e.philhealth && e.pagibig && e.tin && e.birth && e.address).length; return [Math.round((ok / a.length) * 100) + "%", `${ok} of ${a.length} have SSS, PhilHealth, Pag-IBIG, TIN, birth date and address`]; },
-  "Employee Onboarding Completion": () => { const o = listOf(S.onb || new Map()); if (!o.length) return null; const d = o.filter((x) => x.done).length; return [Math.round((d / o.length) * 100) + "%", `${d} of ${o.length} checklists complete`]; },
+  "Employee 201 File Completeness": () => { const a = active().filter((e) => e.hire <= todayISO()); if (!a.length) return null; const ok = a.filter((e) => { try { return f201Status(e).every((x) => x.done); } catch { return false; } }).length; return [Math.round((ok / a.length) * 100) + "%", `${ok} of ${a.length} have every 201 checklist item`]; },
+  "Employee Onboarding Completion": () => { const t = todayISO(); let due = 0, done = 0; for (const o of listOf(S.onb || new Map())) { const e = S.emps.get(o.empId); if (!e || e.separated || !o.start || o.start > t) continue; const days = (new Date(t) - new Date(o.start)) / 864e5; for (const i of o.items || []) { if (i.na) continue; const off = (typeof obStageOf === "function" && obStageOf(i.stage)?.[2]) || 0; if (off <= days) { due++; if (i.done) done++; } } } return due ? [Math.round((done / due) * 100) + "%", `${done} of ${due} onboarding steps due so far are done`] : null; },
   "Approved Manpower Fulfillment": () => { let need = 0, have = 0; for (const p of listOf(S.projects)) { if (p.status && p.status !== "ACTIVE") continue; for (const [pid, k] of Object.entries(p.req || {})) { need += Number(k) || 0; have += Math.min(Number(k) || 0, active().filter((e) => e.projectId === p.id && e.posId === pid).length); } } return need ? [Math.round((have / need) * 100) + "%", `${have} of ${need} approved positions filled on active projects`] : null; },
-  "Employee Turnover Rate": () => { const m = todayISO().slice(0, 7); const left = [...S.emps.values()].filter((e) => e.separated?.date?.startsWith(m)).length; const n = active().length + left; return n ? [((left / n) * 100).toFixed(1) + "%", `${left} separated this month`] : null; },
-  "Mandatory Training Compliance": () => { try { const { pct } = compliance(active()); return [pct + "%", "required trainings current"]; } catch { return null; } },
+  "Employee Turnover Rate": () => { const [y, mo] = todayISO().slice(0, 7).split("-").map(Number); const p = new Date(Date.UTC(y, mo - 2, 1)); const m = p.toISOString().slice(0, 7); const first = `${m}-01`; const last = new Date(Date.UTC(y, mo - 1, 0)).toISOString().slice(0, 10); const all = [...S.emps.values()]; const hc = (d) => all.filter((e) => e.hire && e.hire <= d && !(e.separated?.date && e.separated.date < d)).length; const left = all.filter((e) => e.separated?.date?.startsWith(m)).length; const avg = (hc(first) + hc(last)) / 2; return avg ? [((left / avg) * 100).toFixed(1) + "%", `${left} separated in ${p.toLocaleString("en-PH", { month: "long", timeZone: "UTC" })}, average headcount ${Math.round(avg)}`] : null; },
+  "Mandatory Training Compliance": () => { try { const { pct, T } = compliance(active()); return T.req ? [pct + "%", `${T.OK + T.EXPIRING} of ${T.req} required trainings current`] : null; } catch { return null; } },
 };
 function hrdKpiPage() {
   const m = todayISO().slice(0, 7); const vals = S.hrd?.kpi?.[m] || {}; const ed = S.canEdit;
@@ -14927,7 +14928,7 @@ function hrdKpiPage() {
 const HRD_REP_GO = { "Daily Manpower Status": "projects", "Daily Attendance Monitoring": "dtr", "Recruitment Activity Tracker": "rflow", "Employee Deployment Monitoring": "hrdr_7_employee_deployment_tracker", "Urgent Employee Concerns": "hrdr_16_workplace_concern_monitoring", "Critical Vacancy Report": "hrdr_3_vacancy_monitoring_report",
   "Weekly Recruitment Report": "ranalysis", "Weekly Manpower Complement Report": "projects", "Weekly Employee Relations Report": "hrd_16", "Weekly Deployment Report": "hrdr_7_deployment_status_report", "Weekly HR Compliance Report": "comply", "Weekly HR Accomplishment Report": "needs",
   "Monthly HR Department Performance Report": "report", "Monthly Headcount Report": "hrdash", "Monthly Recruitment Performance Report": "ranalysis", "Monthly Attrition Report": "hrdr_26_attrition_analysis", "Monthly Attendance Analysis": "attrep", "Monthly Employee Relations Report": "hrd_16", "Monthly Training Report": "trrecords", "Monthly Employee Movement Report": "paf", "Monthly HR Compliance Report": "comply", "Monthly HR Budget Report": "hrdr_29_hr_budget_utilization_report" };
-function hrdPeriod(fq) { const d = new Date(); const y = d.getFullYear(); const m = d.getMonth() + 1;
+function hrdPeriod(fq) { const [y, m, dd] = todayISO().split("-").map(Number); const d = new Date(y, m - 1, dd);
   if (/^daily/i.test(fq)) return [todayISO(), "today"]; if (/^weekly/i.test(fq)) { const t = new Date(Date.UTC(y, d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const w = Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 864e5 + 1) / 7); return [`${t.getUTCFullYear()}-W${w}`, `week ${w}`]; }
   if (/^monthly/i.test(fq)) return [todayISO().slice(0, 7), "this month"]; if (/^quarterly/i.test(fq)) return [`${y}-Q${Math.ceil(m / 3)}`, `Q${Math.ceil(m / 3)} ${y}`]; if (/^semiannual/i.test(fq)) return [`${y}-H${m <= 6 ? 1 : 2}`, `${m <= 6 ? "1st" : "2nd"} half ${y}`]; return [String(y), String(y)]; }
 function hrdReportsPage() {
@@ -14937,7 +14938,7 @@ function hrdReportsPage() {
   return head("HR Governance · HR Analytics & Reporting", "Reports calendar") + `<p class="t-muted" style="margin:-6px 0 16px">The HRD reporting structure: tick each report when it has been submitted for the period. Open goes to the page with its figures.</p>` +
     secs.map(({ sec, rows }) => `<section class="card" style="margin-bottom:16px"><div class="card-head"><h2>${esc(sec.replace(/^[A-D]\.\s*/, "").replace(/\b\w+/g, (w) => w[0] + w.slice(1).toLowerCase()))}</h2></div><div class="table-wrap"><table><thead><tr><th>Report</th><th>How often</th><th>Purpose</th><th>Period</th><th>Submitted</th><th></th></tr></thead><tbody>
       ${rows.map(({ fq, name, why }) => { const [pk, pl] = hrdPeriod(fq); const key = `${hrdSlug(name)}|${pk}`; const done = sub[key]; const go = HRD_REP_GO[name];
-        return `<tr><td><b>${esc(name)}</b></td><td>${esc(fq[0].toUpperCase() + fq.slice(1).toLowerCase())}</td><td>${esc(why)}</td><td>${esc(pl)}</td><td>${ed ? `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-hrd-rep="${esc(key)}" ${done ? "checked" : ""}> ${done ? fmtDate(done.at) : "Not yet"}</label>` : done ? `<span class="chip c-ok">${fmtDate(done.at)}</span>` : '<span class="chip c-gray">Not yet</span>'}</td><td>${go && (navHas(go) || HRD_REG[go]) ? `<button class="btn btn-ghost btn-sm" data-go="${go}">Open</button>` : ""}</td></tr>`; }).join("")}
+        return `<tr><td><b>${esc(name)}</b></td><td>${esc(fq[0].toUpperCase() + fq.slice(1).toLowerCase())}</td><td>${esc(why)}</td><td>${esc(pl)}</td><td>${ed ? `<label style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-hrd-rep="${esc(key)}" ${done ? "checked" : ""}> ${done ? hrdDate(done.at) : "Not yet"}</label>` : done ? `<span class="chip c-ok">${hrdDate(done.at)}</span>` : '<span class="chip c-gray">Not yet</span>'}</td><td>${go && (navHas(go) || HRD_REG[go]) ? `<button class="btn btn-ghost btn-sm" data-go="${go}">Open</button>` : ""}</td></tr>`; }).join("")}
     </tbody></table></div></section>`).join("");
 }
 function hrdDivPage() {
@@ -14957,7 +14958,7 @@ Object.assign(VIEWS, { hrd_kpi: hrdKpiPage, hrd_reports: hrdReportsPage, hrd_div
 document.addEventListener("click", async (ev) => {
   const t = ev.target.closest("[data-hrd-new],[data-hrd-edit],[data-hrd-del],[data-hrd-cancel]"); if (!t) return; const d = t.dataset;
   if (d.hrdNew) { S.hrdForm = { reg: d.hrdNew }; render(); $(`#hf-title-${d.hrdNew}`)?.focus(); return; }
-  if (d.hrdCancel != null) { S.hrdForm = null; render(); return; }
+  if (d.hrdCancel != null) { const reg = S.hrdForm?.reg; S.hrdForm = null; render(); document.querySelector(`[data-hrd-new="${reg}"]`)?.focus(); return; }
   if (d.hrdEdit) { const r = S.hrdreg.get(d.hrdEdit); if (!r) return; S.hrdForm = { reg: r.reg, id: r.id }; render(); $(`#hf-title-${r.reg}`)?.focus(); return; }
   if (d.hrdDel) { const r = S.hrdreg.get(d.hrdDel); if (!r || !S.canEdit) return; if (!(await askConfirm(`Delete "${r.title}"? This can't be undone.`))) return;
     try { await S.db.doc(`hrdreg/${r.id}`).delete(); S.hrdreg.delete(r.id); S.ver++; logActivity(`Deleted "${r.title}" from ${labelOf(r.reg)}`); toast("Deleted."); render(); } catch { toast("Couldn't delete. Try again."); } }
@@ -14971,10 +14972,11 @@ document.addEventListener("submit", async (ev) => {
 }, true);
 document.addEventListener("change", async (ev) => {
   const t = ev.target; const d = t.dataset || {};
-  if (d.hrdRs) { const [n, i] = d.hrdRs.split("|"); const resp = { ...(S.hrd?.resp || {}) }; resp[n] = { ...(resp[n] || {}), [i]: t.value }; try { await hrdSaveOrg({ resp }); render(); } catch { toast("Couldn't save. Try again."); } return; }
+  if ((d.hrdRs || d.hrdKpi || d.hrdRep) && !S.canEdit) return;
+  if (d.hrdRs) { const [n, i] = d.hrdRs.split("|"); try { await hrdSaveOrg({ resp: (r) => ({ ...r, [n]: { ...(r[n] || {}), [i]: t.value } }) }); render(); } catch { toast("Couldn't save. Try again."); } return; }
   if (d.hrdSt) { S.hrdQ[d.hrdSt + ":st"] = t.value; render(); return; }
-  if (d.hrdKpi) { const [m, i] = d.hrdKpi.split("|"); const kpi = { ...(S.hrd?.kpi || {}) }; kpi[m] = { ...(kpi[m] || {}), [i]: t.value.trim() }; try { await hrdSaveOrg({ kpi }); toast("Saved."); } catch { toast("Couldn't save. Try again."); } return; }
-  if (d.hrdRep) { const rep = { ...(S.hrd?.rep || {}) }; if (t.checked) rep[d.hrdRep] = { at: todayISO(), by: S.myId || null }; else delete rep[d.hrdRep]; try { await hrdSaveOrg({ rep }, `${t.checked ? "Marked" : "Unmarked"} a report as submitted`); render(); } catch { toast("Couldn't save. Try again."); } }
+  if (d.hrdKpi) { const [m, i] = d.hrdKpi.split("|"); const val = t.value.trim().slice(0, 60); try { await hrdSaveOrg({ kpi: (k) => ({ ...k, [m]: { ...(k[m] || {}), [i]: val } }) }); toast("Saved."); } catch { toast("Couldn't save. Try again."); } return; }
+  if (d.hrdRep) { const key = d.hrdRep, on = t.checked; try { await hrdSaveOrg({ rep: (r) => { const x = { ...r }; if (on) x[key] = { at: todayISO(), by: S.myId || null }; else delete x[key]; return x; } }, `${on ? "Marked" : "Unmarked"} a report as submitted`); render(); } catch { toast("Couldn't save. Try again."); } }
 });
 document.addEventListener("input", (ev) => { const r = ev.target.dataset?.hrdQ; if (!r) return; S.hrdQ[r] = ev.target.value; clearTimeout(S.hrdQt); S.hrdQt = setTimeout(() => { const pos = ev.target.selectionStart; render(); const el = document.querySelector(`[data-hrd-q="${r}"]`); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } }, 250); });
 { const st = document.createElement("style"); st.textContent = `
@@ -14994,6 +14996,48 @@ document.addEventListener("input", (ev) => { const r = ev.target.dataset?.hrdQ; 
 { const b = go; go = function (name, extra = {}) { if (name === "perms_list" || name === "perms_grid") { S.permTab = name === "perms_grid" ? "grid" : "list"; name = "perms"; } return b(name, extra); }; }
 { const b = renderNav; renderNav = function () { const r = b(); if (S.view?.name === "perms") { const nav = $("#nav"); const k = nav?.querySelector(`[data-go="perms_${S.permTab === "grid" ? "grid" : "list"}"]`); if (k) { nav.querySelector('[data-go="perms"]')?.removeAttribute("aria-current"); k.setAttribute("aria-current", "page"); } } return r; }; }
 { const b = applyPerm; applyPerm = (...a) => { const r = b(...a); if (S.perm && Array.isArray(S.perm.mods) && !isPermAdmin()) S.perm.mods = S.perm.mods.filter((g) => g !== "Users & Permissions"); return r; }; }
+
+/* A bad date typed into a record must not blank the page. */
+const hrdDate = (x) => (/^\d{4}-\d{2}-\d{2}/.test(String(x || "")) ? fmtDate(String(x).slice(0, 10)) : "");
+/* Pages taken out of the menu follow the tick box of the page that replaced them. */
+{ const HRD_ALIASV = { trprog: "trhome", emptraining: "trrecords" }; const b = viewAllowed; viewAllowed = function (name, ...x) { return b(HRD_ALIASV[name] || name, ...x); }; }
+/* A module mixes pages from several access modules, so hide the pages a role can't open (a parent stays as a label when some of its sub-pages are open to them). */
+{ const b = renderNav; renderNav = function () { const r = b(); const nav = $("#nav"); if (!S.perm || !nav || S.selfMode || (S.viewAs === "emp" && S.realEdit)) return r;
+  for (const x of nav.querySelectorAll(".nav-group [data-go]")) { if (viewAllowed(x.dataset.go)) continue; const row = x.closest(".nav-row");
+    if (row) { const sub = row.nextElementSibling?.classList.contains("nav-sub2") ? row.nextElementSibling : null; if (!sub || sub.querySelector("[data-go]") && [...sub.querySelectorAll("[data-go]")].some((k) => viewAllowed(k.dataset.go))) { x.removeAttribute("data-go"); x.setAttribute("aria-disabled", "true"); x.classList.add("nav-dim"); continue; } }
+    const s3 = x.nextElementSibling?.classList.contains("nav-sub3") ? x.nextElementSibling : null; if (s3 && ![...s3.querySelectorAll("[data-go]")].some((k) => viewAllowed(k.dataset.go))) s3.remove(); x.remove(); }
+  for (const row of nav.querySelectorAll(".nav-row")) { const x = row.querySelector(".nav-item"); const sub = row.nextElementSibling?.classList.contains("nav-sub2") ? row.nextElementSibling : null; if (x && !x.dataset.go && sub && !sub.querySelector("[data-go]")) { sub.remove(); row.remove(); } }
+  for (const g of nav.querySelectorAll(".nav-group")) if (!g.querySelector("[data-go]") && g.querySelector(".nav-sub")) g.remove();
+  return r; }; }
+{ const st = document.createElement("style"); st.textContent = ".nav-item.nav-dim{cursor:default;opacity:.85}"; document.head.appendChild(st); }
+
+/* ---------- frontend audit 2026-10-14 #3 ---------- */
+// Keep keyboard focus on a dropdown that re-draws the page.
+{ const KEEP = ["hrdRs", "hrdSt", "hrdFcat"]; document.addEventListener("change", (ev) => { const d = ev.target.dataset || {}; const k = KEEP.find((x) => d[x] != null); if (!k) return; const sel = `[data-${k.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase())}="${CSS.escape(d[k])}"]`; setTimeout(() => document.querySelector(sel)?.focus(), 60); setTimeout(() => { if (document.activeElement === document.body) document.querySelector(sel)?.focus(); }, 700); }); }
+// Escape closes the register form and returns to the button that opened it.
+document.addEventListener("keydown", (ev) => { if (ev.key !== "Escape" || !S.hrdForm || document.querySelector(".ac-back")) return; if (!ev.target.closest?.(".hrd-form")) return; const reg = S.hrdForm.reg, id = S.hrdForm.id; S.hrdForm = null; render(); (document.querySelector(id ? `[data-hrd-edit="${CSS.escape(id)}"]` : `[data-hrd-new="${CSS.escape(reg)}"]`) || document.querySelector(`[data-hrd-new="${CSS.escape(reg)}"]`))?.focus(); });
+// Menu: "Find a page" box, and repeated names ("Head Office", "Functions & checklist") read with their parent.
+S.navFind = "";
+{ const b = renderNav; renderNav = function () { const r = b(); const nav = $("#nav"); if (!nav || S.selfMode || (S.viewAs === "emp" && S.realEdit)) return r;
+  for (const x of nav.querySelectorAll(".nav-sub2 > .nav-item, .nav-sub3 > .nav-item")) { const lvl3 = x.parentElement.classList.contains("nav-sub3"); const par = lvl3 ? x.parentElement.previousElementSibling : x.parentElement.previousElementSibling?.querySelector(".nav-item"); const pl = par?.textContent.trim(); if (pl) x.setAttribute("aria-label", `${pl} · ${x.textContent.trim()}`); }
+  const box = `<div class="nav-find"><input class="input" type="search" placeholder="Find a page" aria-label="Find a page in the menu" data-nav-find value="${esc(S.navFind)}"></div>`;
+  const q = S.navFind.trim().toLowerCase();
+  if (q) { const hits = []; for (const [g, items] of NAV) for (const [v, l, ic, kids] of items) { const top = GL(g); if (v && `${l}`.toLowerCase().includes(q)) hits.push([v, l, top, ic]); for (const [kv, kl, ki, gk] of kids || []) { if (kl.toLowerCase().includes(q) || (`${l} ${kl}`).toLowerCase().includes(q)) hits.push([kv, kl, `${top} · ${l}`, ki]); for (const [gv, gl, gi] of gk || []) if (`${kl} ${gl}`.toLowerCase().includes(q)) hits.push([gv, gl, `${l} · ${kl}`, gi]); } }
+    const ok = hits.filter(([v]) => viewAllowed(v) && (v !== "perms" || isPermAdmin())).slice(0, 40);
+    nav.querySelectorAll(".nav-group, .nav-all").forEach((x) => x.remove());
+    nav.insertAdjacentHTML("afterbegin", box + `<div class="nav-hits" role="list">${ok.map(([v, l, path, ic]) => `<button class="nav-item" role="listitem" data-go="${esc(v)}">${icon(ic || "file", 16)}<span><b>${esc(l)}</b><small>${esc(path)}</small></span></button>`).join("") || `<p class="nav-none">No page matches.</p>`}</div>`);
+  } else nav.querySelector(".nav-all")?.insertAdjacentHTML("beforebegin", box);
+  return r; }; }
+document.addEventListener("input", (ev) => { if (!ev.target.matches?.("[data-nav-find]")) return; S.navFind = ev.target.value; const pos = ev.target.selectionStart; renderNav(); const el = document.querySelector("[data-nav-find]"); if (el) { el.focus(); try { el.setSelectionRange(pos, pos); } catch {} } });
+document.addEventListener("click", (ev) => { if (S.navFind && ev.target.closest?.(".nav-hits [data-go]")) { S.navFind = ""; } }, true);
+{ const st = document.createElement("style"); st.textContent = `
+html[data-theme="dark"] .hrd-fn{background:var(--gold,#c9a45c);color:#14213d}
+.hrd-resp{counter-reset:hrdr;list-style:none;padding-left:0}.hrd-resp li{counter-increment:hrdr}.hrd-resp li>span:first-child::before{content:counter(hrdr) ". ";font-weight:700;color:var(--gold-deep,#8a6a2c)}
+html[data-theme="dark"] .hrd-resp li>span:first-child::before{color:var(--gold,#c9a45c)}
+.hrd-m{display:none;font-size:12px;margin-top:4px}
+@media (max-width:600px){.hrd-tbl th:nth-child(n+2):nth-child(-n+5),.hrd-tbl td:nth-child(n+2):nth-child(-n+5){display:none}.hrd-m{display:block}.hrd-tbl td:last-child{white-space:normal!important}}
+.nav-find{padding:0 4px 10px}.nav-find .input{width:100%;background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.25)}.nav-find .input::placeholder{color:rgba(255,255,255,.7)}
+.nav-hits{display:flex;flex-direction:column;gap:2px}.nav-hits .nav-item{align-items:flex-start;text-align:left}.nav-hits .nav-item span{display:flex;flex-direction:column}.nav-hits small{opacity:.8;font-size:12px;font-weight:500}.nav-none{color:rgba(255,255,255,.8);padding:8px 12px;margin:0}`; document.head.appendChild(st); }
 
 /* ===== HRD Platform: process, workflow and automation per function (Glenn, 2026-10-14) =====
    Each of the 45 functions gets its procedure (steps, who does each, the page where it is done), what the app does on its own,
@@ -15060,9 +15104,9 @@ const HRD_FLOW = {
     a: ["Every change is logged in the Employee change log", "Pay or position edits file a Personnel Action Form", "Expiring documents remind HR", "A changed name or position asks for an ID reprint", "Masterlist imports from Excel"],
     m: ["Scanning paper files"] },
   21: { s: [["Give each user a role", "HR", "perms"], ["Review system access", "HR", "perms"], ["Check data accuracy", "HR", "idmiss"], ["Review the activity log", "HR", "activity"]],
-    a: ["Roles limit pages and, on the website, database writes", "Confidential pay is locked in the database", "Activity is logged"], m: ["HR automation report"] },
+    a: ["Roles limit which pages a person sees", "On the website the database blocks changes by View only roles", "Confidential pay is locked in the database", "Activity is logged"], m: ["HR automation report"] },
   22: { s: [["Plan the engagement calendar", "HR", "r:Employee Engagement Calendar"], ["Announce activities", "HR", "ann"], ["Run the satisfaction survey", "HR", "r:Employee Satisfaction Survey"], ["Recognize employees", "OPS", "r:Employee Recognition Program"], ["Report results", "HR", "r:Engagement Activity Reports"]],
-    a: ["Birthday and anniversary reminders", "Announcements by site"], m: ["Survey and recognition"] },
+    a: ["Birthdays on the dashboard", "Yearly review reminders for regular staff", "Announcements by site"], m: ["Survey and recognition"] },
   23: { s: [["Plan the welfare program", "HR", "r:Employee Welfare Program"], ["Schedule wellness activities", "HR", "r:Wellness Activity Calendar"], ["Assist employees in need", "HR", "r:Employee Assistance Monitoring"], ["Report well-being", "HR", "r:Employee Well-Being Report"]],
     a: ["Register entries track due dates and status"], m: ["The whole process is recorded by hand"] },
   24: { s: [["Record medical history and fitness", "HR", "medical"], ["Run safety trainings", "HR", "r:Safety Training Register"], ["Record workplace incidents", "OPS", "r:Employee Incident Records"], ["Monitor OSH training", "HR", "r:OSH Training Monitoring"]],
@@ -15078,7 +15122,7 @@ const HRD_FLOW = {
   29: { s: [["Prepare the HR budget", "HR", "r:Annual HR Budget"], ["Approve the budget", "EX", "r:Annual HR Budget"], ["Track recruitment and training costs", "HR", "r:HR Cost Analysis"], ["Report utilization", "FIN", "r:HR Budget Utilization Report"]],
     a: ["Payroll cost per project is recorded"], m: ["Budget and cost reports"] },
   30: { s: [["Keep the privacy compliance checklist", "HR", "r:HR Data Privacy Compliance Checklist"], ["Have staff sign confidentiality forms", "HR", "r:Confidentiality Acknowledgments"], ["Review records access", "HR", "perms"], ["Assess HR risks", "HR", "r:HR Risk Register"]],
-    a: ["Privacy notice consent is recorded at sign-in (website)", "Confidential pay and roles are enforced in the database", "Uploaded files open safely"], m: ["Risk assessment"] },
+    a: ["Privacy notice consent is recorded at sign-in (website)", "Confidential pay is enforced in the database", "Uploaded files open safely"], m: ["Risk assessment"] },
 };
 // Property management functions (31-45): the same four-step cycle, done per property and cluster.
 for (const n of [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]) HRD_FLOW[n] = {
@@ -15089,8 +15133,8 @@ for (const n of [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]) HR
 const hrdFlowView = (n, v) => (v.startsWith("r:") ? `hrdr_${n}_${hrdSlug(v.slice(2))}` : v);
 function hrdFlowCard(n, compact) {
   const f = HRD_FLOW[n]; if (!f) return "";
-  const steps = f.s.map(([t, w, v], i) => { const to = v && hrdFlowView(n, v); return `<li><span class="hrd-fn">${i + 1}</span><span class="hrd-ft"><b>${esc(t)}</b><span class="t-muted">${esc(HRD_WHO[w] || w)}</span></span>${to && (VIEWS[to] || navHas(to)) && to !== S.view?.name ? `<button class="btn btn-ghost btn-sm" data-go="${esc(to)}">Open</button>` : ""}</li>`; }).join("");
-  return `<section class="card" style="margin-top:16px"><div class="card-head"><h2>${compact ? esc(hrdTitle(n)) : "Process and workflow"}</h2>${compact ? `<button class="btn btn-ghost btn-sm" data-go="hrd_${n}">Open</button>` : ""}</div>
+  const steps = f.s.map(([t, w, v], i) => { const to = v && hrdFlowView(n, v); return `<li><span class="hrd-fn">${i + 1}</span><span class="hrd-ft"><b>${esc(t)}</b><span class="t-muted">${esc(HRD_WHO[w] || w)}</span></span>${to && (VIEWS[to] || navHas(to)) && to !== S.view?.name && !(compact && to === `hrd_${n}`) ? `<button class="btn btn-ghost btn-sm" data-go="${esc(to)}" aria-label="Open ${esc(labelOf(to))} for: ${esc(t)}">Open</button>` : ""}</li>`; }).join("");
+  return `<section class="card" style="margin-top:16px"><div class="card-head"><h2>${compact ? esc(hrdTitle(n)) : "Process and workflow"}</h2>${compact ? `<button class="btn btn-ghost btn-sm" data-go="hrd_${n}" aria-label="Open ${esc(hrdTitle(n))}">Open</button>` : ""}</div>
     <ol class="hrd-flow">${steps}</ol>
     <div class="hrd-auto"><div><h3>${icon("flow", 16)}Done by the app</h3><ul>${f.a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>${icon("sheet", 16)}Still done by hand</h3><ul>${f.m.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></div></section>`;
 }

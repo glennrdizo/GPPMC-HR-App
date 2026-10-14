@@ -63,9 +63,9 @@ const HRD_FLOW = {
     a: ["Every change is logged in the Employee change log", "Pay or position edits file a Personnel Action Form", "Expiring documents remind HR", "A changed name or position asks for an ID reprint", "Masterlist imports from Excel"],
     m: ["Scanning paper files"] },
   21: { s: [["Give each user a role", "HR", "perms"], ["Review system access", "HR", "perms"], ["Check data accuracy", "HR", "idmiss"], ["Review the activity log", "HR", "activity"]],
-    a: ["Roles limit pages and, on the website, database writes", "Confidential pay is locked in the database", "Activity is logged"], m: ["HR automation report"] },
+    a: ["Roles limit which pages a person sees", "On the website the database blocks changes by View only roles", "Confidential pay is locked in the database", "Activity is logged"], m: ["HR automation report"] },
   22: { s: [["Plan the engagement calendar", "HR", "r:Employee Engagement Calendar"], ["Announce activities", "HR", "ann"], ["Run the satisfaction survey", "HR", "r:Employee Satisfaction Survey"], ["Recognize employees", "OPS", "r:Employee Recognition Program"], ["Report results", "HR", "r:Engagement Activity Reports"]],
-    a: ["Birthday and anniversary reminders", "Announcements by site"], m: ["Survey and recognition"] },
+    a: ["Birthdays on the dashboard", "Yearly review reminders for regular staff", "Announcements by site"], m: ["Survey and recognition"] },
   23: { s: [["Plan the welfare program", "HR", "r:Employee Welfare Program"], ["Schedule wellness activities", "HR", "r:Wellness Activity Calendar"], ["Assist employees in need", "HR", "r:Employee Assistance Monitoring"], ["Report well-being", "HR", "r:Employee Well-Being Report"]],
     a: ["Register entries track due dates and status"], m: ["The whole process is recorded by hand"] },
   24: { s: [["Record medical history and fitness", "HR", "medical"], ["Run safety trainings", "HR", "r:Safety Training Register"], ["Record workplace incidents", "OPS", "r:Employee Incident Records"], ["Monitor OSH training", "HR", "r:OSH Training Monitoring"]],
@@ -81,7 +81,7 @@ const HRD_FLOW = {
   29: { s: [["Prepare the HR budget", "HR", "r:Annual HR Budget"], ["Approve the budget", "EX", "r:Annual HR Budget"], ["Track recruitment and training costs", "HR", "r:HR Cost Analysis"], ["Report utilization", "FIN", "r:HR Budget Utilization Report"]],
     a: ["Payroll cost per project is recorded"], m: ["Budget and cost reports"] },
   30: { s: [["Keep the privacy compliance checklist", "HR", "r:HR Data Privacy Compliance Checklist"], ["Have staff sign confidentiality forms", "HR", "r:Confidentiality Acknowledgments"], ["Review records access", "HR", "perms"], ["Assess HR risks", "HR", "r:HR Risk Register"]],
-    a: ["Privacy notice consent is recorded at sign-in (website)", "Confidential pay and roles are enforced in the database", "Uploaded files open safely"], m: ["Risk assessment"] },
+    a: ["Privacy notice consent is recorded at sign-in (website)", "Confidential pay is enforced in the database", "Uploaded files open safely"], m: ["Risk assessment"] },
 };
 // Property management functions (31-45): the same four-step cycle, done per property and cluster.
 for (const n of [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]) HRD_FLOW[n] = {
@@ -92,8 +92,8 @@ for (const n of [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]) HR
 const hrdFlowView = (n, v) => (v.startsWith("r:") ? `hrdr_${n}_${hrdSlug(v.slice(2))}` : v);
 function hrdFlowCard(n, compact) {
   const f = HRD_FLOW[n]; if (!f) return "";
-  const steps = f.s.map(([t, w, v], i) => { const to = v && hrdFlowView(n, v); return `<li><span class="hrd-fn">${i + 1}</span><span class="hrd-ft"><b>${esc(t)}</b><span class="t-muted">${esc(HRD_WHO[w] || w)}</span></span>${to && (VIEWS[to] || navHas(to)) && to !== S.view?.name ? `<button class="btn btn-ghost btn-sm" data-go="${esc(to)}">Open</button>` : ""}</li>`; }).join("");
-  return `<section class="card" style="margin-top:16px"><div class="card-head"><h2>${compact ? esc(hrdTitle(n)) : "Process and workflow"}</h2>${compact ? `<button class="btn btn-ghost btn-sm" data-go="hrd_${n}">Open</button>` : ""}</div>
+  const steps = f.s.map(([t, w, v], i) => { const to = v && hrdFlowView(n, v); return `<li><span class="hrd-fn">${i + 1}</span><span class="hrd-ft"><b>${esc(t)}</b><span class="t-muted">${esc(HRD_WHO[w] || w)}</span></span>${to && (VIEWS[to] || navHas(to)) && to !== S.view?.name && !(compact && to === `hrd_${n}`) ? `<button class="btn btn-ghost btn-sm" data-go="${esc(to)}" aria-label="Open ${esc(labelOf(to))} for: ${esc(t)}">Open</button>` : ""}</li>`; }).join("");
+  return `<section class="card" style="margin-top:16px"><div class="card-head"><h2>${compact ? esc(hrdTitle(n)) : "Process and workflow"}</h2>${compact ? `<button class="btn btn-ghost btn-sm" data-go="hrd_${n}" aria-label="Open ${esc(hrdTitle(n))}">Open</button>` : ""}</div>
     <ol class="hrd-flow">${steps}</ol>
     <div class="hrd-auto"><div><h3>${icon("flow", 16)}Done by the app</h3><ul>${f.a.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div><div><h3>${icon("sheet", 16)}Still done by hand</h3><ul>${f.m.map((x) => `<li>${esc(x)}</li>`).join("")}</ul></div></div></section>`;
 }
