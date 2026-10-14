@@ -95,7 +95,7 @@ const HRD_LABEL = {}; // view -> menu name of new pages
 navKeys = function () {
   const out = []; const g0 = (v) => HRD_PERM[v] || "People";
   for (const [g, items] of NAV) for (const [v, l, ic, kids] of items) { if (!v || v === "perms") { if (v === "perms") continue; } out.push({ g: g === "Overview" ? "Overview" : g0(v), v, l, ic });
-    for (const [kv, kl, ki, gk] of kids || []) { if (kv === "perms") continue; out.push({ g: g === "Overview" ? "Overview" : g0(kv), v: kv, l: kl, ic: ki, parent: v }); for (const [gv, gl, gi] of gk || []) out.push({ g: g0(gv), v: gv, l: `${kl} · ${gl}`, ic: gi, parent: kv }); } }
+    for (const [kv, kl, ki, gk] of kids || []) { if (/^perms/.test(kv)) continue; out.push({ g: g === "Overview" ? "Overview" : g0(kv), v: kv, l: kl, ic: ki, parent: v }); for (const [gv, gl, gi] of gk || []) out.push({ g: g0(gv), v: gv, l: `${kl} · ${gl}`, ic: gi, parent: kv }); } }
   return out;
 };
 viewGroup = function (name) { const v = SECTION_OF[name] || SECTION_OF[baseView(name)] || name; if (NAV[0]?.[0] === "Overview" && NAV[0][1].some(([x]) => x === v)) return "Overview"; return HRD_PERM[v] || null; };
@@ -248,3 +248,13 @@ document.addEventListener("input", (ev) => { const r = ev.target.dataset?.hrdQ; 
 .hrd-resp{margin:0;padding-left:22px;display:flex;flex-direction:column;gap:8px}.hrd-resp li{display:flex;gap:12px;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:8px}
 .hrd-resp li select{max-width:170px;flex:none}
 @media (max-width:600px){.hrd-resp li{flex-direction:column;align-items:stretch}.hrd-resp li select{max-width:none}}`; document.head.appendChild(st); }
+
+/* Users & Permissions: its own module at the end of the menu (Glenn, 2026-10-14), with its two tabs as sub-pages. */
+{
+  for (const [, items] of NAV) for (const it of items) if (it[3]) it[3] = it[3].filter(([k]) => k !== "perms");
+  NAV.push(["Users & Permissions", [["perms", "Users & permissions", "shield", [["perms_list", "Users list", "people"], ["perms_grid", "Users & Roles (tick boxes)", "sliders"]]]]]);
+  MOD_ICON["Users & Permissions"] = "shield"; HRD_PERM.perms = HRD_PERM.perms_list = HRD_PERM.perms_grid = "Records";
+}
+{ const b = go; go = function (name, extra = {}) { if (name === "perms_list" || name === "perms_grid") { S.permTab = name === "perms_grid" ? "grid" : "list"; name = "perms"; } return b(name, extra); }; }
+{ const b = renderNav; renderNav = function () { const r = b(); if (S.view?.name === "perms") { const nav = $("#nav"); const k = nav?.querySelector(`[data-go="perms_${S.permTab === "grid" ? "grid" : "list"}"]`); if (k) { nav.querySelector('[data-go="perms"]')?.removeAttribute("aria-current"); k.setAttribute("aria-current", "page"); } } return r; }; }
+{ const b = applyPerm; applyPerm = (...a) => { const r = b(...a); if (S.perm && Array.isArray(S.perm.mods) && !isPermAdmin()) S.perm.mods = S.perm.mods.filter((g) => g !== "Users & Permissions"); return r; }; }
