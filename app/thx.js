@@ -21,7 +21,7 @@ function t13Of(e, y, upTo) {
     const p = PAY.period(id); if (p.start > end || e.hire > p.end || (e.separated?.date && e.separated.date < p.start)) continue;
     if (isFinal(id)) ensureRun(id); const r = payrun(id); const l = r.lines[e.id]; if (!l) continue;
     let part = 1; if (p.end > end) { const s = e.hire > p.start ? e.hire : p.start; const t = e.separated?.date && e.separated.date < p.end ? e.separated.date : p.end; part = Math.max(0, Math.min(1, (daysBetween(s, end) + 1) / (daysBetween(s, t) + 1))); }
-    const b = PAY.r2(regularPay(l) * part); const c = e.comm13 === false ? 0 : PAY.r2((l.comm || 0) * part);
+    const b = PAY.r2(regularPay(l) * part); const c = e.comm13 !== true ? 0 : PAY.r2((l.comm || 0) * part);
     const src = r.final ? "final" : p.start > today ? "proj" : S.periods.has(id) ? "draft" : "est";
     rows.push({ id, label: p.label, src, basic: b, comm: c, absent: PAY.r2(((l.absent || 0) + (l.tardy || 0)) * part) }); basic += b; comm += c; ben += (l.flexB || 0) * part;
   }

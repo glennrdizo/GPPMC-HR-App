@@ -347,8 +347,8 @@ VIEWS.paySetup = () => {
       <h2 style="font-size:17px">Rank, commissions and time clock</h2>
       <div class="form-grid"><div class="field"><label for="ps-rank">Rank (FlexBen credits and fringe benefit tax)</label><select class="input" id="ps-rank">${opts(RANKS, e.rank || "", `From the position title (${rankName(rankOf({ ...e, rank: null }))})`)}</select></div>
         <div class="field"><label for="ps-bio">Biometric ID (user number on the time clock)</label><input class="input" id="ps-bio" value="${esc(e.bioId || "")}" placeholder="${esc(String(Number(String(e.no).replace(/\D/g, "")) || ""))}"></div></div>
-      <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="ps-comm13" ${e.comm13 === false ? "" : "checked"}> Commissions are part of the wage and count toward 13th month pay</label>
-      <p class="t-muted" style="margin:-8px 0 0;font-size:13px">Untick for productivity or profit-sharing incentives that aren't part of the wage. Enter commissions in the time sheet's Commission column.</p>
+      <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="ps-comm13" ${e.comm13 === true ? "checked" : ""}> Include commissions in 13th month pay</label>
+      <p class="t-muted" style="margin:-8px 0 0;font-size:13px">Off by company policy. Tick only if this person's commission is part of their basic salary (PD 851). Enter commissions in the time sheet's Commission column.</p>
       <h2 style="font-size:17px">Pag-IBIG</h2>
       <div class="form-grid"><div class="field"><label for="ps-hdmf">Voluntary monthly contribution (blank for the standard ₱200)</label><input class="input" id="ps-hdmf" type="number" min="0" step="1" value="${e.hdmfVol || ""}" placeholder="200"></div></div>
       <h2 style="font-size:17px">Previous employer in ${y}</h2>
@@ -364,7 +364,7 @@ async function submitPaySetup() {
   const allow = [...document.querySelectorAll("[data-allow]")].map((x) => ({ code: x.dataset.allow, amt: Number(x.value) || 0 })).filter((a) => a.amt > 0);
   const none = $("#ps-none").checked; const hasPrev = none || $("#ps-emp").value.trim() || num("#ps-tx") || num("#ps-tax");
   const prev = hasPrev ? (none ? { year: y, none: true } : { year: y, employer: $("#ps-emp").value.trim() || null, tin: $("#ps-tin").value.trim() || null, gross: num("#ps-gross"), nontax: num("#ps-nt"), taxable: num("#ps-tx"), tax: num("#ps-tax") }) : e.prev?.year === y ? null : e.prev || null;
-  const ne = { ...e, allow, hdmfVol: num("#ps-hdmf") || null, prev, rank: $("#ps-rank").value || null, bioId: $("#ps-bio").value.trim() || null, comm13: $("#ps-comm13").checked ? null : false };
+  const ne = { ...e, allow, hdmfVol: num("#ps-hdmf") || null, prev, rank: $("#ps-rank").value || null, bioId: $("#ps-bio").value.trim() || null, comm13: $("#ps-comm13").checked ? true : null };
   await saveEmp(ne); S.emps.set(e.id, ne); logActivity(`Updated the pay setup of ${fullName(e)}`); toast("Pay setup saved."); go("employee", { id: e.id });
 }
 async function submitMove(f) {

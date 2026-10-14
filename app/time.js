@@ -350,7 +350,7 @@ function thirteenthRows(year) {
     const months = PAY.r2(Math.max(0, daysBetween(from, to) + 1) / 365 * 12);
     const monthly = e.payType === "DAILY" ? (e.basicPay * Sx.factor) / 12 : e.basicPay;
     const paid = PAY.r2(finals.reduce((a, [, r]) => a + (r.lines[e.id] ? regularPay(r.lines[e.id]) : 0), 0));
-    const comm = e.comm13 === false ? 0 : PAY.r2(finals.reduce((a, [, r]) => a + (r.lines[e.id]?.comm || 0), 0));
+    const comm = e.comm13 !== true ? 0 : PAY.r2(finals.reduce((a, [, r]) => a + (r.lines[e.id]?.comm || 0), 0));
     return { e, months, monthly: PAY.r2(monthly), paid, comm, est: PAY.r2((monthly * months) / 12 + comm / 12) };
   });
 }
