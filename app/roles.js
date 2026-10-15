@@ -11,12 +11,25 @@ const RL_TOP = new Set(["owner", "admin"]);
 const iAmOwner = () => !!S.isOwner || S.access?.users?.[S.myId]?.role === "owner";
 const rlRoleOf = (id) => { const a = S.access || {}; return a.users?.[id]?.role || a.defaultRole || "admin"; };
 const rlLocked = (id) => !iAmOwner() && (RL_TOP.has(rlRoleOf(id)) || id === S.myId);
+// Built-in roles on the new menu (Glenn 2026-10-15): whole modules (mods) plus single sub-modules (subs, with everything under them).
+// A role re-ticked in Users & Roles (org/access.roles) keeps its own ticks; Reset brings back these.
+const RL_MENU = {
+  payroll: { mods: ["HR Operations"], subs: ["Employee Records & 201 Files", "Employee Movement", "Separation & Offboarding"], bot: true, note: "HR Operations (timekeeping, leave, payroll, compensation, benefits), plus 201 files, employee movement and separation" },
+  timekeeper: { mods: [], subs: ["Timekeeping & Attendance", "Leave Administration"], bot: false, note: "Timekeeping & attendance and leave, in HR Operations" },
+  talent: { mods: ["Talent Management", "Employee Development"], subs: ["Manpower Planning", "Employee Records & 201 Files"], bot: true, note: "Talent Management and Employee Development, plus manpower planning and 201 files" },
+};
+function rlMenuViews(spec) {
+  const keys = navKeys(); const out = new Set(keys.filter((k) => (k.g === "Overview" && (spec.bot || k.v !== "hrbot")) || spec.mods.includes(k.g)).map((k) => k.v));
+  for (const l of spec.subs) for (const k of keys.filter((x) => x.d === 0 && x.l === l)) { out.add(k.v); for (const v of descOf(keys, k.v)) out.add(v); }
+  return out;
+}
 function rlSync() {
   const R = S.access?.roles || {};
   for (const k of Object.keys(ROLES)) if (!ROLES_BASE[k]) delete ROLES[k];
   for (const [k, b] of Object.entries(ROLES_BASE)) ROLES[k] = { ...b, mods: [...b.mods] };
+  for (const [k, spec] of Object.entries(RL_MENU)) if (ROLES[k]) { const v = rlMenuViews(spec); ROLES[k] = { ...ROLES[k], views: [...v], mods: modsOf(v), note: spec.note }; }
   for (const [k, r] of Object.entries(R)) { if (RL_FIXED.has(k) || !r) continue; const views = Array.isArray(r.views) ? r.views : null; const base = ROLES_BASE[k];
-    ROLES[k] = { name: r.name || base?.name || "Role", edit: r.edit ?? base?.edit ?? false, note: r.note || base?.note || "Made in Users & Roles", views, mods: views ? modsOf(new Set(views)) : base?.mods || [], made: !base }; }
+    ROLES[k] = { name: r.name || base?.name || "Role", edit: r.edit ?? base?.edit ?? false, note: r.note || (views ? "" : ROLES[k]?.note) || base?.note || "Made in Users & Roles", views: views || ROLES[k]?.views || null, mods: views ? modsOf(new Set(views)) : ROLES[k]?.mods || base?.mods || [], made: !base }; if (!ROLES[k].views) delete ROLES[k].views; }
 }
 { const b = myRole; myRole = (...x) => { const r = b(...x); const a = S.access || {}; const u = S.myId ? a.users?.[S.myId] : null; const key = S.isOwner ? "owner" : u?.role || a.defaultRole || "admin";
     if (key === "owner") return { ...ROLES.admin, ...r, key: "admin", ownerRole: true, name: "Owner", views: null, mods: PERM_MODS, edit: true };
