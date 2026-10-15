@@ -1,5 +1,5 @@
 # Builds the website (public/) from the app (app/index.html) plus the Supabase layer in web/.
-import os, re, shutil
+import os, re, shutil, subprocess
 W = os.path.dirname(os.path.abspath(__file__))
 app = open(os.path.join(W, '..', 'app', 'index.html')).read()
 end = '\nboot();\n})();\n</script>'
@@ -8,7 +8,9 @@ app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + end)
 logo = re.search(r'const CO_LOGO = "([^"]+)"', app).group(1)
 sbjs = open(os.path.join(W, '..', 'public', 'supabase.js')).read()  # @supabase/supabase-js 2.45.4 UMD
 shim = open(os.path.join(W, 'sb-shim.js')).read()
-head = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+NOTICE = ('<!-- Copyright (c) 2026 GD Prime Property Management Corporation. All rights reserved. '
+          'Proprietary and confidential: copying, reuse or redistribution of this code is not permitted. -->')
+head = ('<!doctype html><html lang="en"><head>' + NOTICE + '<meta charset="utf-8"><meta name="robots" content="noindex, nofollow">'
         '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
         '<meta name="theme-color" content="#0D1729"><link rel="icon" href="' + logo + '">'
         '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0}</style>'
@@ -18,7 +20,7 @@ open(os.path.join(out, 'index.html'), 'w').write(head + app + '</body></html>')
 shutil.copy(os.path.join(W, 'sw.js'), os.path.join(out, 'sw.js'))
 open(os.path.join(out, 'supabase.js'), 'w').write(sbjs)
 # Careers page and applicant portal (/careers): a light page of its own, sharing the same Supabase project and sign-in.
-car = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
+car = ('<!doctype html><html lang="en"><head>' + NOTICE + '<meta charset="utf-8">'
        '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
        '<title>Careers · GD Prime</title><meta name="description" content="Job openings at GD Prime Property Management Corporation. Apply online and follow your application.">'
        '<meta property="og:title" content="Careers at GD Prime"><meta property="og:description" content="Job openings at GD Prime Property Management Corporation. Apply online.">'
@@ -28,4 +30,8 @@ car = ('<!doctype html><html lang="en"><head><meta charset="utf-8">'
 open(os.path.join(out, 'careers.html'), 'w').write(car)
 m = re.findall(r'<script[^>]*>(.*?)</script>', head + app, re.S)
 open('/tmp/chk-shim.js', 'w').write(m[1]); open('/tmp/chk-app.js', 'w').write(m[-1])
+# Minify the published scripts (needs `npm install` in web/ once).
+if not os.path.exists(os.path.join(W, 'node_modules', 'terser')):
+    raise SystemExit('Run `npm install` in web/ first: the website is published minified.')
+subprocess.run(['node', os.path.join(W, 'minify.cjs')], check=True)
 print('built', os.path.getsize(os.path.join(out, 'index.html')))

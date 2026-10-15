@@ -1,0 +1,9 @@
+{
+  "name": "gd-prime-hr-website-build",
+  "private": true,
+  "license": "UNLICENSED",
+  "description": "Build tools for the website in ../public (python3 build.py runs the minifier).",
+  "devDependencies": {
+    "terser": "5.36.0"
+  }
+}
