@@ -15,7 +15,7 @@ HR and payroll system for GD Prime Property Management Corporation.
 
 ```sh
 cd app && python3 rebuild.py && node --check chk.js   # rebuild the app after editing a module
-cd ../web && python3 build.py                        # rebuild the website into public/
+cd ../web && npm install && python3 build.py        # rebuild the website into public/ (minified)
 ```
 
 Commit and push to `main`; Vercel redeploys automatically.
@@ -25,3 +25,9 @@ Commit and push to `main`; Vercel redeploys automatically.
 - Vercel: import this repository, Framework preset **Other**, no build command. `vercel.json` points it at `public/`.
 - Supabase (gd-prime-hr): Authentication > URL Configuration > Site URL = the Vercel address.
 - Optional: Edge Functions > Secrets > `ANTHROPIC_API_KEY` turns on the HR assistant, loan reading and report analysis.
+
+## Security
+
+- The website is published minified, with a copyright notice, a strict Content-Security-Policy and other security headers (`vercel.json`). Third-party libraries load with integrity fingerprints (`LIB_SRI` in `app/io.js`).
+- `app/sec.js` drops records whose ids could break out of the page, ignores odd role names, and keeps Owner and Executive out of the default role. The database applies the same rules (`supabase/migrations/20261015_hr_security_hardening.sql`).
+- This code is proprietary. See `LICENSE`. Keep this repository private.

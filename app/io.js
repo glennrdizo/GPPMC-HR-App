@@ -25,12 +25,21 @@ const LIB = {
   pdfTable: [["jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js", "jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"], () => window.jspdf?.jsPDF?.API?.autoTable],
 };
 const libLoads = {};
+// Fingerprints of the exact library files (npm builds), so a tampered CDN copy is refused.
+const LIB_SRI = {
+  "xlsx@0.18.5/dist/xlsx.full.min.js": "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw",
+  "pptxgenjs@3.12.0/dist/pptxgen.bundle.js": "sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ",
+  "jspdf@2.5.1/dist/jspdf.umd.min.js": "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk",
+  "jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js": "sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3",
+  "pdfjs-dist@3.11.174/build/pdf.min.js": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+  "pdfjs-dist@3.11.174/build/pdf.worker.min.js": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+};
 function loadLib(k) {
   const [[cdnjs, npm], ready] = LIB[k];
   if (ready()) return Promise.resolve(ready());
   return (libLoads[k] ||= (async () => {
     for (const url of ["https://cdnjs.cloudflare.com/ajax/libs/" + cdnjs, "https://cdn.jsdelivr.net/npm/" + npm]) {
-      try { await new Promise((ok, no) => { const s = document.createElement("script"); s.src = url; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); if (ready()) return ready(); } catch {}
+      try { await new Promise((ok, no) => { const s = document.createElement("script"); if (LIB_SRI[npm]) { s.integrity = LIB_SRI[npm]; s.crossOrigin = "anonymous"; } s.src = url; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); if (ready()) return ready(); } catch {}
     }
     libLoads[k] = null; throw new Error("library");
   })());

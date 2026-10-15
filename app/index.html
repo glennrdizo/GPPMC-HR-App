@@ -5761,12 +5761,21 @@ const LIB = {
   pdfTable: [["jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js", "jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"], () => window.jspdf?.jsPDF?.API?.autoTable],
 };
 const libLoads = {};
+// Fingerprints of the exact library files (npm builds), so a tampered CDN copy is refused.
+const LIB_SRI = {
+  "xlsx@0.18.5/dist/xlsx.full.min.js": "sha384-vtjasyidUo0kW94K5MXDXntzOJpQgBKXmE7e2Ga4LG0skTTLeBi97eFAXsqewJjw",
+  "pptxgenjs@3.12.0/dist/pptxgen.bundle.js": "sha384-Cck14aA9cifjYolcnjebXRfWGkz5ltHMBiG4px/j8GS+xQcb7OhNQWZYyWjQ+UwQ",
+  "jspdf@2.5.1/dist/jspdf.umd.min.js": "sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk",
+  "jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js": "sha384-fCAW/rDWORTbQXSiB7mOg0QtQ5c+r0f544y6XoKjuVva0nMBlCpNUjiFeG5iMdS3",
+  "pdfjs-dist@3.11.174/build/pdf.min.js": "sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+  "pdfjs-dist@3.11.174/build/pdf.worker.min.js": "sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+};
 function loadLib(k) {
   const [[cdnjs, npm], ready] = LIB[k];
   if (ready()) return Promise.resolve(ready());
   return (libLoads[k] ||= (async () => {
     for (const url of ["https://cdnjs.cloudflare.com/ajax/libs/" + cdnjs, "https://cdn.jsdelivr.net/npm/" + npm]) {
-      try { await new Promise((ok, no) => { const s = document.createElement("script"); s.src = url; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); if (ready()) return ready(); } catch {}
+      try { await new Promise((ok, no) => { const s = document.createElement("script"); if (LIB_SRI[npm]) { s.integrity = LIB_SRI[npm]; s.crossOrigin = "anonymous"; } s.src = url; s.onload = ok; s.onerror = no; document.head.appendChild(s); }); if (ready()) return ready(); } catch {}
     }
     libLoads[k] = null; throw new Error("library");
   })());
@@ -15103,6 +15112,57 @@ document.addEventListener("click", async (ev) => {
 @media (max-width:600px){.au-f,.au-f .input{min-width:0;width:100%}.au-f{flex:1 1 45%}}`; document.head.appendChild(st); }
 // The log is read-only: no Excel import or attachments bar on its pages (it has its own Download button).
 { const b = ioBar; ioBar = (...a) => (AU_VIEWS.has(S.view?.name) ? "" : b(...a)); }
+
+/* ---------- Security audit #4 (2026-10-15): page-side guards. The database applies the same rules on the website. ---------- */
+// Record ids and role keys end up inside the page, so anything that could break out of an attribute is never shown.
+const SEC_BAD_ID = /[<>"'`&\\\u0000-\u001f]/;
+const secOkId = (id) => typeof id === "string" && id.length > 0 && id.length <= 300 && !SEC_BAD_ID.test(id);
+const SEC_ROLE_KEY = /^[a-z][a-z0-9_]{0,40}$/;
+function secSnap(s) {
+  if (!s || !Array.isArray(s.docs) || s.docs.every((d) => secOkId(d.id))) return s;
+  const docs = s.docs.filter((d) => secOkId(d.id));
+  return new Proxy(s, { get: (t, k) => {
+    if (k === "docs") return docs; if (k === "size") return docs.length; if (k === "empty") return !docs.length;
+    if (k === "forEach") return (f, th) => docs.forEach(f, th);
+    if (k === "docChanges") return (...a) => (typeof t.docChanges === "function" ? t.docChanges(...a) : []).filter((c) => secOkId(c?.doc?.id));
+    const v = t[k]; return typeof v === "function" ? v.bind(t) : v; } });
+}
+function secQuery(q) {
+  if (!q || typeof q !== "object") return q;
+  return new Proxy(q, { get: (t, k) => {
+    if (k === "onSnapshot") return (cb, ...r) => t.onSnapshot((s) => cb(secSnap(s)), ...r);
+    if (k === "get") return async (...a) => secSnap(await t.get(...a));
+    const v = t[k]; if (typeof v !== "function") return v;
+    if (k === "doc" || k === "add") return v.bind(t);
+    return (...a) => { const r = v.apply(t, a); return r && typeof r === "object" && typeof r.onSnapshot === "function" ? secQuery(r) : r; };
+  } });
+}
+{ const prev = S.wrapDb; S.wrapDb = (raw) => {
+  const db = prev ? prev(raw) : raw; if (!db) return db;
+  return new Proxy({}, { get: (t, k) => { if (k === "collection") return (p) => secQuery(db.collection(p)); const v = db[k]; return typeof v === "function" ? v.bind(db) : v; } });
+}; }
+
+// Saved roles with odd keys are ignored.
+{ const b = rlSync; rlSync = (...a) => { const r = b(...a); for (const k of Object.keys(ROLES)) if (!SEC_ROLE_KEY.test(k)) delete ROLES[k]; return r; }; }
+
+// Executive is a top role too: only an Owner gives it.
+RL_TOP.add("exec");
+
+// Nobody becomes Owner or Executive through the default role. On the website the database gives View only instead.
+{ const b = myRole; myRole = (...x) => { const a = S.access; const d = a?.defaultRole;
+  if (!a || S.isOwner || !S.myId || a.users?.[S.myId]?.role || !(d === "owner" || d === "exec" || (window.__hosted && d === "admin"))) return b(...x);
+  a.defaultRole = window.__hosted ? "viewer" : "admin"; try { return b(...x); } finally { a.defaultRole = d; } }; }
+
+// Removing someone drops them to the default role. While that is a top role, only an Owner may remove people.
+window.addEventListener("click", (ev) => { if (iAmOwner()) return; const t = ev.target.closest?.("[data-perm-del],[data-pu-del]"); if (!t) return;
+  const d = S.access?.defaultRole || "admin"; if (RL_TOP.has(d)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Only an Owner can remove people while the default role is " + (ROLES[d]?.name || "HR Admin") + "."); } }, true);
+
+// Audit log: entries with a bad date or name are skipped instead of blanking the page.
+{ let data = AU.data; Object.defineProperty(AU, "data", { configurable: true, enumerable: true, get: () => data, set: (m) => {
+  if (m instanceof Map) for (const [k, d] of m) { if (!d || typeof d !== "object") { m.delete(k); continue; }
+    if (d.name != null && typeof d.name !== "string") d.name = String(d.name); if (d.role != null && typeof d.role !== "string") d.role = "";
+    d.items = Array.isArray(d.items) ? d.items.filter((it) => it && typeof it.at === "string" && !Number.isNaN(Date.parse(it.at))) : []; }
+  data = m; } }); AU.data = data; }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {
