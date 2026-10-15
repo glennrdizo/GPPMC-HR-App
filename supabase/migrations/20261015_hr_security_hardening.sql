@@ -1,4 +1,4 @@
--- Security audit #4 (2026-10-16). Closes the role, invite and file-storage gaps found after audit #3.
+-- Security audit #4 (2026-10-15). Closes the role, invite and file-storage gaps found after audit #3.
 -- * hr_role(): someone who isn't in the Users list gets the role of the invitation sent to their email, otherwise the
 --   default role, but never Owner, Executive or HR Admin through the default (they get View only instead).
 -- * org/access: only an Owner adds or removes HR Admins, changes the default role, or edits the Owner, Executive and

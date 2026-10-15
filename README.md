@@ -29,5 +29,5 @@ Commit and push to `main`; Vercel redeploys automatically.
 ## Security
 
 - The website is published minified, with a copyright notice, a strict Content-Security-Policy and other security headers (`vercel.json`). Third-party libraries load with integrity fingerprints (`LIB_SRI` in `app/io.js`).
-- `app/sec.js` drops records whose ids could break out of the page, ignores odd role names, and keeps Owner and Executive out of the default role. The database applies the same rules (`supabase/migrations/20261016_hr_security_hardening.sql`).
+- `app/sec.js` drops records whose ids could break out of the page, ignores odd role names, and keeps Owner and Executive out of the default role. The database applies the same rules (`supabase/migrations/20261015_hr_security_hardening.sql`).
 - This code is proprietary. See `LICENSE`. Keep this repository private.

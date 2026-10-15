@@ -1,4 +1,4 @@
-/* ---------- Security audit #4 (2026-10-16): page-side guards. The database applies the same rules on the website. ---------- */
+/* ---------- Security audit #4 (2026-10-15): page-side guards. The database applies the same rules on the website. ---------- */
 // Record ids and role keys end up inside the page, so anything that could break out of an attribute is never shown.
 const SEC_BAD_ID = /[<>"'`&\\\u0000-\u001f]/;
 const secOkId = (id) => typeof id === "string" && id.length > 0 && id.length <= 300 && !SEC_BAD_ID.test(id);
