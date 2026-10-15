@@ -5658,7 +5658,7 @@ VIEWS.perms = () => {
     <section class="card perm-how"><div class="card-head"><h2>How access works</h2></div>
       <ol style="margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;max-width:90ch">
         <li><b>Who can open the app</b> is set with the page's <b>Share</b> button on claude.ai. Give HR staff <b>Can edit</b>. Anyone shared at a lower level only gets their own phone time clock.</li>
-        <li><b>What each HR staff member sees</b> is set here: pick a role for each person, or tap <b>Change access</b> in the Users table and tick exactly which modules and sub-modules they get. The side menu then shows only those pages, and people without "Can change records" can only look.</li>
+        <li><b>What each HR staff member sees</b> is set here: pick a role for each person, or tick exactly which modules, sub-modules and sub-sub-modules they get, with <b>Change access</b> in the Users table or in the <b>Users &amp; Roles</b> tick boxes below. The side menu then shows only those pages, and people without "Can change records" can only look.</li>
         <li>You, as the owner, always have full access.</li>
       </ol>
       <p class="t-muted" style="margin:12px 0 0;font-size:13px;max-width:90ch">Roles control what the app shows and lets people do. Anyone with Can edit could still reach the data with technical tools, so give Can edit only to people you trust with all HR records.</p></section>
@@ -13013,12 +13013,12 @@ function rlGrid() {
         ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${pmLvl(k)}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${roleCols.map((c) => rCell(c, k.v, k.l)).join("")}${userCols.map((c) => uCell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
       <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users &amp; permissions</th>${roleCols.map(() => '<td class="pm-c pm-rc"><input type="checkbox" disabled aria-label="Users and permissions"></td>').join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
-    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page." : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user on the Users list tab.</p></section>`;
+    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page." : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user in the Users card above.</p></section>`;
 }
 { const b = VIEWS.perms; VIEWS.perms = (...x) => { const h = b(...x); if (!isPermAdmin()) return h;
-  const tabs = `<div class="tabs rl-tabs" role="tablist"><button class="tab" role="tab" aria-selected="${S.permTab !== "grid"}" data-perm-tab="list">Users list</button><button class="tab" role="tab" aria-selected="${S.permTab === "grid"}" data-perm-tab="grid">Users &amp; Roles (tick boxes)</button></div>`;
-  const i = h.indexOf("</header>"); if (i < 0) return h; const top = h.slice(0, i + 9);
-  return S.permTab === "grid" ? top + tabs + rlGrid() : top + tabs + h.slice(i + 9); }; }
+  // One page (Glenn 2026-10-15): the Users list, then the Users & Roles tick boxes, then the roles summary.
+  const j = h.indexOf('<section class="card"><div class="card-head"><h2>Roles</h2>'); const grid = `<div id="rl-grid">${rlGrid()}</div>`;
+  return j < 0 ? h + grid : h.slice(0, j) + grid + h.slice(j); }; }
 { const prev = after.perms; after.perms = () => { prev?.(); document.querySelectorAll(".pm [data-mixed]").forEach((x) => (x.indeterminate = true)); }; }
 
 async function rlSave(roles, msg) { await saveAccess({ roles: JSON.parse(JSON.stringify(roles)) }, msg); }
@@ -14639,10 +14639,10 @@ document.addEventListener("input", (ev) => { const r = ev.target.dataset?.hrdQ; 
 /* Users & Permissions: its own module at the end of the menu (Glenn, 2026-10-14), with its two tabs as sub-pages. */
 {
   for (const [, items] of NAV) for (const it of items) if (it[3]) it[3] = it[3].filter(([k]) => k !== "perms");
-  NAV.push(["Users & Permissions", [["perms", "Users & permissions", "shield", [["perms_list", "Users list", "people"], ["perms_grid", "Users & Roles (tick boxes)", "sliders"]]]]]);
+  NAV.push(["Users & Permissions", [["perms", "Users & permissions", "shield"]]]); // Users list and tick boxes are one page (2026-10-15)
   MOD_ICON["Users & Permissions"] = "shield"; HRD_PERM.perms = HRD_PERM.perms_list = HRD_PERM.perms_grid = "Records";
 }
-{ const b = go; go = function (name, extra = {}) { if (name === "perms_list" || name === "perms_grid") { S.permTab = name === "perms_grid" ? "grid" : "list"; name = "perms"; } return b(name, extra); }; }
+{ const b = go; go = function (name, extra = {}) { const grid = name === "perms_grid"; if (name === "perms_list" || grid) name = "perms"; const r = b(name, extra); if (grid) setTimeout(() => document.getElementById("rl-grid")?.scrollIntoView({ block: "start" }), 50); return r; }; }
 { const b = renderNav; renderNav = function () { const r = b(); if (S.view?.name === "perms") { const nav = $("#nav"); const k = nav?.querySelector(`[data-go="perms_${S.permTab === "grid" ? "grid" : "list"}"]`); if (k) { nav.querySelector('[data-go="perms"]')?.removeAttribute("aria-current"); k.setAttribute("aria-current", "page"); } } return r; }; }
 { const b = applyPerm; applyPerm = (...a) => { const r = b(...a); if (S.perm && Array.isArray(S.perm.mods) && !isPermAdmin()) S.perm.mods = S.perm.mods.filter((g) => g !== "Users & Permissions"); return r; }; }
 

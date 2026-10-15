@@ -68,12 +68,12 @@ function rlGrid() {
         ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${pmLvl(k)}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${roleCols.map((c) => rCell(c, k.v, k.l)).join("")}${userCols.map((c) => uCell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
       <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users &amp; permissions</th>${roleCols.map(() => '<td class="pm-c pm-rc"><input type="checkbox" disabled aria-label="Users and permissions"></td>').join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
-    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page." : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user on the Users list tab.</p></section>`;
+    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page." : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user in the Users card above.</p></section>`;
 }
 { const b = VIEWS.perms; VIEWS.perms = (...x) => { const h = b(...x); if (!isPermAdmin()) return h;
-  const tabs = `<div class="tabs rl-tabs" role="tablist"><button class="tab" role="tab" aria-selected="${S.permTab !== "grid"}" data-perm-tab="list">Users list</button><button class="tab" role="tab" aria-selected="${S.permTab === "grid"}" data-perm-tab="grid">Users &amp; Roles (tick boxes)</button></div>`;
-  const i = h.indexOf("</header>"); if (i < 0) return h; const top = h.slice(0, i + 9);
-  return S.permTab === "grid" ? top + tabs + rlGrid() : top + tabs + h.slice(i + 9); }; }
+  // One page (Glenn 2026-10-15): the Users list, then the Users & Roles tick boxes, then the roles summary.
+  const j = h.indexOf('<section class="card"><div class="card-head"><h2>Roles</h2>'); const grid = `<div id="rl-grid">${rlGrid()}</div>`;
+  return j < 0 ? h + grid : h.slice(0, j) + grid + h.slice(j); }; }
 { const prev = after.perms; after.perms = () => { prev?.(); document.querySelectorAll(".pm [data-mixed]").forEach((x) => (x.indeterminate = true)); }; }
 
 async function rlSave(roles, msg) { await saveAccess({ roles: JSON.parse(JSON.stringify(roles)) }, msg); }

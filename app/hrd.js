@@ -257,10 +257,10 @@ document.addEventListener("input", (ev) => { const r = ev.target.dataset?.hrdQ; 
 /* Users & Permissions: its own module at the end of the menu (Glenn, 2026-10-14), with its two tabs as sub-pages. */
 {
   for (const [, items] of NAV) for (const it of items) if (it[3]) it[3] = it[3].filter(([k]) => k !== "perms");
-  NAV.push(["Users & Permissions", [["perms", "Users & permissions", "shield", [["perms_list", "Users list", "people"], ["perms_grid", "Users & Roles (tick boxes)", "sliders"]]]]]);
+  NAV.push(["Users & Permissions", [["perms", "Users & permissions", "shield"]]]); // Users list and tick boxes are one page (2026-10-15)
   MOD_ICON["Users & Permissions"] = "shield"; HRD_PERM.perms = HRD_PERM.perms_list = HRD_PERM.perms_grid = "Records";
 }
-{ const b = go; go = function (name, extra = {}) { if (name === "perms_list" || name === "perms_grid") { S.permTab = name === "perms_grid" ? "grid" : "list"; name = "perms"; } return b(name, extra); }; }
+{ const b = go; go = function (name, extra = {}) { const grid = name === "perms_grid"; if (name === "perms_list" || grid) name = "perms"; const r = b(name, extra); if (grid) setTimeout(() => document.getElementById("rl-grid")?.scrollIntoView({ block: "start" }), 50); return r; }; }
 { const b = renderNav; renderNav = function () { const r = b(); if (S.view?.name === "perms") { const nav = $("#nav"); const k = nav?.querySelector(`[data-go="perms_${S.permTab === "grid" ? "grid" : "list"}"]`); if (k) { nav.querySelector('[data-go="perms"]')?.removeAttribute("aria-current"); k.setAttribute("aria-current", "page"); } } return r; }; }
 { const b = applyPerm; applyPerm = (...a) => { const r = b(...a); if (S.perm && Array.isArray(S.perm.mods) && !isPermAdmin()) S.perm.mods = S.perm.mods.filter((g) => g !== "Users & Permissions"); return r; }; }
 

@@ -92,7 +92,7 @@ VIEWS.perms = () => {
     <section class="card perm-how"><div class="card-head"><h2>How access works</h2></div>
       <ol style="margin:0;padding-left:20px;display:grid;gap:8px;font-size:14px;max-width:90ch">
         <li><b>Who can open the app</b> is set with the page's <b>Share</b> button on claude.ai. Give HR staff <b>Can edit</b>. Anyone shared at a lower level only gets their own phone time clock.</li>
-        <li><b>What each HR staff member sees</b> is set here: pick a role for each person, or tap <b>Change access</b> in the Users table and tick exactly which modules and sub-modules they get. The side menu then shows only those pages, and people without "Can change records" can only look.</li>
+        <li><b>What each HR staff member sees</b> is set here: pick a role for each person, or tick exactly which modules, sub-modules and sub-sub-modules they get, with <b>Change access</b> in the Users table or in the <b>Users &amp; Roles</b> tick boxes below. The side menu then shows only those pages, and people without "Can change records" can only look.</li>
         <li>You, as the owner, always have full access.</li>
       </ol>
       <p class="t-muted" style="margin:12px 0 0;font-size:13px;max-width:90ch">Roles control what the app shows and lets people do. Anyone with Can edit could still reach the data with technical tools, so give Can edit only to people you trust with all HR records.</p></section>
