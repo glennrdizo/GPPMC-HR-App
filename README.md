@@ -33,6 +33,11 @@ Commit and push to `main`; Vercel redeploys automatically.
 - Secrets: `RESEND_API_KEY` (or `BREVO_API_KEY`) and `MAIL_FROM`, e.g. `GD Prime HR <hr@gd-prime.com>`. Optional `SEMAPHORE_API_KEY` and `SEMAPHORE_SENDER` for SMS.
 - HR Admins switch notices on and pick recipients in Users & Permissions > Automatic notices (`web/autojobs.js`, settings in `org/notify`). Rules and message wording: `supabase/functions/hr-jobs/logic.ts`; tests: `node --experimental-strip-types web/test-jobs.mjs`.
 
+## Live biometric sync (`tools/bio-sync`)
+
+- ZKTeco TX628 terminals: a Python program (pyzk) on a computer at each site reads punches over port 4370 every 5 minutes and calls `hr_bio_push` with that site's key (`supabase/migrations/20261016b_hr_bio_sync.sql`). Punches land in `clockins/biometric/days/<date>`, the same place as the file import.
+- HR Admins create and revoke site keys on Timekeeping > Biometric import (`web/biosync.js`); `web/build.py` publishes the program as `public/bio-sync.zip`.
+
 ## Security
 
 - The website is published minified, with a copyright notice, a strict Content-Security-Policy and other security headers (`vercel.json`). Third-party libraries load with integrity fingerprints (`LIB_SRI` in `app/io.js`).
