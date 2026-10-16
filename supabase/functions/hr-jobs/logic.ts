@@ -1,0 +1,196 @@
+// GD Prime HR automatic jobs: pure rules (no network), shared by the edge function and its tests.
+// Turns record changes into notices for employees, approvers and applicants, and builds HR's morning digest.
+// Emails carry no pay amounts or government numbers: they say what happened and link to the app.
+
+export type Doc = Record<string, any>;
+export type Notice = { id: string; kind: string; to: string; mobile?: string | null; subject: string; text: string; sms?: string };
+export type Settings = {
+  on: boolean; company: string; appUrl: string; careersUrl: string; digestHour: number;
+  digestTo: string[]; approverTo: string[]; sms: boolean;
+  kinds: { decided: boolean; approval: boolean; payslip: boolean; applicant: boolean; digest: boolean };
+};
+export type Ctx = {
+  today: string; settings: Settings; emps: Map<string, Doc>; jobs: Map<string, Doc>;
+  ops: Doc; leaveTypes: Record<string, string>; userEmail: (uid: string) => string | null;
+};
+
+export const NOTIFY_DEF: Settings = {
+  on: false, company: "GD Prime Property Management Corporation", appUrl: "https://gppmc-hr-app1.vercel.app",
+  careersUrl: "https://gppmc-hr-app1.vercel.app/careers", digestHour: 7, digestTo: [], approverTo: [], sms: false,
+  kinds: { decided: true, approval: true, payslip: true, applicant: true, digest: true },
+};
+export function readSettings(d: Doc | null | undefined): Settings {
+  const o = d || {};
+  const list = (x: unknown) => (Array.isArray(x) ? x : String(x || "").split(/[,;\s]+/)).map((s) => String(s).trim().toLowerCase()).filter(isEmail);
+  return { ...NOTIFY_DEF, ...o, on: o.on === true, sms: o.sms === true, digestHour: Math.min(23, Math.max(0, Number(o.digestHour ?? 7) || 0)),
+    digestTo: list(o.digestTo), approverTo: list(o.approverTo), kinds: { ...NOTIFY_DEF.kinds, ...(o.kinds || {}) } };
+}
+export const isEmail = (s: unknown) => typeof s === "string" && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(s.trim());
+
+/* ---------- dates (Philippine time) ---------- */
+export const manila = (d = new Date()) => { const t = new Date(d.getTime() + 8 * 3600e3); return { date: t.toISOString().slice(0, 10), hour: t.getUTCHours() }; };
+export const addDays = (s: string, n: number) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+export const addMonths = (s: string, n: number) => { const [y, m, d] = s.split("-").map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate(); t.setUTCDate(Math.min(d, last)); return t.toISOString().slice(0, 10); };
+export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
+const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "");
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+export const fmt = (s: string) => { const d = day(s); if (!d) return ""; const [y, m, dd] = d.split("-").map(Number); return `${MON[m - 1]} ${dd}, ${y}`; };
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+/* ---------- requests that wait for a decision ---------- */
+// collection -> [ops kind (for target days and approval chain), label]
+export const REQ: Record<string, [string, string]> = {
+  leaves: ["leave", "Leave"], leavereq: ["lvreq", "Leave credit or cancellation request"], otreqs: ["ot", "Overtime request"],
+  attreq: ["ar", "Attendance request"], flex: ["flex", "FlexBen claim"], reimb: ["rb", "Reimbursement"],
+  empchg: ["cq", "Change request"], certreq: ["cert", "Certificate request"], resign: ["rs", "Resignation notice"],
+};
+const AR_KIND: Record<string, string> = { OB: "Official business request", UT: "Undertime request", SHIFT: "Change of schedule request" };
+const SLA_DEF: Record<string, number> = { leave: 2, lvreq: 3, ot: 2, ar: 2, flex: 5, rb: 5, cq: 3, cert: 3, rs: 2 };
+export const WATCHED = [...Object.keys(REQ), "payruns", "applicants"];
+const DONE: Record<string, string> = { APPROVED: "was approved", REJECTED: "was not approved", DECLINED: "was not approved", DENIED: "was not approved", READY: "is ready for release", RELEASED: "was released", ACCEPTED: "was accepted" };
+
+const nameOf = (e: Doc | null | undefined) => (e ? [e.first, e.last].filter(Boolean).join(" ") || e.name || "an employee" : "an employee");
+const reqLabel = (col: string, r: Doc) => (col === "attreq" && AR_KIND[r.kind]) || REQ[col]?.[1] || "Request";
+function reqWhat(col: string, r: Doc, ctx: Ctx) {
+  if (col === "leaves") { const t = ctx.leaveTypes[r.type] || r.type || "Leave"; const d = r.from ? (r.to && r.to !== r.from ? `${fmt(r.from)} to ${fmt(r.to)}` : fmt(r.from)) : ""; return [t, d].filter(Boolean).join(", "); }
+  const d = day(r.d) || day(r.date) || day(r.from) || ""; return d ? `for ${fmt(d)}` : "";
+}
+const footer = (s: Settings) => `\n\nOpen the HR app: ${s.appUrl}\n\n${s.company} · Human Resources\nThis is an automatic message. Please don't reply to it; contact HR if you have a question.`;
+
+function reqNotices(col: string, id: string, oldR: Doc | null, r: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings, out: Notice[] = []; const e = r.empId ? ctx.emps.get(r.empId) : null; const label = reqLabel(col, r); const what = reqWhat(col, r, ctx);
+  const was = oldR?.status, now = r.status;
+  if (now === "PENDING" && was !== "PENDING" && S.kinds.approval) {
+    const kind = REQ[col]?.[0]; const first = (ctx.ops?.chains?.[kind] || [])[0]; const lead = first?.uid ? ctx.userEmail(first.uid) : null;
+    const to = [...new Set([...(lead ? [lead] : []), ...S.approverTo])];
+    for (const t of to) out.push({ id: `apv-${col}-${id}-${t}`, kind: "approval", to: t, subject: `${label} from ${nameOf(e)} needs a decision`,
+      text: `${nameOf(e)}${e?.no ? ` (${e.no})` : ""} filed a ${label.toLowerCase()}${what ? ` (${what})` : ""}. It's waiting for your decision.${footer(S)}` });
+  }
+  if (was === "PENDING" && now && DONE[now] && S.kinds.decided && e && (isEmail(e.email) || (S.sms && e.mobile))) {
+    const line = `Your ${label.toLowerCase()}${what ? ` (${what})` : ""} ${DONE[now]}.`;
+    out.push({ id: `dec-${col}-${id}-${now}`, kind: "decided", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null,
+      subject: `${label}: ${DONE[now].replace(/^(was|is) /, "")}`, text: `Hi ${e.first || nameOf(e)},\n\n${line}${r.note || r.remarks ? `\nNote from HR: ${String(r.note || r.remarks).slice(0, 300)}` : ""}${footer(S)}`,
+      sms: `${S.company.split(" ")[0]} HR: ${line} Details in the HR app.` });
+  }
+  return out;
+}
+
+/* ---------- applicants ---------- */
+const STAGE_MSG: Record<string, [string, string]> = {
+  APPLIED: ["We received your application", "Thank you for applying for {job}. We received your application and our HR team will review it. You can follow it on our careers page."],
+  REQUIREMENTS: ["Please prepare your requirements", "Good news: your application for {job} moved to the requirements stage. Please sign in to the careers page to see the documents to prepare and upload."],
+  OFFER: ["Job offer for {job}", "We are pleased to let you know that we'd like to offer you the position of {job}. HR will contact you with the offer details."],
+  HIRED: ["Welcome to {company}", "Welcome aboard! You are now hired for {job}. HR will send your first-day details and onboarding steps."],
+  REJECTED: ["Update on your application", "Thank you for your interest in {job}. After careful review, we will not be moving forward with your application at this time. We'll keep your details on file for future openings."],
+};
+function appNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.applicant || !isEmail(a.email) || a.sample) return [];
+  const to = a.email.trim().toLowerCase(); const job = ctx.jobs.get(a.jobId)?.title || "the position"; const hi = `Hi ${a.first || "there"},\n\n`;
+  const sub = (s: string) => s.replace("{job}", job).replace("{company}", S.company); const out: Notice[] = [];
+  const end = `\n\nCareers page: ${S.careersUrl}\n\n${S.company} · Human Resources\nThis is an automatic message.`;
+  const stage = a.stage || "APPLIED";
+  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + end }); }
+  const had = new Set((oldA?.ivs || []).map((i: Doc) => i.id));
+  for (const iv of a.ivs || []) { if (had.has(iv.id) || iv.result !== "PENDING" || !day(iv.d) || day(iv.d) < ctx.today) continue;
+    const k = String(iv.kind || "Interview"); out.push({ id: `iv-${id}-${iv.id}`, kind: "applicant", to, subject: `${k} schedule for ${job}`,
+      text: `${hi}Your ${k.toLowerCase()} for ${job} is set on ${fmt(iv.d)}${iv.t ? ` at ${iv.t}` : ""}${iv.by ? ` with ${iv.by}` : ""}. Please be on time and bring a valid ID. If you can't make it, please reply through the careers page or contact HR.${end}` }); }
+  return out;
+}
+
+/* ---------- payslips ---------- */
+function payNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.payslip) return [];
+  const before = new Set(Object.keys(oldP?.lines || {})); const out: Notice[] = []; const period = p.start && p.end ? `${fmt(p.start)} to ${fmt(p.end)}` : id;
+  for (const empId of Object.keys(p.lines || {})) { if (before.has(empId)) continue; const e = ctx.emps.get(empId); if (!e) continue;
+    if (!isEmail(e.email) && !(S.sms && e.mobile)) continue;
+    out.push({ id: `pay-${id}-${empId}`, kind: "payslip", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null,
+      subject: `Your payslip for ${period} is ready`, text: `Hi ${e.first || nameOf(e)},\n\nYour payslip for ${period} is ready. Sign in to the HR app and open My payslips to view it.${footer(S)}`,
+      sms: `${S.company.split(" ")[0]} HR: Your payslip for ${period} is ready in the HR app.` }); }
+  return out;
+}
+
+/* ---------- one changed record -> notices ---------- */
+export function eventNotices(ev: { path: string; col: string; old: Doc | null; new: Doc | null }, ctx: Ctx): Notice[] {
+  const n = ev.new; if (!n) return []; const id = ev.path.split("/").slice(1).join("_");
+  if (ev.col === "leaves") { const out: Notice[] = []; const was = ev.old?.items || {};
+    for (const [k, l] of Object.entries(n.items || {})) if (l && typeof l === "object" && !(l as Doc).sample) out.push(...reqNotices("leaves", k, was[k] || null, l as Doc, ctx)); return out; }
+  if (n.sample) return [];
+  if (REQ[ev.col]) return reqNotices(ev.col, id, ev.old, n, ctx);
+  if (ev.col === "applicants") return appNotices(id, ev.old, n, ctx);
+  if (ev.col === "payruns") return payNotices(id, ev.old, n, ctx);
+  return [];
+}
+
+/* ---------- HR's morning digest ---------- */
+export type All = { emps: Doc[]; leaves: Doc[]; reqs: Record<string, Doc[]>; offboard: Doc[]; contracts: Doc[]; cases: Doc[]; remit: Map<string, Doc>; payruns: Set<string>; projects: Map<string, Doc> };
+const REMIT: [string, string][] = [["sss", "SSS contributions"], ["ph", "PhilHealth premiums"], ["hdmf", "Pag-IBIG contributions"], ["bir", "BIR 1601-C withholding tax"]];
+export function remitDue(month: string, k: string, due: Record<string, number>) {
+  const [y, m] = month.split("-").map(Number); const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1; const d = Number(due[k]) || 0;
+  const last = new Date(Date.UTC(ny, nm, 0)).getUTCDate(); return `${ny}-${String(nm).padStart(2, "0")}-${String(d > 0 ? Math.min(d, last) : last).padStart(2, "0")}`;
+}
+export function cutoffOf(dateISO: string) { const [y, m, d] = dateISO.split("-").map(Number); const mm = `${y}-${String(m).padStart(2, "0")}`; const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return d <= 15 ? { id: `${mm}-1`, start: `${mm}-01`, end: `${mm}-15` } : { id: `${mm}-2`, start: `${mm}-16`, end: `${mm}-${last}` }; }
+
+export function digestSections(A: All, ctx: Ctx) {
+  const T = ctx.today, O = ctx.ops || {}, sla = { ...SLA_DEF, ...(O.sla || {}) }, due = { sss: 0, ph: 15, hdmf: 15, bir: 10, ...(O.due || {}) };
+  const emp = new Map(A.emps.map((e) => [e.id, e])); const act = A.emps.filter((e) => !e.separated && !e.sample);
+  const who = (e: Doc | undefined) => (e ? `${nameOf(e)}${e.no ? ` (${e.no})` : ""}` : "Unknown employee");
+  const sec: { title: string; lines: string[] }[] = []; const add = (title: string, lines: [number, string][]) => { if (lines.length) sec.push({ title, lines: lines.sort((a, b) => b[0] - a[0]).map((x) => x[1]) }); };
+
+  const late: [number, string][] = [];
+  const pend = (col: string, r: Doc) => { if (r.status !== "PENDING" || r.sample) return; const e = emp.get(r.empId); if (r.empId && (!e || e.separated)) return;
+    const filed = day(r.filed) || day(r.d) || day(r.date); if (!filed) return; const kind = REQ[col][0]; const over = daysBetween(addDays(filed, Number(sla[kind]) || 3), T);
+    if (over > 0) late.push([over, `${reqLabel(col, r)}: ${who(e)}, filed ${fmt(filed)}, ${plural(over, "day")} past target`]); };
+  for (const l of A.leaves) pend("leaves", l); for (const [col, list] of Object.entries(A.reqs)) for (const r of list) pend(col, r);
+  add("Requests past their target time", late);
+
+  const gov: [number, string][] = []; const m0 = T.slice(0, 7), prev = addDays(`${m0}-01`, -1).slice(0, 7);
+  for (const month of [prev, m0]) { const done = A.remit.get(month) || {}; for (const [k, l] of REMIT) { if (done[k]) continue; const d = remitDue(month, k, due); const left = daysBetween(T, d); if (left > 5) continue;
+    gov.push([-left, `${l} for ${month}: ${left < 0 ? `${plural(-left, "day")} overdue (due ${fmt(d)})` : left === 0 ? "due today" : `due ${fmt(d)}`}`]); } }
+  if (act.length) add("Government filings not yet marked filed", gov);
+
+  const pay: [number, string][] = []; const c = cutoffOf(T), pc = cutoffOf(addDays(c.start, -1));
+  if (act.length && !A.payruns.has(pc.id)) pay.push([daysBetween(pc.end, T), `Payroll for ${fmt(pc.start)} to ${fmt(pc.end)} is not finalized yet (cutoff ended ${fmt(pc.end)})`]);
+  if (act.length && daysBetween(T, c.end) <= 1 && !A.payruns.has(c.id)) pay.push([0, `Cutoff ${fmt(c.start)} to ${fmt(c.end)} ends ${c.end === T ? "today" : "tomorrow"}: check time records, overtime and leave`]);
+  add("Payroll", pay);
+
+  const fp: [number, string][] = [];
+  for (const o of A.offboard) { const e = emp.get(o.empId); if (!e || o.released || !day(o.last) || o.sample) continue; if (!e.separated && o.last > T) continue;
+    const d = addDays(o.last, 30), left = daysBetween(T, d); if (left <= 7) fp.push([-left, `Final pay for ${who(e)}: ${left < 0 ? `${plural(-left, "day")} past the 30-day deadline` : `due ${fmt(d)}`} (last day ${fmt(o.last)})`]); }
+  add("Final pay", fp);
+
+  const ctr: [number, string][] = []; const offIds = new Set(A.offboard.map((o) => o.empId)); const soon = addDays(T, 14);
+  const latest = new Map<string, Doc>(); for (const k of A.contracts) { const p = latest.get(k.empId); if (!p || (k.start || "") > (p.start || "")) latest.set(k.empId, k); }
+  for (const e of act) { if (offIds.has(e.id)) continue; let end = "";
+    if (e.status === "PROBATIONARY" && day(e.hire)) { const r = addMonths(e.hire, 6); if (r <= soon) ctr.push([-daysBetween(T, r), `Regularization of ${who(e)}: ${r < T ? `was due ${fmt(r)}` : `due ${fmt(r)}`} (6 months from hire)`]); continue; }
+    if (e.status === "PROJECT_BASED") end = day(e.projectUntil) || day(A.projects.get(e.projectId)?.end);
+    else if (e.status === "CONTRACTUAL" || e.status === "CASUAL") end = day(e.contractEnd) || day(latest.get(e.id)?.end);
+    if (end && end <= soon) ctr.push([-daysBetween(T, end), `Contract of ${who(e)} ${end < T ? `ended ${fmt(end)} with no renewal or exit recorded` : `ends ${fmt(end)}`}`]); }
+  add("Contracts and regularization", ctr);
+
+  const docs: [number, string][] = []; const in30 = addDays(T, 30);
+  for (const e of act) for (const d of e.docs || []) { const x = day(d?.exp); if (x && x <= in30) docs.push([-daysBetween(T, x), `${d.name || d.kind || "Document"} of ${who(e)} ${x < T ? "expired" : "expires"} ${fmt(x)}`]); }
+  add("Documents expiring in 30 days", docs.slice(0, 200));
+
+  const er: [number, string][] = []; const nteDays = Number(O.nteDays) || 5, decDays = Number(O.decDays) || 15;
+  for (const k of A.cases) { const e = emp.get(k.empId); if (!e || !day(k.nte) || k.decision || k.sample) continue;
+    if (!k.reply) { const d = addDays(k.nte, nteDays); if (d <= addDays(T, 1)) er.push([-daysBetween(T, d), `Written reply of ${who(e)} to the notice to explain ${d < T ? `was due ${fmt(d)}` : `is due ${fmt(d)}`}`]); }
+    const dd = addDays(day(k.reply?.d) || addDays(k.nte, nteDays), decDays); if (dd <= addDays(T, 3)) er.push([-daysBetween(T, dd), `Decision on the case of ${who(e)} ${dd < T ? `was due ${fmt(dd)}` : `is due ${fmt(dd)}`}`]); }
+  add("Disciplinary cases", er);
+  return sec;
+}
+export function digestNotices(A: All, ctx: Ctx): { notices: Notice[]; count: number } {
+  const S = ctx.settings; const sec = digestSections(A, ctx); const count = sec.reduce((a, s) => a + s.lines.length, 0);
+  if (!S.kinds.digest || !count || !S.digestTo.length) return { notices: [], count };
+  const MAX = 25; const body = sec.map((s) => `${s.title} (${s.lines.length})\n${s.lines.slice(0, MAX).map((l) => `  • ${l}`).join("\n")}${s.lines.length > MAX ? `\n  …and ${s.lines.length - MAX} more in the app` : ""}`).join("\n\n");
+  const text = `Good morning. Here is what needs HR's attention today, ${fmt(ctx.today)}.\n\n${body}\n\nThe full list is on Overview > Needs action.${footer(S)}`;
+  return { count, notices: S.digestTo.map((to) => ({ id: `dig-${ctx.today}-${to}`, kind: "digest", to, subject: `HR to-do for ${fmt(ctx.today)}: ${plural(count, "item")}`, text })) };
+}
+
+/* ---------- message formats ---------- */
+const escH = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
+export const toHtml = (text: string) => `<div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.55;color:#14213D;max-width:620px">${escH(text).replace(/(https:\/\/[^\s<]+)/g, '<a href="$1">$1</a>').replace(/\n/g, "<br>")}</div>`;
+// Philippine mobile numbers to the 09XXXXXXXXX form SMS gateways take; anything else is dropped.
+export const phMobile = (s: unknown) => { const d = String(s || "").replace(/\D/g, ""); const m = d.startsWith("63") ? "0" + d.slice(2) : d.startsWith("9") && d.length === 10 ? "0" + d : d; return /^09\d{9}$/.test(m) ? m : null; };
+// Outbox ids are kept to the characters the app allows in record ids.
+export const outId = (id: string) => id.toLowerCase().replace(/[^a-z0-9_.@-]/g, "_").slice(0, 180);

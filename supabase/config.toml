@@ -1,0 +1,4 @@
+# Only the function settings Supabase needs from this folder.
+# hr-jobs is called by pg_cron with the vault secret (x-hr-jobs header), not a sign-in token; it checks callers itself.
+[functions.hr-jobs]
+verify_jwt = false

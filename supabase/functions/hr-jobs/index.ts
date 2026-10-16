@@ -1,0 +1,129 @@
+// GD Prime HR automatic jobs. Called every 10 minutes by the database scheduler (pg_cron), and by HR Admins from
+// Users & Permissions > Automatic notices. Each run:
+//  1. turns record changes noted by the hr_docs trigger (table hr_events) into messages in hr_outbox,
+//  2. once a day after the digest hour (Philippine time) adds HR's morning to-do digest,
+//  3. sends queued messages by email (Resend or Brevo) and, if switched on, SMS (Semaphore).
+// Secrets: RESEND_API_KEY or BREVO_API_KEY, MAIL_FROM ("GD Prime HR <hr@your-domain>"); optional SEMAPHORE_API_KEY, SEMAPHORE_SENDER.
+// Nothing is sent until an HR Admin ticks "Send automatic notices" (org/notify.on).
+import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, manila, eventNotices, digestNotices, toHtml, phMobile, outId, isEmail } from "./logic.ts";
+
+const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
+const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
+const env = (k: string) => (Deno.env.get(k) || "").trim();
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/* ---------- database (service role; RLS does not apply) ---------- */
+async function rest(path: string, init: RequestInit = {}, extra: Record<string, string> = {}) {
+  const r = await fetch(`${BASE}/rest/v1/${path}`, { ...init, headers: { apikey: SVC, authorization: `Bearer ${SVC}`, "content-type": "application/json", ...extra } });
+  if (!r.ok) throw new Error(`${init.method || "GET"} ${path.split("?")[0]}: ${r.status} ${(await r.text()).slice(0, 200)}`);
+  return r.status === 204 ? null : r.json().catch(() => null);
+}
+async function docsOf(col: string): Promise<Doc[]> {
+  const out: Doc[] = [];
+  for (let from = 0; ; from += 1000) {
+    const rows = (await rest(`hr_docs?select=path,data&col=eq.${encodeURIComponent(col)}&order=path`, {}, { range: `${from}-${from + 999}` })) as { path: string; data: Doc }[];
+    for (const r of rows || []) if (r.path.split("/").length === 2) out.push({ ...r.data, id: r.path.split("/")[1] });
+    if (!rows || rows.length < 1000) return out;
+  }
+}
+async function getDoc(path: string): Promise<Doc | null> { const r = (await rest(`hr_docs?select=data&path=eq.${encodeURIComponent(path)}`)) as { data: Doc }[]; return r?.[0]?.data || null; }
+const rpc = (fn: string, args: Doc, auth = `Bearer ${SVC}`, key = SVC) => fetch(`${BASE}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: key, authorization: auth, "content-type": "application/json" }, body: JSON.stringify(args) })
+  .then(async (r) => (r.ok ? r.json() : null)).catch(() => null);
+
+/* ---------- senders ---------- */
+const sender = () => (env("RESEND_API_KEY") ? "resend" : env("BREVO_API_KEY") ? "brevo" : null);
+async function sendEmail(to: string, subject: string, text: string): Promise<{ ok: boolean; via: string | null; err?: string }> {
+  const via = sender(); const from = env("MAIL_FROM");
+  if (!via || !from) return { ok: false, via, err: !via ? "No email sender set up" : "MAIL_FROM is not set" };
+  let r: Response;
+  if (via === "resend") r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [to], subject, text, html: toHtml(text) }) });
+  else { const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/); r = await fetch("https://api.brevo.com/v3/smtp/email", { method: "POST", headers: { "api-key": env("BREVO_API_KEY"), "content-type": "application/json" },
+    body: JSON.stringify({ sender: m ? { name: m[1] || "HR", email: m[2] } : { email: from }, to: [{ email: to }], subject, textContent: text, htmlContent: toHtml(text) }) }); }
+  return r.ok ? { ok: true, via } : { ok: false, via, err: `${r.status} ${(await r.text()).slice(0, 160)}` };
+}
+async function sendSms(num: string, message: string): Promise<{ ok: boolean; err?: string }> {
+  const key = env("SEMAPHORE_API_KEY"); if (!key) return { ok: false, err: "No SMS account set up" };
+  const f = new URLSearchParams({ apikey: key, number: num, message: message.slice(0, 300) }); if (env("SEMAPHORE_SENDER")) f.set("sendername", env("SEMAPHORE_SENDER"));
+  const r = await fetch("https://api.semaphore.co/api/v4/messages", { method: "POST", body: f });
+  return r.ok ? { ok: true } : { ok: false, err: `${r.status} ${(await r.text()).slice(0, 160)}` };
+}
+
+/* ---------- context ---------- */
+async function context(today: string, settings: ReturnType<typeof readSettings>): Promise<Ctx> {
+  const [emps, jobs, ops, set, prof] = await Promise.all([docsOf("employees"), docsOf("jobs"), getDoc("org/ops"), getDoc("org/settings"), rest("hr_profiles?select=user_id,email").catch(() => [])]);
+  const leaveTypes: Record<string, string> = { VL: "Vacation leave", SL: "Sick leave", SIL: "Service incentive leave", ML: "Maternity leave", PL: "Paternity leave", SPL: "Solo parent leave", VAWC: "VAWC leave", MCW: "Special leave for women", BL: "Bereavement leave", LWOP: "Leave without pay", EL: "Emergency leave" };
+  for (const t of set?.leaveTypes || []) if (t?.code) leaveTypes[t.code] = t.name || t.code;
+  const mail = new Map(((prof as Doc[]) || []).map((p) => [p.user_id, p.email]));
+  return { today, settings, emps: new Map(emps.map((e) => [e.id, e])), jobs: new Map(jobs.map((j) => [j.id, j])), ops: ops || {}, leaveTypes, userEmail: (u) => (isEmail(mail.get(u)) ? String(mail.get(u)).toLowerCase() : null) };
+}
+async function allData(ctx: Ctx): Promise<All> {
+  const reqCols = Object.keys(REQ).filter((c) => c !== "leaves");
+  const [leaveDocs, offboard, contracts, cases, remit, payruns, projects, ...reqs] = await Promise.all([docsOf("leaves"), docsOf("offboard"), docsOf("contracts"), docsOf("cases"), docsOf("remit"),
+    rest("hr_docs?select=path&col=eq.payruns", {}, { range: "0-999" }), docsOf("projects"), ...reqCols.map(docsOf)]);
+  const leaves = leaveDocs.flatMap((d) => Object.entries(d.items || {}).map(([id, l]) => ({ id, ...(l as Doc) })));
+  return { emps: [...ctx.emps.values()], leaves, offboard, contracts, cases, remit: new Map(remit.map((r) => [r.id, r])), payruns: new Set(((payruns as Doc[]) || []).map((p) => String(p.path).split("/")[1])),
+    projects: new Map(projects.map((p) => [p.id, p])), reqs: Object.fromEntries(reqCols.map((c, i) => [c, reqs[i]])) };
+}
+
+/* ---------- one run ---------- */
+const putOut = (rows: Doc[]) => rows.length ? rest("hr_outbox?on_conflict=id", { method: "POST", body: JSON.stringify(rows) }, { prefer: "resolution=ignore-duplicates,return=minimal" }) : null;
+async function run(force = false) {
+  const now = new Date(), { date: today, hour } = manila(now); const at = now.toISOString();
+  const settings = readSettings(await getDoc("org/notify"));
+  const log: Doc = (((await rest(`hr_job_runs?select=data&day=eq.${today}`)) as Doc[]) || [])[0]?.data || {};
+  const events = ((await rest("hr_events?select=id,path,col,old,new&order=id&limit=300")) as Doc[]) || [];
+  let queued = 0, digestCount: number | null = null; const notices: Notice[] = [];
+  const needDigest = settings.on && settings.kinds.digest && !log.digestAt && (hour >= settings.digestHour || force);
+  if ((events.length && settings.on) || needDigest) {
+    const ctx = await context(today, settings);
+    if (settings.on) for (const ev of events) { if (!WATCHED.includes(ev.col)) continue; try { notices.push(...eventNotices(ev as any, ctx)); } catch (e) { console.error("event", ev.path, e); } }
+    if (needDigest) { const d = digestNotices(await allData(ctx), ctx); digestCount = d.count; notices.push(...d.notices); }
+  }
+  // Queue new messages. Each id is sent once, however often its record changes back and forth.
+  const smsOn = settings.sms && !!env("SEMAPHORE_API_KEY");
+  const rows = [...new Map(notices.map((n) => [outId(n.id), n])).entries()].map(([id, n]) => { const mob = settings.sms ? phMobile(n.mobile) : null;
+    return { id, kind: n.kind, to_email: isEmail(n.to) ? n.to : null, mobile: mob, subject: n.subject, body: n.text, sms: mob ? n.sms || n.subject : null,
+      status: !isEmail(n.to) ? "SKIPPED" : sender() && env("MAIL_FROM") ? "QUEUED" : "NO_SENDER", sms_status: mob ? (smsOn ? "QUEUED" : "NO_SENDER") : null }; })
+    .filter((r) => r.to_email || r.mobile);
+  for (let i = 0; i < rows.length; i += 200) await putOut(rows.slice(i, i + 200)); queued = rows.length;
+  if (events.length) await rest(`hr_events?id=lte.${events[events.length - 1].id}`, { method: "DELETE" }, { prefer: "return=minimal" });
+  // Send what is waiting, about two a second so the email service doesn't refuse them.
+  let sent = 0, failed = 0;
+  if (settings.on) {
+    const due = ((await rpc("hr_outbox_claim", { n: 80 })) as Doc[]) || [];
+    for (const m of due) { const upd: Doc = { updated_at: new Date().toISOString(), claim_at: null };
+      if (m.status === "QUEUED") { const r = await sendEmail(m.to_email, m.subject, m.body); upd.tries = (m.tries || 0) + 1; upd.via = r.via;
+        if (r.ok) { upd.status = "SENT"; upd.sent_at = new Date().toISOString(); upd.err = null; sent++; } else { upd.err = r.err; upd.status = upd.tries >= 3 || !r.via ? "FAILED" : "QUEUED"; failed++; } }
+      if (m.sms_status === "QUEUED") { const r = await sendSms(m.mobile, m.sms || m.subject); upd.sms_tries = (m.sms_tries || 0) + 1; upd.sms_status = r.ok ? "SENT" : upd.sms_tries >= 3 ? "FAILED" : "QUEUED"; if (!r.ok) upd.err = [upd.err, `SMS: ${r.err}`].filter(Boolean).join("; "); }
+      await rest(`hr_outbox?id=eq.${encodeURIComponent(m.id)}`, { method: "PATCH", body: JSON.stringify(upd) }, { prefer: "return=minimal" }); await sleep(550); }
+  }
+  // Keep 90 days of messages and run notes.
+  if (needDigest) { const old = new Date(now.getTime() - 90 * 864e5).toISOString(); await rest(`hr_outbox?at=lt.${old}`, { method: "DELETE" }, { prefer: "return=minimal" }).catch(() => null); await rest(`hr_job_runs?day=lt.${old.slice(0, 10)}`, { method: "DELETE" }, { prefer: "return=minimal" }).catch(() => null); }
+  const entry = { date: today, runs: (log.runs || 0) + 1, lastAt: at, events: (log.events || 0) + events.length, queued: (log.queued || 0) + queued, sent: (log.sent || 0) + sent, failed: (log.failed || 0) + failed,
+    digestAt: log.digestAt || (digestCount != null ? at : null), digestItems: digestCount ?? log.digestItems ?? null, on: settings.on, sender: sender() };
+  await rest("hr_job_runs?on_conflict=day", { method: "POST", body: JSON.stringify([{ day: today, data: entry, updated_at: at }]) }, { prefer: "resolution=merge-duplicates,return=minimal" });
+  return entry;
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+  if (req.method !== "POST") return json({ error: "POST only" }, 405);
+  if (!BASE || !SVC) return json({ error: "Server keys missing" }, 500);
+  let body: Doc = {}; try { body = await req.json(); } catch { /* empty body is a run */ }
+  // The scheduler proves itself with the secret kept in the database vault; people must be HR Admins.
+  const secret = req.headers.get("x-hr-jobs"); const auth = req.headers.get("authorization") || "";
+  if (secret) { if ((await rpc("hr_jobs_secret_ok", { p: secret })) !== true) return json({ error: "Not allowed" }, 403); }
+  else if (!/^Bearer .+/.test(auth) || (await rpc("hr_is_admin", {}, auth, ANON || SVC)) !== true) return json({ error: "Only HR Admins can run automatic jobs." }, 403);
+  try {
+    if (body.status) return json({ sender: sender(), from: env("MAIL_FROM") || null, sms: !!env("SEMAPHORE_API_KEY"), today: manila().date });
+    if (body.test) { // a test email goes only to the signed-in admin's own address
+      const u = await fetch(`${BASE}/auth/v1/user`, { headers: { apikey: ANON || SVC, authorization: auth } }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (!isEmail(u?.email)) return json({ error: "Couldn't read your email address." }, 400);
+      const r = await sendEmail(u.email, "Test from the HR app", `This is a test of the HR app's automatic emails. If you can read this, emails are working.\n\nSent ${new Date().toISOString()}`);
+      return json(r.ok ? { ok: true, to: u.email, via: r.via } : { ok: false, error: r.err }, r.ok ? 200 : 502);
+    }
+    return json({ ok: true, ...(await run(!!body.digest && !secret)) });
+  } catch (e) { console.error(e); return json({ error: String((e as Error)?.message || e).slice(0, 300) }, 500); }
+});

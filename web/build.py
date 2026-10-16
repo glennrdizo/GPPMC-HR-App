@@ -4,7 +4,7 @@ W = os.path.dirname(os.path.abspath(__file__))
 app = open(os.path.join(W, '..', 'app', 'index.html')).read()
 end = '\nboot();\n})();\n</script>'
 assert app.count(end) == 1, 'app end marker'
-app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + end)
+app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + '\n' + open(os.path.join(W, 'autojobs.js')).read() + end)
 logo = re.search(r'const CO_LOGO = "([^"]+)"', app).group(1)
 sbjs = open(os.path.join(W, '..', 'public', 'supabase.js')).read()  # @supabase/supabase-js 2.45.4 UMD
 shim = open(os.path.join(W, 'sb-shim.js')).read()
