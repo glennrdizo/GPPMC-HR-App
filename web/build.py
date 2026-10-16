@@ -4,7 +4,7 @@ W = os.path.dirname(os.path.abspath(__file__))
 app = open(os.path.join(W, '..', 'app', 'index.html')).read()
 end = '\nboot();\n})();\n</script>'
 assert app.count(end) == 1, 'app end marker'
-app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + '\n' + open(os.path.join(W, 'autojobs.js')).read() + end)
+app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + '\n' + open(os.path.join(W, 'autojobs.js')).read() + '\n' + open(os.path.join(W, 'biosync.js')).read() + end)
 logo = re.search(r'const CO_LOGO = "([^"]+)"', app).group(1)
 sbjs = open(os.path.join(W, '..', 'public', 'supabase.js')).read()  # @supabase/supabase-js 2.45.4 UMD
 shim = open(os.path.join(W, 'sb-shim.js')).read()
@@ -30,6 +30,13 @@ car = ('<!doctype html><html lang="en"><head>' + NOTICE + '<meta charset="utf-8"
 open(os.path.join(out, 'careers.html'), 'w').write(car)
 m = re.findall(r'<script[^>]*>(.*?)</script>', head + app, re.S)
 open('/tmp/chk-shim.js', 'w').write(m[1]); open('/tmp/chk-app.js', 'w').write(m[-1])
+# The biometric sync program HR downloads for each site computer (tools/bio-sync, without local settings or logs).
+import zipfile
+T = os.path.join(W, '..', 'tools', 'bio-sync')
+with zipfile.ZipFile(os.path.join(out, 'bio-sync.zip'), 'w', zipfile.ZIP_DEFLATED) as z:
+    for f in sorted(os.listdir(T)):
+        if f in ('config.ini', 'bio_sync.log') or f.startswith(('__', '.')) or not os.path.isfile(os.path.join(T, f)): continue
+        z.write(os.path.join(T, f), 'bio-sync/' + f)
 # Minify the published scripts (needs `npm install` in web/ once).
 if not os.path.exists(os.path.join(W, 'node_modules', 'terser')):
     raise SystemExit('Run `npm install` in web/ first: the website is published minified.')
