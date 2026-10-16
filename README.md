@@ -26,6 +26,13 @@ Commit and push to `main`; Vercel redeploys automatically.
 - Supabase (gd-prime-hr): Authentication > URL Configuration > Site URL = the Vercel address.
 - Optional: Edge Functions > Secrets > `ANTHROPIC_API_KEY` turns on the HR assistant, loan reading and report analysis.
 
+## Automatic notices (`supabase/functions/hr-jobs`)
+
+- `supabase/migrations/20261016_hr_auto_jobs.sql` adds a trigger that notes changes to requests, payroll runs and applicants (`hr_events`), the message log (`hr_outbox`), daily run notes (`hr_job_runs`) and a pg_cron job that calls `hr-jobs` every 10 minutes with a secret kept in the vault.
+- Deploy `hr-jobs` with JWT verification off (`supabase/config.toml`); it accepts only the scheduler's secret or a signed-in HR Admin.
+- Secrets: `RESEND_API_KEY` (or `BREVO_API_KEY`) and `MAIL_FROM`, e.g. `GD Prime HR <hr@gd-prime.com>`. Optional `SEMAPHORE_API_KEY` and `SEMAPHORE_SENDER` for SMS.
+- HR Admins switch notices on and pick recipients in Users & Permissions > Automatic notices (`web/autojobs.js`, settings in `org/notify`). Rules and message wording: `supabase/functions/hr-jobs/logic.ts`; tests: `node --experimental-strip-types web/test-jobs.mjs`.
+
 ## Security
 
 - The website is published minified, with a copyright notice, a strict Content-Security-Policy and other security headers (`vercel.json`). Third-party libraries load with integrity fingerprints (`LIB_SRI` in `app/io.js`).

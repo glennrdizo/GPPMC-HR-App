@@ -56,6 +56,7 @@
       else if (a.p_kind === "req") { if (x.portal.reqs?.[a.p_key]?.status === "ACCEPTED") return { error: { message: "already_accepted" } }; x.portal.reqs = { ...(x.portal.reqs || {}), [a.p_key]: { ...(v.file ? { file: v.file, name: v.name } : {}), num: v.num || null, at: new Date().toISOString(), status: "SUBMITTED" } }; }
       else if (a.p_kind === "back") { if (!(x.portal.shared || []).some((s) => s.id === a.p_key)) return { error: { code: "P0002", message: "not_found" } }; x.portal.back = { ...(x.portal.back || {}), [a.p_key]: { file: v.file, name: v.name, at: new Date().toISOString() } }; }
       window.__writes.push(["portal", a.p_kind, a.p_key]); fire(k); return { data: null }; }
+    if (name === "hr_job_runs_list" || name === "hr_outbox_list") { const A = window.__AJ; if (!A) return { error: { code: "PGRST202", message: "function not found" } }; window.__writes.push(["rpc", name]); return { data: name === "hr_outbox_list" ? A.out : A.runs }; }
     return { error: { message: "unknown rpc " + name } };
   };
   const from = (t) => {
@@ -72,6 +73,8 @@
   const authCbs = [];
   const client = {
     from, rpc,
+    functions: { invoke: async (fn, o) => { window.__writes.push(["fn", fn, JSON.stringify(o?.body || {})]); const A = window.__AJ; if (!A) return { data: null, error: { message: "Failed to send a request to the Edge Function" } };
+      const b = o?.body || {}; return { data: b.status ? A.status : b.test ? { ok: true, to: session?.user.email } : { ok: true, sent: 3, digestAt: b.digest ? new Date().toISOString() : null, digestItems: 4 }, error: null }; } },
     auth: {
       getSession: async () => ({ data: { session } }),
       getUser: async () => ({ data: { user: session?.user || null } }),
