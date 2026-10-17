@@ -34,7 +34,8 @@ const TDEF = {
 };
 const TSET = () => ({ ...TDEF, ...(S.talent || {}) });
 const listOf = (m) => [...m.values()];
-const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return PAY.iso(d); };
+// A bad date gives "\uffff", which sorts after every real date, so day-by-day loops over a malformed record end instead of running forever.
+const addDays = (iso, n) => { const d = parseISO(iso); d.setDate(d.getDate() + n); return isNaN(d) ? "\uffff" : PAY.iso(d); };
 const tfact = (l, v) => `<div><dt>${l}</dt><dd>${v || '<span class="t-muted" style="font-weight:400">—</span>'}</dd></div>`;
 const tabsBar = (cur, list, attr) => `<div class="tabs on-blue" role="tablist">${list.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${cur === k}" data-${attr}="${k}">${l}</button>`).join("")}</div>`;
 const backLink = (attrs, label) => `<div class="no-print"><button class="link" style="color:#fff" ${attrs}>${icon("back", 16)} ${label}</button></div>`;

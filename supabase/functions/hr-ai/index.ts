@@ -27,6 +27,8 @@ Deno.serve(async (req) => {
     return !!r?.ok && (await r.json().catch(() => false)) === true;
   };
   if (!(await rpc("hr_is_approved"))) return json({ error: "Your account can't use the assistant." }, 403);
+  // Daily limit per person (hr_ai_tick, migration 20261017_hr_audit5.sql). Apply the migration before deploying this.
+  if (!(await rpc("hr_ai_tick"))) return json({ error: "You've reached today's limit for the assistant. Try again tomorrow." }, 429);
   const messages = Array.isArray(body?.messages) ? body.messages : null;
   if (!messages?.length || JSON.stringify(messages).length > 1_500_000) return json({ error: "Bad request" }, 400);
   // Only the app's own page tools; server tools (web search, code execution and the like) would bill extra.

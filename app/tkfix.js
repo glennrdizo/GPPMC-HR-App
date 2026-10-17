@@ -14,7 +14,7 @@ function tkWaiting() {
   const w = new Map(); const add = (eid, d, what) => w.set(`${eid}|${d}`, what);
   for (const r of listOf(S.attReqs || new Map())) if (r.status === "PENDING" && r.d) add(r.empId, r.d, "ar");
   for (const r of listOf(S.otReqs || new Map())) if (r.status === "PENDING") add(r.empId, r.d, "ot");
-  for (const l of allLeaves()) if (l.status === "PENDING") for (let d = l.from; d <= l.to; d = addDays(d, 1)) add(l.empId, d, "lv");
+  for (const l of allLeaves()) if (l.status === "PENDING" && FX_DAY.test(String(l.from)) && FX_DAY.test(String(l.to))) for (let d = l.from, n = 0; d <= l.to && n < 400; d = addDays(d, 1), n++) add(l.empId, d, "lv");
   return w;
 }
 /* Every open issue of every employee in the open cutoffs, up to yesterday (computed once per change). */
@@ -86,8 +86,8 @@ function fxCards(s, live) {
 }
 { const b = dashSections; dashSections = (s, go) => { const live = go === "self-tab" && S.selfMode;
     if (live && !S.fxMineSub && S.self?.uid && S.db) { S.fxMineSub = true;
-      S.db.collection(`clockins/${S.self.uid}/fixes`).limit(200).onSnapshot((snap) => { S.fxMine = new Map(snap.docs.map((d) => [d.id, d.data()])); render(); }, () => {});
-      S.db.collection(`clockins/${S.self.uid}/decide`).limit(300).onSnapshot((snap) => { S.dcMine = new Map(snap.docs.map((d) => [d.id, d.data()])); render(); }, () => {}); }
+      fxQ(S.self.uid, "fixes", 200).onSnapshot((snap) => { S.fxMine = new Map(snap.docs.map((d) => [d.id, d.data()])); render(); }, () => {});
+      fxQ(S.self.uid, "decide", 300).onSnapshot((snap) => { S.dcMine = new Map(snap.docs.map((d) => [d.id, d.data()])); render(); }, () => {}); }
     let top = ""; try { top = fxCards(s, live); } catch {} return top + b(s, go); }; }
 document.addEventListener("click", async (ev) => {
   const t = ev.target.closest("[data-fx],[data-dc]"); if (!t || !S.selfMode || !S.self?.uid) return; ev.stopImmediatePropagation();
@@ -109,46 +109,102 @@ window.addEventListener("submit", async (ev) => {
 }, true);
 
 /* ---------- HR's app: pick up fixes and decisions from the phones ---------- */
+// Newest first, so a phone's old, finished records never hide its new ones.
+const fxQ = (dev, sub, n) => S.db.collection(`clockins/${dev}/${sub}`).orderBy("at", "desc").limit(n);
 function fxWatch() {
-  for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.fxSubs.has(d.id)) continue; S.fxSubs.add(d.id);
-    S.db.collection(`clockins/${d.id}/fixes`).limit(200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {});
-    S.db.collection(`clockins/${d.id}/decide`).limit(300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+  const live = new Set(active().map((e) => e.id));
+  for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.fxSubs.has(d.id) || !live.has(S.clockLinks[d.id])) continue; S.fxSubs.add(d.id);
+    fxQ(d.id, "fixes", 200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {});
+    fxQ(d.id, "decide", 300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+}
+const FX_DAY = /^\d{4}-\d\d-\d\d$/, FX_HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+const fxText = (v, n = 200) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, n);
+// Re-reads one phone's punches for a day's cutoff, so an issue that isn't found really is fixed (and not just not read yet).
+async function fxReadDev(dev, d) { const p = PAY.period(PAY.periodOf(d));
+  const snap = await S.db.collection(`clockins/${dev}/days`).where("d", ">=", p.start).where("d", "<=", p.end).get();
+  for (const x of snap.docs) S.clockDays.set(`${dev}/${x.data().d}`, x.data()); S.ver++; }
+const fxDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/fixes/${f.id}`).update(extra); S.fxPhone.set(`${f.dev}:${f.id}`, { ...f, done: true, ...extra }); };
+// Every open HR app runs this; a short claim on the phone's record makes sure only one of them acts on it.
+const FX_TAB = uid();
+async function fxClaim(path) {
+  const ref = S.db.doc(path); const cur = await ref.get(); const x = cur.exists ? cur.data() : null; if (!x || x.done) return false;
+  if (x.claim && x.claim.by !== FX_TAB && Date.now() - Date.parse(x.claim.at) < 60000) return false;
+  await ref.update({ claim: { by: FX_TAB, at: new Date().toISOString() } }); await new Promise((r) => setTimeout(r, 1500));
+  const y = await ref.get(); return !!y.exists && !y.data().done && y.data().claim?.by === FX_TAB;
+}
+/* One fix from a phone. Only what the app itself found for that person is accepted, with the values the app allows. */
+async function fxOne(f) {
+  const e = S.emps.get(S.clockLinks[f.dev]); if (!e) return false; const fixId = `${f.dev}:${f.id}`;
+  if (!FX_DAY.test(String(f.d || "")) || isNaN(parseISO(f.d))) { await fxDone(f, { done: true, note: "Not a valid day. Ask HR." }); return true; }
+  if (isFinal(PAY.periodOf(f.d))) { await fxDone(f, { done: true, note: "Payroll for that cutoff is already final. Ask HR." }); return true; }
+  const find = () => (tkIssuesAll().get(e.id) || []).find((x) => x.k === f.k && x.kind !== "GEO");
+  let iss = find(); if (!iss && tkOpenCutoffs().includes(PAY.periodOf(f.d))) { await fxReadDev(f.dev, f.d); iss = find(); } // a read error throws: tried again next round
+  if (!iss) {
+    await fxDone(f, { done: true, note: "This is already fixed or no longer open. Ask HR if it still needs a change." }); return true; }
+  const reason = fxText(f.reason); const d = iss.d; let req = null;
+  const dup = (m) => listOf(m || new Map()).find((r) => r.fixId === fixId);
+  if (iss.kind === "OT") { const ex = dup(S.otReqs); if (ex) req = `ot:${ex.id}`;
+    else { const h = Math.min(Number(iss.hours) || 0, Math.max(0, Math.round((Number(f.hours) || 0) * 2) / 2)); if (!(h > 0)) { await fxDone(f, { done: true, note: "Enter the overtime hours again." }); return true; }
+      const id = `fx_${fxSafe(fixId)}`; await put("otreqs", { id, empId: e.id, d, hours: h, reason, status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId }); req = `ot:${id}`; } }
+  else if (f.mode === "leave" && iss.kind === "ABS") { const ex = allLeaves().find((l) => l.fixId === fixId); if (ex) req = `lv:${ex.month}:${ex.id}`;
+    else { const t = leaveType(f.type) || SET().leaveTypes[0]; const item = { empId: e.id, type: t.code, from: d, to: d, half: false, reason, status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId };
+      item.days = PAY.leaveDays(item, SET(), t) || 1; const id = `fx_${fxSafe(fixId)}`; const month = d.slice(0, 7);
+      if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+      const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++; req = `lv:${month}:${id}`; } }
+  else { const tin = FX_HM.test(f.in || "") ? f.in : null, tout = FX_HM.test(f.out || "") ? f.out : null;
+    if (!tin && !tout) { await fxDone(f, { done: true, note: "Enter the time in or out again." }); return true; }
+    const ex = dup(S.attReqs); if (ex) req = `ar:${ex.id}`;
+    else { const id = `fx_${fxSafe(fixId)}`; const r = { empId: e.id, kind: "ADJUST", d, in: tin, out: tout, reason, status: "PENDING", filed: todayISO(), by: null, src: "phone", fixId };
+      await S.db.doc(`attreq/${id}`).set(JSON.parse(JSON.stringify(r))); S.attReqs.set(id, { id, ...r }); S.ver++; req = `ar:${id}`; } }
+  await fxDone(f, { done: true, req });
+  logActivity(`${fullName(e)} sent a timekeeping fix from the phone (${FX_KIND[iss.kind][0]}, ${fmtDate(d)})`); return true;
+}
+// With an approval chain set for that kind of request (Needs action > Rules), the supervisor's Approve fills the next step that
+// anyone may endorse; a step kept for a named person, or any step left after it, stays with HR before the final approval.
+const FX_OPK = { ar: "ar", ot: "ot", lv: "leave" };
+async function fxChain(type, key, c, sup) {
+  const kind = FX_OPK[type]; const ch = OPS().chains[kind] || []; const id = apprId(kind, key); const rec = S.apprs.get(id) || { kind, key, steps: [] };
+  const at = new Date().toISOString(), by = `sup:${sup.id}`; let x = { ...rec, steps: [...(rec.steps || [])] };
+  if (c.st === "APPROVED" && x.steps.length < ch.length) { const L = ch[x.steps.length];
+    if (!L.uid) x.steps.push({ i: x.steps.length, name: L.name, by, sup: fullName(sup), at }); else x.sup = { name: fullName(sup), by, at }; }
+  const held = c.st === "APPROVED" && x.steps.length < ch.length; if (!held) x.final = { st: c.st, at, by };
+  S.apprs.set(id, x); try { await S.db.doc(`apprs/${id}`).set(JSON.parse(JSON.stringify(x))); } catch {}
+  return held; // true: endorsed only, HR decides
+}
+async function dcOne(c) {
+  const sup = S.emps.get(S.clockLinks[c.dev]); const ok = c.st === "APPROVED" || c.st === "REJECTED"; let note = null;
+  const by = sup ? `sup:${sup.id}` : null; const mine = (empId) => sup && empId !== sup.id && S.emps.get(empId)?.supervisorId === sup.id;
+  const [type, ...rest] = String(c.key || "").split(":");
+  if (!sup || !ok) note = "Not allowed";
+  else if (type === "ar") { const r = S.attReqs.get(rest.join(":")); if (!r || !mine(r.empId)) note = "Not your team"; else if (r.status !== "PENDING") note = "Already decided";
+    else if (await fxChain("ar", r.id, c, sup)) note = "Endorsed; HR gives the final approval";
+    else { if (c.st === "APPROVED") await applyReq(r); const nr = { ...r, status: c.st, decided: { d: todayISO(), by } }; await S.db.doc(`attreq/${r.id}`).set(JSON.parse(JSON.stringify((({ id: _, ...x }) => x)(nr)))); S.attReqs.set(r.id, nr); } }
+  else if (type === "ot") { const r = S.otReqs?.get(rest.join(":")); if (!r || !mine(r.empId)) note = "Not your team"; else if (r.status !== "PENDING") note = "Already decided";
+    else if (await fxChain("ot", r.id, c, sup)) note = "Endorsed; HR gives the final approval"; else await put("otreqs", { ...r, status: c.st, decided: todayISO(), decidedBy: by }); }
+  else if (type === "lv") { const [month, id] = rest; const doc = S.leaveDocs.get(month); const l = doc?.items?.[id];
+    if (!l || !mine(l.empId)) note = "Not your team"; else if (l.status !== "PENDING") note = "Already decided"; else if (c.st === "APPROVED" && isFinal(PAY.periodOf(l.from))) note = "Payroll is final; HR will decide";
+    else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), yearOf(l.from)).find((x) => x.code === l.type) : null;
+      if (b && b.left != null && l.days > b.left) note = "Not enough leave left; HR will decide";
+      else if (await fxChain("lv", `${month}:${id}`, c, sup)) note = "Endorsed; HR gives the final approval";
+      else { await S.db.doc("leaves/" + month).update({ items: { [id]: { status: c.st, decided: todayISO(), decidedBy: by } } }); S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status: c.st, decided: todayISO(), decidedBy: by } } }); S.ver++; } } }
+  else if (type === "geo") { const [dev, d, id] = rest.join(":").split("|"); const p = S.clockDays.get(`${dev}/${d}`)?.punches?.[id]; const eid = p ? (hrDev(dev) ? p.empId : null) || S.clockLinks[dev] || null : null; // a phone's punches belong to HR's link, as in punchesIn()
+    if (!p || !mine(eid)) note = "Not your team"; else if (S.punchRevs?.get(`${dev}|${d}|${id}`)) note = "Already decided";
+    else { const r = { dev, d, id, rev: c.st === "APPROVED" ? "OK" : "REJ", by, at: new Date().toISOString() }; await S.db.doc(`punchrev/${revId(dev, d, id)}`).set(r); S.punchRevs.set(`${dev}|${d}|${id}`, r); S.ver++; } }
+  else note = "Unknown request";
+  await S.db.doc(`clockins/${c.dev}/decide/${c.id}`).update({ done: true, note }); S.dcPhone.set(`${c.dev}:${c.id}`, { ...c, done: true, note });
+  if (!note) logActivity(`${fullName(sup)} (supervisor) ${c.st === "APPROVED" ? "approved" : "rejected"} a request from the phone`);
+  else if (/^Endorsed/.test(note)) logActivity(`${fullName(sup)} (supervisor) endorsed a request from the phone`);
+  return true;
 }
 let fxBusy = false;
 async function fxProcess() {
   if (fxBusy || !S.db || !S.realEdit || !S.canEdit || S.selfMode) return; fxBusy = true; let moved = 0;
+  S.auSys = "Phone fixes and approvals";
   try { fxWatch();
-    for (const f of [...S.fxPhone.values()]) { if (f.done) continue; const e = S.emps.get(S.clockLinks[f.dev]); if (!e || !f.d) continue; const fixId = `${f.dev}:${f.id}`; let req = null;
-      if (isFinal(PAY.periodOf(f.d))) { await S.db.doc(`clockins/${f.dev}/fixes/${f.id}`).update({ done: true, note: "Payroll for that cutoff is already final. Ask HR." }); continue; }
-      const dup = (m) => listOf(m || new Map()).find((r) => r.fixId === fixId);
-      if (f.kind === "OT") { const ex = dup(S.otReqs); if (ex) req = `ot:${ex.id}`; else { const id = uid(); await put("otreqs", { id, empId: e.id, d: f.d, hours: Number(f.hours) || 0, reason: f.reason || "", status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId }); req = `ot:${id}`; } }
-      else if (f.mode === "leave") { const ex = allLeaves().find((l) => l.fixId === fixId); if (ex) req = `lv:${ex.month}:${ex.id}`; else { const t = leaveType(f.type) || SET().leaveTypes[0]; const item = { empId: e.id, type: t.code, from: f.d, to: f.d, half: false, reason: f.reason || "", status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId };
-          item.days = PAY.leaveDays(item, SET(), t) || 1; const id = uid(); const month = f.d.slice(0, 7);
-          if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
-          const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++; req = `lv:${month}:${id}`; } }
-      else { const ex = dup(S.attReqs); if (ex) req = `ar:${ex.id}`; else { const id = uid(); const r = { empId: e.id, kind: "ADJUST", d: f.d, in: f.in || null, out: f.out || null, reason: f.reason || "", status: "PENDING", filed: todayISO(), by: null, src: "phone", fixId };
-          await S.db.doc(`attreq/${id}`).set(JSON.parse(JSON.stringify(r))); S.attReqs.set(id, { id, ...r }); S.ver++; req = `ar:${id}`; } }
-      await S.db.doc(`clockins/${f.dev}/fixes/${f.id}`).update({ done: true, req }); S.fxPhone.set(fixId, { ...f, done: true, req }); moved++;
-      logActivity(`${fullName(e)} sent a timekeeping fix from the phone (${FX_KIND[f.kind]?.[0] || f.kind}, ${fmtDate(f.d)})`); }
-    for (const c of [...S.dcPhone.values()]) { if (c.done) continue; const sup = S.emps.get(S.clockLinks[c.dev]); const ok = c.st === "APPROVED" || c.st === "REJECTED"; let note = null;
-      const by = sup ? `sup:${sup.id}` : null; const mine = (empId) => sup && S.emps.get(empId)?.supervisorId === sup.id;
-      const [type, ...rest] = String(c.key || "").split(":");
-      if (!sup || !ok) note = "Not allowed";
-      else if (type === "ar") { const r = S.attReqs.get(rest.join(":")); if (!r || !mine(r.empId)) note = "Not your team"; else if (r.status !== "PENDING") note = "Already decided";
-        else { if (c.st === "APPROVED") await applyReq(r); const nr = { ...r, status: c.st, decided: { d: todayISO(), by } }; await S.db.doc(`attreq/${r.id}`).set(JSON.parse(JSON.stringify((({ id: _, ...x }) => x)(nr)))); S.attReqs.set(r.id, nr); } }
-      else if (type === "ot") { const r = S.otReqs?.get(rest.join(":")); if (!r || !mine(r.empId)) note = "Not your team"; else if (r.status !== "PENDING") note = "Already decided"; else await put("otreqs", { ...r, status: c.st, decided: todayISO(), decidedBy: by }); }
-      else if (type === "lv") { const [month, id] = rest; const doc = S.leaveDocs.get(month); const l = doc?.items?.[id];
-        if (!l || !mine(l.empId)) note = "Not your team"; else if (l.status !== "PENDING") note = "Already decided"; else if (c.st === "APPROVED" && isFinal(PAY.periodOf(l.from))) note = "Payroll is final; HR will decide";
-        else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), yearOf(l.from)).find((x) => x.code === l.type) : null;
-          if (b && b.left != null && l.days > b.left) note = "Not enough leave left; HR will decide";
-          else { await S.db.doc("leaves/" + month).update({ items: { [id]: { status: c.st, decided: todayISO(), decidedBy: by } } }); S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status: c.st, decided: todayISO(), decidedBy: by } } }); S.ver++; } } }
-      else if (type === "geo") { const [dev, d, id] = rest.join(":").split("|"); const p = S.clockDays.get(`${dev}/${d}`)?.punches?.[id]; const eid = p ? p.empId || S.clockLinks[dev] : null;
-        if (!p || !mine(eid)) note = "Not your team"; else if (S.punchRevs?.get(`${dev}|${d}|${id}`)) note = "Already decided";
-        else { const r = { dev, d, id, rev: c.st === "APPROVED" ? "OK" : "REJ", by, at: new Date().toISOString() }; await S.db.doc(`punchrev/${revId(dev, d, id)}`).set(r); S.punchRevs.set(`${dev}|${d}|${id}`, r); S.ver++; } }
-      else note = "Unknown request";
-      await S.db.doc(`clockins/${c.dev}/decide/${c.id}`).update({ done: true, note }); S.dcPhone.set(`${c.dev}:${c.id}`, { ...c, done: true, note }); moved++;
-      if (!note) logActivity(`${fullName(sup)} (supervisor) ${c.st === "APPROVED" ? "approved" : "rejected"} a request from the phone`); }
-  } catch {} finally { fxBusy = false; }
+    // Each record on its own: one bad record never holds up everyone else's.
+    for (const f of [...S.fxPhone.values()]) { if (f.done || !S.emps.get(S.clockLinks[f.dev])) continue; try { if (await fxClaim(`clockins/${f.dev}/fixes/${f.id}`) && await fxOne(f)) moved++; } catch {} }
+    for (const c of [...S.dcPhone.values()]) { if (c.done) continue; try { if (await fxClaim(`clockins/${c.dev}/decide/${c.id}`) && await dcOne(c)) moved++; } catch {} }
+  } catch {} finally { fxBusy = false; S.auSys = null; }
   // The other side sees it on their phone straight away, not at the next minute's refresh.
   if (moved) setTimeout(() => syncSummaries(), 300);
 }
@@ -180,7 +236,7 @@ VIEWS.tkissues = tkIssuesPage; SECTION_OF.tkissues = "tkissues"; HRD_PERM.tkissu
 document.addEventListener("input", (ev) => { if (ev.target.id !== "tki-q") return; S.tkiQ = ev.target.value; const p0 = ev.target.selectionStart; render(); const i = $("#tki-q"); if (i) { i.focus(); try { i.setSelectionRange(p0, p0); } catch {} } });
 // Needs action: overtime not filed waits on the employee until the cutoff is near; then one line per person still open.
 { const b = opsDeadlines; opsDeadlines = () => { const out = b(); const near = tkNear(); const keep = out.filter((x) => !(x.kind === "ot" && x.src === "dl" && !near));
-    if (near) { try { const by = tkIssuesAll(); const due = PAY.period(tkOpenCutoffs()[0] || curPeriod()).end;
-      for (const [eid, list] of by) { const e = S.emps.get(eid); const open = list.filter((x) => !x.wait || !phoneOf(e?.supervisorId)); if (!e || !open.length) continue;
+    if (near) { try { const by = tkIssuesAll();
+      for (const [eid, list] of by) { const e = S.emps.get(eid); const open = list.filter((x) => !x.wait || !phoneOf(e?.supervisorId)); if (!e || !open.length) continue; const due = PAY.period(open[0].pid).end; // the earliest cutoff with something open
         keep.push({ src: "dl", kind: "tki", label: "Timekeeping issue not fixed", what: `${open.length} open: ${[...new Set(open.map((x) => FX_KIND[x.kind][0].toLowerCase()))].join(", ")}`, e, due, late: Math.max(0, daysBetween(due, todayISO())), view: "tkissues", unit: unitName(e) }); } } catch {} }
     return keep.sort((a, b) => b.late - a.late || a.due.localeCompare(b.due)); }; }

@@ -33,14 +33,17 @@ async function syncSummaries() {
   try {
     if (S.meSynced == null) { try { const d = await S.db.doc("org/medash").get(); S.meSynced = d.exists ? d.data().h || {} : {}; } catch { S.meSynced = {}; } }
     { const m0 = `${todayISO().slice(0, 7)}-01`; await loadClock(m0, todayISO()); }
-    const changed = {};
-    for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust) continue; const e = S.emps.get(S.clockLinks[d.id]); if (!e || e.sample) continue;
+    // Nothing changed since the last round on the same day: every summary would come out the same.
+    const key = `${S.ver}|${todayISO()}`; if (key === S.meKey) return;
+    const changed = {}; let i = 0;
+    for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust) continue; if (++i % 20 === 0) await new Promise((r) => setTimeout(r, 0)); /* let the page breathe */ const e = S.emps.get(S.clockLinks[d.id]); if (!e || e.sample) continue;
       const sum = buildSummary(e); const json = JSON.stringify(sum); let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
       if (S.meSynced[d.id] === h) continue; await S.db.doc(`clockins/${d.id}/me/summary`).set(JSON.parse(JSON.stringify({ ...sum, at: new Date().toISOString() }))); S.meSynced[d.id] = h; changed[d.id] = h; }
     if (Object.keys(changed).length) await S.db.doc("org/medash").set({ h: S.meSynced, at: new Date().toISOString() });
+    S.meKey = key;
   } catch {} finally { meBusy = false; }
 }
-{ const b = bootIO; bootIO = (db) => { b(db); setTimeout(function tick() { syncSummaries(); setTimeout(tick, 60000); }, 8000); }; }
+{ const b = bootIO; bootIO = (db) => { b(db); setTimeout(function tick() { syncSummaries(); setTimeout(tick, 60000); }, 25000); }; }
 
 /* ---------- shared dashboard sections (phone and the Employee view preview) ---------- */
 const RQ_CHIP = { PENDING: ["Waiting", "c-warn"], APPROVED: ["Approved", "c-ok"], REJECTED: ["Rejected", "c-bad"], CANCELLED: ["Cancelled", "c-gray"], PAID: ["Paid", "c-ok"], READY: ["Ready", "c-blue"], RELEASED: ["Released", "c-ok"] };
