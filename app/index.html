@@ -4302,7 +4302,7 @@ function clockLinksTab(claims) {
       ${claims.map((c) => { const linked = S.emps.get(S.clockLinks[c.id]); const match = linked || byNo.get(String(c.empNo || "").toLowerCase());
         return `<tr><td><b>${esc(c.name || "No name given")}</b><div class="t-muted" style="font-size:13px">${esc(c.empNo || "")} · since ${esc(fmtDate((c.at || "").slice(0, 10)))}</div><div style="font-size:13px">Signed in as <b>${esc(personName(c.id))}</b></div>${!linked && match && Object.entries(S.clockLinks).some(([k, v]) => v === match.id && k !== c.id) ? '<div class="t-bad" style="font-size:13px">This employee already has a linked phone. Check before confirming.</div>' : ""}</td>
           <td>${match ? personCell(match, esc(match.no)) : '<span class="t-bad" style="font-size:14px">No employee with that number</span>'}</td>
-          <td>${linked ? '<span class="chip c-ok">Confirmed</span>' : '<span class="chip c-warn">Waiting</span>'}${c.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td>
+          <td>${linked ? '<span class="chip c-ok">Confirmed</span>' + (S.meErr?.[c.id] ? `<div class="t-bad" style="font-size:13px">Dashboard not shared yet: ${esc(S.meErr[c.id])}</div>` : S.meSynced?.[c.id] != null ? '<div class="t-muted" style="font-size:13px">Dashboard shared</div>' : '<div class="t-muted" style="font-size:13px">Sharing their dashboard…</div>') : '<span class="chip c-warn">Waiting</span>'}${c.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td>
           ${S.canEdit ? `<td class="num">${linked ? `<button class="link danger" data-clock-unlink="${c.id}">Remove</button>` : match ? `<button class="btn btn-primary btn-sm" data-clock-link="${c.id}:${match.id}">Confirm</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="4" class="empty">No one has linked a phone yet.</td></tr>`}
       </tbody></table></div></section>`;
 }
@@ -9746,13 +9746,21 @@ async function syncSummaries() {
     // Nothing changed since the last round on the same day: every summary would come out the same.
     const key = `${S.ver}|${todayISO()}`; if (key === S.meKey) return;
     const changed = {}; let i = 0;
+    S.meErr = S.meErr || {}; let failed = false;
     for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust) continue; if (++i % 20 === 0) await new Promise((r) => setTimeout(r, 0)); /* let the page breathe */ const e = S.emps.get(S.clockLinks[d.id]); if (!e || e.sample) continue;
-      const sum = buildSummary(e); const json = JSON.stringify(sum); let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
-      if (S.meSynced[d.id] === h) continue; await S.db.doc(`clockins/${d.id}/me/summary`).set(JSON.parse(JSON.stringify({ ...sum, at: new Date().toISOString() }))); S.meSynced[d.id] = h; changed[d.id] = h; }
+      // One employee whose summary can't be built or saved must not hold back everyone else's.
+      try {
+        const sum = buildSummary(e); const json = JSON.stringify(sum); let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
+        if (S.meSynced[d.id] === h) { delete S.meErr[d.id]; continue; } await S.db.doc(`clockins/${d.id}/me/summary`).set(JSON.parse(JSON.stringify({ ...sum, at: new Date().toISOString() }))); S.meSynced[d.id] = h; changed[d.id] = h; delete S.meErr[d.id];
+      } catch (err) { failed = true; S.meErr[d.id] = String(err?.message || err || "error").slice(0, 160); console.warn("Employee dashboard not shared", d.id, err); }
+    }
+    if (Object.keys(changed).length || failed) render();
     if (Object.keys(changed).length) await S.db.doc("org/medash").set({ h: S.meSynced, at: new Date().toISOString() });
-    S.meKey = key;
-  } catch {} finally { meBusy = false; }
+    if (!failed) S.meKey = key;
+  } catch (err) { console.warn("Employee dashboards not shared", err); } finally { meBusy = false; if (S.meAgain) { S.meAgain = false; setTimeout(syncSummaries, 300); } }
 }
+// Confirming an employee's phone shares their dashboard right away instead of on the next round.
+window.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-clock-link]")) return; setTimeout(() => { if (meBusy) S.meAgain = true; else syncSummaries(); }, 800); });
 { const b = bootIO; bootIO = (db) => { b(db); setTimeout(function tick() { syncSummaries(); setTimeout(tick, 60000); }, 25000); }; }
 
 /* ---------- shared dashboard sections (phone and the Employee view preview) ---------- */
