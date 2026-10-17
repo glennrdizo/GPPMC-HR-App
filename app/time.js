@@ -201,7 +201,7 @@ function leaveRequests(all) {
       ${rows.map((l) => { const e = S.emps.get(l.empId); const t = leaveType(l.type);
         return `<tr><td><div class="person" style="min-width:200px">${avatar(e, 34)}<span class="who"><button class="link" style="color:var(--ink);text-align:left" data-emp="${e.id}">${esc(fullName(e))}</button><span class="sub">${esc(pos(e.posId)?.title || "")}</span></span></div></td>
           <td>${esc(t?.name || l.type)}${l.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td><td style="white-space:nowrap">${fmtDate(l.from)}${l.to !== l.from ? " to " + fmtDate(l.to) : ""}${l.half ? " (half day)" : ""}</td>
-          <td class="num">${l.days}</td><td class="t-muted" style="max-width:240px">${esc(l.reason || "")}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td>
+          <td class="num">${l.days}</td><td class="t-muted" style="max-width:240px">${esc(l.reason || "")}${fzLinks(l.files)}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td>
           ${S.canEdit ? `<td style="white-space:nowrap">${l.status === "PENDING" ? `<button class="btn btn-primary btn-sm" data-lv-set="${l.month}:${l.id}:APPROVED">Approve</button> <button class="btn btn-ghost btn-sm" data-lv-set="${l.month}:${l.id}:REJECTED">Reject</button>` : l.status === "APPROVED" && !isFinal(PAY.periodOf(l.from)) ? `<button class="link danger" data-lv-set="${l.month}:${l.id}:CANCELLED">Cancel</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="7" class="empty">No leave requests match.</td></tr>`}
     </tbody></table></div>
     <nav aria-label="Pages" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:14px"><span class="t-muted">${list.length} requests · page ${f.page} of ${pages}</span>
@@ -246,6 +246,7 @@ VIEWS.leaveForm = () => {
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="lf-half"> Half day (one-day leave only)</label>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="lf-docs"> The supporting documents for this leave are on file</label>
       <div class="field"><label for="lf-reason">Reason</label><textarea class="input" id="lf-reason" rows="2"></textarea></div>
+      ${fileZone("lv")}
       <div class="panel" id="lf-hint" aria-live="polite">${leaveHint()}</div>
       <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;align-items:center"><p class="err" id="lf-err" style="margin:0 auto 0 0" hidden></p>
         <button type="button" class="btn btn-ghost" ${pre ? `data-emp="${pre.id}"` : 'data-go="leave"'}>Cancel</button><button class="btn btn-primary" id="lf-save">Save leave</button></div>
@@ -281,8 +282,9 @@ async function submitLeave() {
   if (b.left != null && days > b.left - b.pend) return fail(`Only ${Math.max(0, b.left - b.pend)} ${t.name.toLowerCase()} days are left for ${yearOf(d.from)}${b.pend ? ` after ${b.pend} days waiting for approval` : ""}. File the rest as leave without pay.`);
   if (isFinal(PAY.periodOf(d.from)) && d.status === "APPROVED") return fail("Payroll for that period is already final. Reopen it first, or file this as pending.");
   const btn = $("#lf-save"); btn.disabled = true; btn.textContent = "Saving…";
+  let files = []; try { files = await fzUpload("lv"); } catch { btn.disabled = false; btn.textContent = "Save leave"; return fail("Couldn't upload the attachments. Check your connection and try again."); }
   const id = uid(); const month = d.from.slice(0, 7);
-  const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null };
+  const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null, ...(files.length ? { files } : {}) };
   try {
     if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } });
     else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
