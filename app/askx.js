@@ -16,7 +16,7 @@ const AK_WORDS = { PAYROLL: /pay ?slip|salary|sahod|swel?do|suweldo|13th|thirtee
 function akDeskOf(cat, text) { if (cat !== "OTHER") return AK_CAT_DESK[cat] || "HR"; const x = String(text || ""); return AK_WORDS.PAYROLL.test(x) ? "PAYROLL" : AK_WORDS.TIME.test(x) ? "TIME" : "HR"; }
 const akDesk = (t) => t.dept || AK_CAT_DESK[t.cat] || "HR";
 const akDeskName = (k) => AK_DESKS.find((d) => d[0] === k)?.[1] || "HR";
-/* Who answers each department: from their role (Payroll, Timekeeper, HR Admin / Recruitment, or a Custom role's modules), unless HR Admin picked people in Department routing. */
+/* Who answers each department: from their role (Payroll, Timekeeper, HR Manager / Recruitment, or a Custom role's modules), unless HR Manager picked people in Department routing. */
 function akDeskStaff() {
   const a = S.access || {}; const over = a.desks || {}; const staff = staffList(); const out = { HR: [], PAYROLL: [], TIME: [] };
   for (const { id } of staff) { const u = a.users?.[id] || {}; const key = u.role || a.defaultRole || "admin"; const mods = key === "custom" ? u.mods || [] : [];

@@ -12,7 +12,7 @@ claimInvite = async () => {
   const a = S.access; if (!a || !S.myId || S.isOwner || !S.realEdit || a.users?.[S.myId]?.role) return;
   const my = (await window.__sb?.auth.getUser())?.data?.user?.email?.toLowerCase() || "";
   const hit = Object.entries(a.invites || {}).find(([, v]) => (my && String(v.email || "").toLowerCase() === my) || (S.myName && normName(v.name) === normName(S.myName))); if (!hit) return;
-  const [k, v] = hit; const users = { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: v.role, empId: v.empId || null, email: v.email || my || null, ...(v.role === "custom" ? { views: [], mods: [], edit: true } : {}) } };
+  const [k, v] = hit; const users = { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: v.role, empId: v.empId || null, email: v.email || my || null, ...(v.role === "custom" ? { views: Array.isArray(v.views) ? v.views : [], mods: Array.isArray(v.mods) ? v.mods : [], edit: v.edit !== false } : {}) } };
   const invites = { ...a.invites }; delete invites[k]; const next = { ...a, users, invites };
   await S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))); S.access = next; applyPerm(); logActivity(`${v.name} signed in and got the ${ROLES[v.role]?.name || ""} role`); render();
 };

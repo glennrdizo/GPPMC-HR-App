@@ -142,7 +142,7 @@ function usersTable() {
       <td class="num" style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-pu-edit="${esc(id)}">Edit</button> ${owner ? "" : `<button class="btn btn-ghost btn-sm" style="color:#a4262c" data-pu-del="${esc(id)}">Delete</button>`}</td></tr>${S.puAcc === id ? `<tr class="pu-accrow"><td colspan="8">${puAccess(id, owner)}</td></tr>` : ""}`; };
   const inv = Object.entries(a.invites || {}).sort((x, y) => String(x[1].name).localeCompare(String(y[1].name)));
   const invRow = ([k, v]) => { const e = S.emps.get(v.empId);
-    return `<tr><td><b>${esc(v.name)}</b><div><span class="chip c-warn">Invited</span></div></td><td>${esc(ROLES[v.role]?.name || "")}</td><td><span class="t-muted" style="font-size:13px">Set when they first open the app</span></td>
+    return `<tr><td><b>${esc(v.name)}</b><div><span class="chip c-warn">Invited</span></div></td><td>${esc(ROLES[v.role]?.name || "")}</td><td><span class="t-muted" style="font-size:13px">${v.role === "custom" ? "Custom pages, set in Users &amp; Roles" : "Their pages can be ticked in Users &amp; Roles"}. They get them when they first sign in.</span></td>
       <td>${esc(e ? pos(e.posId)?.title || "" : "") || '<span class="t-muted">—</span>'}</td><td>${esc(v.email || e?.email || "") || '<span class="t-muted">—</span>'}</td><td>${esc(e?.no || "") || '<span class="t-muted">—</span>'}</td>
       <td class="t-muted">Not signed in yet</td><td class="num" style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-inv-edit="${esc(k)}">Edit</button> <button class="btn btn-ghost btn-sm" style="color:#a4262c" data-inv-del="${esc(k)}">Delete</button></td></tr>`; };
   const iv = S.puAdd && S.puAdd !== true ? a.invites?.[S.puAdd] || {} : {};
@@ -178,7 +178,7 @@ const normName = (x) => String(x || "").toLowerCase().replace(/[^a-z]+/g, " ").t
 async function claimInvite() {
   const a = S.access; if (!a || !S.myId || !S.myName || S.isOwner || !S.realEdit || a.users?.[S.myId]?.role) return;
   const hit = Object.entries(a.invites || {}).find(([, v]) => normName(v.name) === normName(S.myName)); if (!hit) return;
-  const [k, v] = hit; const users = { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: v.role, empId: v.empId || null, email: v.email || null, ...(v.role === "custom" ? { views: [], mods: [], edit: true } : {}) } };
+  const [k, v] = hit; const users = { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: v.role, empId: v.empId || null, email: v.email || null, ...(v.role === "custom" ? { views: Array.isArray(v.views) ? v.views : [], mods: Array.isArray(v.mods) ? v.mods : [], edit: v.edit !== false } : {}) } };
   const invites = { ...a.invites }; delete invites[k]; const next = { ...a, users, invites };
   await S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))); S.access = next; applyPerm(); logActivity(`${v.name} opened the app and got the ${ROLES[v.role]?.name || ""} role`); render();
 }
