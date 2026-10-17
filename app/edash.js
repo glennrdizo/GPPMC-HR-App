@@ -36,13 +36,21 @@ async function syncSummaries() {
     // Nothing changed since the last round on the same day: every summary would come out the same.
     const key = `${S.ver}|${todayISO()}`; if (key === S.meKey) return;
     const changed = {}; let i = 0;
+    S.meErr = S.meErr || {}; let failed = false;
     for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust) continue; if (++i % 20 === 0) await new Promise((r) => setTimeout(r, 0)); /* let the page breathe */ const e = S.emps.get(S.clockLinks[d.id]); if (!e || e.sample) continue;
-      const sum = buildSummary(e); const json = JSON.stringify(sum); let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
-      if (S.meSynced[d.id] === h) continue; await S.db.doc(`clockins/${d.id}/me/summary`).set(JSON.parse(JSON.stringify({ ...sum, at: new Date().toISOString() }))); S.meSynced[d.id] = h; changed[d.id] = h; }
+      // One employee whose summary can't be built or saved must not hold back everyone else's.
+      try {
+        const sum = buildSummary(e); const json = JSON.stringify(sum); let h = 0; for (let i = 0; i < json.length; i++) h = (h * 31 + json.charCodeAt(i)) | 0;
+        if (S.meSynced[d.id] === h) { delete S.meErr[d.id]; continue; } await S.db.doc(`clockins/${d.id}/me/summary`).set(JSON.parse(JSON.stringify({ ...sum, at: new Date().toISOString() }))); S.meSynced[d.id] = h; changed[d.id] = h; delete S.meErr[d.id];
+      } catch (err) { failed = true; S.meErr[d.id] = String(err?.message || err || "error").slice(0, 160); console.warn("Employee dashboard not shared", d.id, err); }
+    }
+    if (Object.keys(changed).length || failed) render();
     if (Object.keys(changed).length) await S.db.doc("org/medash").set({ h: S.meSynced, at: new Date().toISOString() });
-    S.meKey = key;
-  } catch {} finally { meBusy = false; }
+    if (!failed) S.meKey = key;
+  } catch (err) { console.warn("Employee dashboards not shared", err); } finally { meBusy = false; if (S.meAgain) { S.meAgain = false; setTimeout(syncSummaries, 300); } }
 }
+// Confirming an employee's phone shares their dashboard right away instead of on the next round.
+window.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-clock-link]")) return; setTimeout(() => { if (meBusy) S.meAgain = true; else syncSummaries(); }, 800); });
 { const b = bootIO; bootIO = (db) => { b(db); setTimeout(function tick() { syncSummaries(); setTimeout(tick, 60000); }, 25000); }; }
 
 /* ---------- shared dashboard sections (phone and the Employee view preview) ---------- */
