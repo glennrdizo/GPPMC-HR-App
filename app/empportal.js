@@ -167,3 +167,74 @@ window.addEventListener("submit", async (ev) => {
   if (kind === "cert") { Object.assign(rec, { type: v("rq-ct"), purpose: v("rq-pp"), copies: Number(v("rq-cp")) || 1, need: v("rq-need") || null }); if (!rec.purpose) { toast("Give the purpose."); return; } }
   const id = uid(); try { await S.db.doc(`clockins/${S.self.uid}/reqs/${id}`).set(JSON.parse(JSON.stringify(rec))); S.rqMine = [{ id, ...rec }, ...(S.rqMine || [])]; S.epOpen = null; toast("Sent to HR."); render(); } catch { toast("Couldn't send. Check your connection and try again."); }
 }, true);
+
+/* ---------- The employee's account builds its own pages (website, Glenn 2026-10-17) ----------
+   hr_my_data() returns only the signed-in employee's own slice of HR's records. The account loads that slice into a read-only
+   copy of the database and starts the same loaders HR's app starts, so the Employee pages and the home summary are drawn here,
+   current, without an HR browser open. The employee's own folder (clockins/{uid}) and pub/ still go to the real database.
+   If the function isn't there or the account isn't linked yet, the pages HR's app saved are shown as before. */
+const MY = { rows: null, at: 0, busy: false, off: false, booted: false, subs: new Set(), pv: -1, live: null, calc: false };
+const MY_EVERY = 2 * 60000;
+async function myLoad() {
+  if (MY.busy || MY.off || !window.__sb || !S.selfMode || !S.self?.uid || !S.self.claim) return; MY.busy = true;
+  try {
+    const { data, error } = await window.__sb.rpc("hr_my_data"); if (error) throw error;
+    if (!Array.isArray(data)) { MY.rows = null; MY.pv = -1; render(); return; } // not linked to an active employee yet
+    MY.rows = new Map(data.filter((r) => r && typeof r.path === "string").map((r) => [r.path, r.data])); MY.at = Date.now(); MY.pv = -1;
+    if (!MY.booted) myBoot(); else { for (const f of MY.subs) try { f(); } catch {} }
+    S.ver++; render();
+  } catch (err) { if (/PGRST202|42883|does not exist|Could not find the function/i.test(`${err?.code} ${err?.message}`)) MY.off = true; console.warn("Couldn't load my records", err); }
+  finally { MY.busy = false; }
+}
+function myDb(real) {
+  const mine = (p) => p === `clockins/${S.self.uid}` || p.startsWith(`clockins/${S.self.uid}/`) || p.startsWith("pub/");
+  const par = (p) => p.replace(/\/[^/]+$/, "");
+  const val = (v, f) => String(f).split(".").reduce((x, k) => x?.[k], v);
+  const snap = (p, v) => ({ id: p.split("/").pop(), exists: v != null, data: () => (v == null ? undefined : structuredClone(v)) });
+  const cmp = (a, op, b) => op === "==" ? a === b : op === "!=" ? a !== b : op === "<" ? a < b : op === "<=" ? a <= b : op === ">" ? a > b : op === ">=" ? a >= b
+    : op === "in" ? (b || []).includes(a) : op === "array-contains" ? Array.isArray(a) && a.includes(b) : false;
+  const run = (c, o) => {
+    let docs = [...(MY.rows || new Map())].filter(([p, v]) => par(p) === c && o.w.every(([f, op, x]) => cmp(val(v, f), op, x)));
+    if (o.ob) docs.sort(([, a], [, b]) => { const x = val(a, o.ob), y = val(b, o.ob); return (x < y ? -1 : x > y ? 1 : 0) * (o.dir === "desc" ? -1 : 1); });
+    if (o.n) docs = docs.slice(0, o.n); const ds = docs.map(([p, v]) => snap(p, v));
+    return { docs: ds, size: ds.length, empty: !ds.length, forEach: (fn) => ds.forEach(fn) };
+  };
+  const watch = (fn) => { MY.subs.add(fn); try { fn(); } catch {} return () => MY.subs.delete(fn); };
+  const no = async () => { const e = new Error("Not allowed."); e.code = "permission_denied"; throw e; };
+  const q = (c, o) => ({ where: (f, op, v) => q(c, { ...o, w: [...o.w, [f, op, v]] }), orderBy: (f, dir = "asc") => q(c, { ...o, ob: f, dir }), limit: (n) => q(c, { ...o, n }),
+    get: async () => run(c, o), onSnapshot: (cb) => watch(() => cb(run(c, o))) });
+  return { mine: true, real,
+    doc: (p) => (mine(p) ? real.doc(p) : { id: p.split("/").pop(), path: p, get: async () => snap(p, MY.rows?.get(p)), set: no, update: no, delete: no,
+      onSnapshot: (cb) => watch(() => cb(snap(p, MY.rows?.get(p)))) }),
+    collection: (c) => (mine(c) ? real.collection(c) : q(c, { w: [] })) };
+}
+function myBoot() {
+  MY.booted = true; const db = myDb(S.db); S.db = db; const map = (snap) => new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+  // the loaders HR's app starts with, reading the employee's own slice
+  db.collection("employees").limit(50).onSnapshot((snap) => { S.emps = map(snap); S.loaded.emps = true; refresh(); });
+  db.collection("projects").limit(50).onSnapshot((snap) => { S.projects = map(snap); S.loaded.projects = true; refresh(); });
+  db.doc("org/main").onSnapshot((d) => { const o = d.exists ? d.data() : { companyName: CO_DEFAULT, departments: [], positions: [] }; S.org = !o.companyName || o.companyName === "HR System" ? { ...o, companyName: CO_DEFAULT } : o; S.loaded.org = true; refresh(); });
+  db.doc("org/settings").onSnapshot((d) => { S.settings = d.exists ? d.data() : null; refresh(); });
+  db.collection("leaves").orderBy("month", "desc").limit(24).onSnapshot((snap) => { S.leaveDocs = new Map(snap.docs.map((d) => [d.id, d.data()])); refresh(); });
+  db.collection("periods").orderBy("start", "desc").limit(48).onSnapshot((snap) => { S.periods = new Map(snap.docs.map((d) => [d.id, d.data()])); refresh(); });
+  db.collection("payruns").orderBy("start", "desc").limit(12).onSnapshot((snap) => { S.runs = new Map(snap.docs.map((d) => [d.id, d.data()])); refresh(); });
+  for (const b of [bootTalent, bootComply, bootExtra, bootTk, bootTr]) try { b(db); } catch (err) { console.warn("Loader skipped", err); }
+  setInterval(() => { if (document.visibilityState === "visible") myLoad(); }, MY_EVERY);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - MY.at > 30000) myLoad(); });
+}
+// The pages and home summary drawn here from the employee's own records, redrawn when the records change.
+function myLive() {
+  if (!MY.rows || MY.calc || !S.selfMode) return null; const e = S.emps.get(S.clockLinks?.[S.self?.uid]); if (!e) return null;
+  if (MY.pv === S.ver && MY.live) return MY.live; MY.calc = true;
+  try { const at = new Date(MY.at).toISOString(); const sum = JSON.parse(JSON.stringify({ ...buildSummary(e), at }));
+    if (MY.stSum?.team) sum.team = MY.stSum.team; // the people a supervisor approves for come from HR's copy
+    MY.live = { P: { ...epRender(e), at, live: true }, sum }; MY.pv = S.ver; }
+  catch (err) { console.warn("Couldn't draw my pages", err); MY.live = null; MY.off = true; }
+  finally { MY.calc = false; }
+  return MY.live;
+}
+{ const had = { P: S.mePages, sum: S.meSum };
+  Object.defineProperty(S, "mePages", { configurable: true, enumerable: true, get: () => myLive()?.P ?? MY.stP, set: (v) => { MY.stP = v; } });
+  Object.defineProperty(S, "meSum", { configurable: true, enumerable: true, get: () => myLive()?.sum ?? MY.stSum, set: (v) => { MY.stSum = v; } });
+  MY.stP = had.P; MY.stSum = had.sum; }
+{ const b = epSub; epSub = () => { const first = !S.epSub; b(); if (first && S.epSub) myLoad(); }; }
