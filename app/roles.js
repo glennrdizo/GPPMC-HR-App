@@ -14,8 +14,8 @@ const rlLocked = (id) => !iAmOwner() && (RL_TOP.has(rlRoleOf(id)) || id === S.my
 // Built-in roles on the new menu (Glenn 2026-10-15): whole modules (mods) plus single sub-modules (subs, with everything under them).
 // A role re-ticked in Users & Roles (org/access.roles) keeps its own ticks; Reset brings back these.
 const RL_MENU = {
-  payroll: { mods: ["HR Operations"], subs: ["Employee Records & 201 Files", "Employee Movement", "Separation & Offboarding"], bot: true, note: "HR Operations (timekeeping, leave, payroll, compensation, benefits), plus 201 files, employee movement and separation" },
-  timekeeper: { mods: [], subs: ["Timekeeping & Attendance", "Leave Administration"], bot: false, note: "Timekeeping & attendance and leave, in HR Operations" },
+  payroll: { mods: ["Timekeeping & Leave", "Payroll & Benefits"], subs: ["Employee Records & 201 Files", "Employee Movement", "Separation & Offboarding"], bot: true, note: "Timekeeping and Payroll (attendance, leave, payroll, compensation, benefits), plus 201 files, employee movement and separation" },
+  timekeeper: { mods: ["Timekeeping & Leave"], subs: [], bot: false, note: "Timekeeping: attendance and leave" },
   talent: { mods: ["Talent Management", "Employee Development"], subs: ["Manpower Planning", "Employee Records & 201 Files"], bot: true, note: "Talent Management and Employee Development, plus manpower planning and 201 files" },
 };
 function rlMenuViews(spec) {

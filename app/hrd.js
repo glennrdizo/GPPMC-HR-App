@@ -6,7 +6,10 @@ const HRD_DATA = {"areas":[{"n":1,"obj":"Align human resource strategies with th
 const HRD_CATS = [
   ["Strategic HR Management", "star", [1, 2, 3]],
   ["Talent Management", "people", [4, 5, 6, 7]],
-  ["HR Operations", "clock", [8, 9, 10, 11, 12]],
+  // HR Operations split into two modules of their own (Glenn 2026-10-17). Menu shows them as "Timekeeping" and "Payroll" (GROUP_LABEL);
+  // the keys differ from the old access modules Timekeeping/Payroll so a shown menu group never widens S.perm.mods.
+  ["Timekeeping & Leave", "clock", [8, 9]],
+  ["Payroll & Benefits", "pay", [10, 11, 12]],
   ["Employee Development", "cap", [13, 14, 15]],
   ["Employee Relations & Compliance", "shield", [16, 17, 18, 19]],
   ["HR Administration", "file", [20, 21, 25, 26]],
@@ -53,6 +56,7 @@ const hrdSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").repla
 const hrdAreaOf = (n) => HRD_DATA.areas.find((a) => a.n === n) || null;
 const hrdPropOf = (n) => HRD_DATA.prop.find((p) => p.n === n) || null;
 const hrdCatOf = (n) => HRD_CATS.find(([, , ns]) => ns.includes(n))?.[0] || "";
+Object.assign(GROUP_LABEL, { "Timekeeping & Leave": "Timekeeping", "Payroll & Benefits": "Payroll" });
 const HRD_REG = {}; // register view -> { n, label }
 const HRD_PERM = {}; // view -> access module it belongs to
 const HRD_LABEL = {}; // view -> menu name of new pages
@@ -152,7 +156,7 @@ function hrdRegister(reg, n, label) {
       </tbody></table></div>` : `<div class="empty-state"><span class="es-ic">${icon("sheet", 22)}</span><p>${rows.length ? "Nothing matches." : `No entries yet.${ed ? " Add the first one, or attach the existing file with Attachments above." : ""}`}</p></div>`}</section>`;
 }
 function hrdRegPage(v) {
-  const r = HRD_REG[v]; const n = r.n; const cat = hrdCatOf(n);
+  const r = HRD_REG[v]; const n = r.n; const cat = GL(hrdCatOf(n));
   if (r.inline) { const p = hrdPropOf(n);
     return head(esc(cat), esc(p.title)) + `<section class="card"><p style="margin:0">${esc(p.resp)}</p><p class="t-muted" style="margin:8px 0 0;font-size:13px">Property management function no. ${n}. Record each activity below so the work is tracked per property and per cluster.</p></section>` + `<div style="margin-top:16px">${hrdRegister(v, n, "Activity log")}</div>`; }
   return head(`${esc(cat)} · <button class="link" data-go="${HRD_AREAS[n][2] && n <= 30 ? `hrd_${n}` : `hrd_${n}`}">${esc(hrdTitle(n))}</button>`, esc(r.label)) + hrdRegister(v, n, r.label);
@@ -162,7 +166,7 @@ function hrdAreaPage(n) {
   const done = a.resp.filter((_, i) => st[i] === "OK" || st[i] === "NA").length; const pct = a.resp.length ? Math.round((done / a.resp.length) * 100) : 0;
   const delivs = subs.filter((s) => !info0(s) && !HRD_EXTRA[s]).map((s) => { const [lab, to] = s.split("="); const v = to || `hrdr_${n}_${hrdSlug(lab)}`; const cnt = HRD_REG[v] ? hrdRows(v).length : null; return { lab, v, cnt }; });
   const regs = Object.keys(HRD_REG).filter((v) => HRD_REG[v].n === n); const openN = regs.reduce((s, v) => s + hrdRows(v).filter((r) => r.status !== "DONE").length, 0); const lateN = regs.reduce((s, v) => s + hrdRows(v).filter(hrdOverdue).length, 0);
-  return head(esc(hrdCatOf(n)), esc(name), main ? `<button class="btn btn-ghost btn-sm" data-go="${main}">${icon("back", 16)}Open ${esc(labelOf(main))}</button>` : "") + `
+  return head(esc(GL(hrdCatOf(n))), esc(name), main ? `<button class="btn btn-ghost btn-sm" data-go="${main}">${icon("back", 16)}Open ${esc(labelOf(main))}</button>` : "") + `
     <section class="stats kpis">
       <div class="card stat"><span class="label">Responsibilities in place</span><span class="value">${pct}%</span><span class="note">${done} of ${a.resp.length}</span></div>
       <div class="card stat"><span class="label">Deliverables</span><span class="value">${delivs.length}</span><span class="note">${delivs.filter((d) => HRD_REG[d.v] && d.cnt).length} of ${delivs.filter((d) => HRD_REG[d.v]).length} registers have entries</span></div>
