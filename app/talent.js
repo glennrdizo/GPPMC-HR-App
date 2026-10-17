@@ -220,7 +220,7 @@ VIEWS.jobForm = () => {
       ${Sel("posId", "Position", S.org.positions.slice().sort((a, b) => a.title.localeCompare(b.title)).map((x) => [x.id, x.title]), "Choose…")}${F("title", "Job title", "text", true)}
       ${Sel("deptId", "Department", S.org.departments.map((d) => [d.id, d.name]), "—")}${Sel("projectId", "Project", listOf(S.projects).filter((x) => x.status !== "COMPLETED").map((x) => [x.id, x.name]), "Head office")}
       ${F("slots", "People needed", "number", true, 'min="1" step="1"')}${Sel("empType", "Employment", [["PROBATIONARY", "Probationary (up to 6 months)"], ["PROJECT_BASED", "Project-based"], ["CONTRACTUAL", "Contractual"]])}
-      ${Sel("payType", "Pay type", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]])}${F("rate", "Pay rate (PHP)", "number", false, 'min="0" step="0.01"')}
+      ${Sel("payType", "Pay type", [["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]])}${F("rate", "Pay rate (PHP)", "number", false, 'min="0" step="0.01"')}
       ${Sel("mgrId", "Hiring manager", mgrs.map((e) => [e.id, `${fullName(e)}, ${pos(e.posId)?.title}`]), "—")}${Sel("status", "Status", Object.entries(JSTATUS).map(([k, x]) => [k, x[0]]))}${F("opened", "Opened", "date", true)}
     </div>
     <div class="field"><label for="jf-desc">Qualifications and duties</label><textarea class="input" id="jf-desc" name="desc" rows="4">${esc(v.desc || "")}</textarea></div>

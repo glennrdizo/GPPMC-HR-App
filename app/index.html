@@ -1566,6 +1566,7 @@ const PAY = (() => {
     ],
     shifts: [
       { id: "day", name: "Day shift", start: "08:00", end: "17:00" },
+      { id: "day830", name: "Day shift", start: "08:30", end: "17:30" },
       { id: "night", name: "Night shift", start: "22:00", end: "07:00" },
     ],
     /* Recurring allowances. De minimis items are tax-free up to the cap (RR 2-98 as amended by RR 4-2025); the rest is taxable. */
@@ -2241,7 +2242,7 @@ function timeExport(kind) {
   }
   const run = payrun(id); const emps = refilter([...S.emps.values()].filter((e) => run.lines[e.id]), { q: "", dept: "", project: "" });
   if (kind === "register") return offer(`payroll-register-${id}.csv`, toCSV([["Employee No", "Name", "Charged to", "Pay type", "Rate", "Days", "Basic", "Holiday pay", "Leave pay", "Absences", "Late/undertime", "Overtime", "Rest day", "Reg. holiday worked", "Special day worked", "Holiday/rest day OT, double holiday", "Night diff", "Taxable adj.", "Non-taxable allowance", "De minimis allowances", "Taxable allowances", "Commission", "FlexBen non-taxable", "FlexBen taxable", "Gross", "SSS", "PhilHealth", "Pag-IBIG", "Taxable", "Tax", "Other deductions", "Loans", "Net pay", "SSS ER", "EC", "PhilHealth ER", "Pag-IBIG ER"],
-    ...emps.map((e) => { const l = run.lines[e.id]; return [e.no, fullName(e), chargeName(l, e), e.payType === "DAILY" ? "Daily" : "Monthly", e.basicPay, l.days, l.basic, l.hol, l.leave, l.absent, l.tardy, l.ot, l.rd, l.rhw, l.sh, l.xp || 0, l.nd, l.adj, l.adjN, l.allowN || 0, l.allowT || 0, l.comm || 0, PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0)), l.flexT || 0, l.gross, l.sss, l.ph, l.hd, l.taxable, l.tax, l.ded, l.loanTot || 0, l.net, l.sssEr, l.ec, l.phEr, l.hdEr]; })]));
+    ...emps.map((e) => { const l = run.lines[e.id]; return [e.no, fullName(e), chargeName(l, e), ptLabel(e.payType), e.basicPay, l.days, l.basic, l.hol, l.leave, l.absent, l.tardy, l.ot, l.rd, l.rhw, l.sh, l.xp || 0, l.nd, l.adj, l.adjN, l.allowN || 0, l.allowT || 0, l.comm || 0, PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0)), l.flexT || 0, l.gross, l.sss, l.ph, l.hd, l.taxable, l.tax, l.ded, l.loanTot || 0, l.net, l.sssEr, l.ec, l.phEr, l.hdEr]; })]));
   if (kind === "bank") return offer(`bank-file-${id}.csv`, toCSV([["Employee No", "Name", "Bank", "Account No", "Net pay", "Pay period"], ...emps.map((e) => [e.no, fullName(e), e.bank || "", e.bankAcct || "", run.lines[e.id].net, p.label])]));
   if (kind === "13th") { const y = String(new Date().getFullYear()); return offer(`13th-month-${y}.csv`, toCSV([["Employee No", "Name", "Months in year", "Monthly basic", "Basic paid (final payrolls)", "Commissions (final payrolls)", "Estimated 13th month"], ...thirteenthRows(y).map((r) => [r.e.no, fullName(r.e), r.months, r.monthly, r.paid, r.comm, r.est])])); }
 }
@@ -2564,7 +2565,7 @@ VIEWS.jobForm = () => {
       ${Sel("posId", "Position", S.org.positions.slice().sort((a, b) => a.title.localeCompare(b.title)).map((x) => [x.id, x.title]), "Choose…")}${F("title", "Job title", "text", true)}
       ${Sel("deptId", "Department", S.org.departments.map((d) => [d.id, d.name]), "—")}${Sel("projectId", "Project", listOf(S.projects).filter((x) => x.status !== "COMPLETED").map((x) => [x.id, x.name]), "Head office")}
       ${F("slots", "People needed", "number", true, 'min="1" step="1"')}${Sel("empType", "Employment", [["PROBATIONARY", "Probationary (up to 6 months)"], ["PROJECT_BASED", "Project-based"], ["CONTRACTUAL", "Contractual"]])}
-      ${Sel("payType", "Pay type", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]])}${F("rate", "Pay rate (PHP)", "number", false, 'min="0" step="0.01"')}
+      ${Sel("payType", "Pay type", [["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]])}${F("rate", "Pay rate (PHP)", "number", false, 'min="0" step="0.01"')}
       ${Sel("mgrId", "Hiring manager", mgrs.map((e) => [e.id, `${fullName(e)}, ${pos(e.posId)?.title}`]), "—")}${Sel("status", "Status", Object.entries(JSTATUS).map(([k, x]) => [k, x[0]]))}${F("opened", "Opened", "date", true)}
     </div>
     <div class="field"><label for="jf-desc">Qualifications and duties</label><textarea class="input" id="jf-desc" name="desc" rows="4">${esc(v.desc || "")}</textarea></div>
@@ -5888,7 +5889,7 @@ const DS = {
   employees: { label: "Employees", group: "People", pages: ["employees", "employee", "import"],
     cols: ["Employee No", "First Name", "Middle Name", "Last Name", "Suffix", "Title", "Position", "Department", "Status", "Hire Date", "Birth Date", "Sex", "Civil Status", "Mobile", "Email", "Address", "TIN", "SSS", "PhilHealth", "Pag-IBIG", "Pay Type", "Basic Pay", "Project Code"],
     note: "Adds new employees. Rows whose Employee No already exists are skipped, so change existing 201 files on the employee's page.",
-    rows: () => [...S.emps.values()].filter((e) => !e.separated).sort((a, b) => String(a.no).localeCompare(String(b.no))).map((e) => [e.no, e.first, e.middle, e.last, e.suffix, e.title, pos(e.posId)?.title, dept(e.deptId)?.name, STATUS[e.status]?.[0], e.hire, e.birth, e.gender === "F" ? "Female" : e.gender === "M" ? "Male" : "", e.civil, e.mobile, e.email, e.address, e.tin, e.sss, e.philhealth, e.pagibig, e.payType === "DAILY" ? "Daily" : "Monthly", e.basicPay, S.projects.get(e.projectId)?.code]) },
+    rows: () => [...S.emps.values()].filter((e) => !e.separated).sort((a, b) => String(a.no).localeCompare(String(b.no))).map((e) => [e.no, e.first, e.middle, e.last, e.suffix, e.title, pos(e.posId)?.title, dept(e.deptId)?.name, STATUS[e.status]?.[0], e.hire, e.birth, e.gender === "F" ? "Female" : e.gender === "M" ? "Male" : "", e.civil, e.mobile, e.email, e.address, e.tin, e.sss, e.philhealth, e.pagibig, ptLabel(e.payType), e.basicPay, S.projects.get(e.projectId)?.code]) },
   projects: { label: "Projects", group: "People", pages: ["projects", "project", "projcodes"], key: "Project Code",
     cols: ["Project Code", "Project Name", "Client", "Location", "Region", "Status", "Start Date", "End Date", "Description"],
     note: "Rows with an existing project code update that project; new codes are added.",
@@ -5966,13 +5967,13 @@ const DS = {
     } },
   jobs: { label: "Jobs", group: "Talent", pages: ["hiring", "hireho", "hireprj", "job"], col: "jobs",
     cols: ["Job Title", "Position", "Department Code", "Project Code", "People Needed", "Employment Type", "Pay Type", "Rate", "Status", "Date Opened", "Description", "Record ID"],
-    rows: () => listOf(S.jobs).map((j) => [j.title, pos(j.posId)?.title, dept(j.deptId)?.code, S.projects.get(j.projectId)?.code, j.slots, lbl(STATUS, j.empType), j.payType === "DAILY" ? "Daily" : "Monthly", j.rate, lbl(JSTATUS, j.status), j.opened, j.desc, j.id]),
+    rows: () => listOf(S.jobs).map((j) => [j.title, pos(j.posId)?.title, dept(j.deptId)?.code, S.projects.get(j.projectId)?.code, j.slots, lbl(STATUS, j.empType), ptLabel(j.payType), j.rate, lbl(JSTATUS, j.status), j.opened, j.desc, j.id]),
     read(g, v, _s, prev) {
       const title = g("Job Title") || prev?.title; if (!title) return "needs a Job Title.";
       const p = g("Position") ? (S.org.positions || []).find((x) => x.title.toLowerCase() === g("Position").toLowerCase()) : null;
       const pr = projByCode(g("Project Code")); if (g("Project Code") && !pr) return `project ${g("Project Code")} isn't on file.`;
       return { ...(prev || { id: uid(), mgrId: null }), title, posId: p?.id || prev?.posId || null, deptId: deptByCode(g("Department Code"))?.id || prev?.deptId || null, projectId: pr?.id || (g("Project Code") === "" ? prev?.projectId || null : null),
-        slots: Math.max(1, Math.floor(numv(g("People Needed")) || prev?.slots || 1)), empType: pickK(mapList(STATUS), g("Employment Type")) || prev?.empType || "PROBATIONARY", payType: /^d/i.test(g("Pay Type")) ? "DAILY" : g("Pay Type") ? "MONTHLY" : prev?.payType || "MONTHLY",
+        slots: Math.max(1, Math.floor(numv(g("People Needed")) || prev?.slots || 1)), empType: pickK(mapList(STATUS), g("Employment Type")) || prev?.empType || "PROBATIONARY", payType: /^d/i.test(g("Pay Type")) ? "DAILY" : /^semi/i.test(g("Pay Type")) ? "SEMI" : g("Pay Type") ? "MONTHLY" : prev?.payType || "MONTHLY",
         rate: numv(g("Rate")) || prev?.rate || 0, status: pickK(mapList(JSTATUS), g("Status")) || prev?.status || "OPEN", opened: dateIn(g("Date Opened")) || prev?.opened || todayISO(), desc: v("Description", prev?.desc) };
     } },
   applicants: { label: "Applicants", group: "Talent", pages: ["applicant"], col: "applicants",
@@ -6867,7 +6868,7 @@ VIEWS.mprForm = () => {
       <div class="field"><label for="mf-type">Type of request</label><select class="input" id="mf-type" name="type">${opts(MPR_TYPES.map((x) => [x, x]), v.type)}</select></div>
       ${F("replaces", "Replacing (name)", "text", false, 'placeholder="Only for a replacement"')}
       <div class="field"><label for="mf-empType">Employment status</label><select class="input" id="mf-empType" name="empType">${opts(Object.entries(STATUS).map(([k, x]) => [k, x[0]]), v.empType)}</select></div>
-      <div class="field"><label for="mf-payType">Pay basis</label><select class="input" id="mf-payType" name="payType">${opts([["MONTHLY", "Monthly"], ["DAILY", "Daily"]], v.payType)}</select></div>
+      <div class="field"><label for="mf-payType">Pay basis</label><select class="input" id="mf-payType" name="payType">${opts([["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]], v.payType)}</select></div>
       ${F("rate", "Budgeted pay (PHP)", "number", false, 'min="0" step="0.01"')}
     </div>
     <div class="field"><label for="mf-reason">Reason for the request <span class="req">*</span></label><textarea class="input" id="mf-reason" name="reason" rows="3" placeholder="Why these people are needed now">${esc(v.reason || "")}</textarea></div>
@@ -7656,7 +7657,7 @@ function audVal(f, v) {
   if (v == null || v === "") return "";
   if (f === "posId") return pos(v)?.title || v; if (f === "deptId") return dept(v)?.name || v; if (f === "projectId") return S.projects.get(v)?.name || v;
   if (f === "supervisorId") { const s = S.emps.get(v); return s ? fullName(s) : v; } if (f === "status") return STATUS[v]?.[0] || v;
-  if (f === "shiftId") return SET().shifts.find((s) => s.id === v)?.name || v; if (f === "payType") return v === "DAILY" ? "Daily" : "Monthly";
+  if (f === "shiftId") return SET().shifts.find((s) => s.id === v)?.name || v; if (f === "payType") return ptLabel(v);
   if (f === "basicPay") return peso.format(v); if (f === "allow") return Array.isArray(v) ? v.map((a) => `${a.name || a.code || ""} ${a.amt != null ? peso.format(a.amt) : ""}`.trim()).join(", ") : JSON.stringify(v);
   if (f === "separated") return v.date ? `${fmtDate(v.date)} · ${v.reason || ""}` : ""; if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return fmtDate(v);
   return typeof v === "object" ? JSON.stringify(v) : String(v);
@@ -9961,7 +9962,7 @@ window.addEventListener("submit", async (ev) => {
 
 /* ---------- Geofence: rules (record, needs HR approval, or block), live area check on the phone and kiosk, and HR's review of punches made outside a site area ---------- */
 Object.assign(S, { geoAll: false, geoF: { from: null, to: null, st: "WAIT" } });
-const FENCE_MODES = [["RECORD", "Record only: allow the punch and flag it for HR"], ["APPROVE", "Needs HR approval: the employee gives a reason, and the punch counts once HR approves"], ["BLOCK", "Block: no time in or out outside the site area"]];
+const FENCE_MODES = [["RECORD", "Record only: allow the punch and flag it for HR"], ["APPROVE", "Needs HR approval: the employee gives a reason, and the punch counts once HR approves"], ["BLOCK", "Block: no time in or out outside the site area"], ["MIXED", "Block outside, approve without location: no time in or out outside the site area, and a punch with no location counts once HR approves"]];
 const fenceMode = () => SET().fenceMode || "RECORD";
 {
   const tk = NAV.find(([g]) => g === "Timekeeping");
@@ -10009,16 +10010,17 @@ function fenceRadar(g, f) {
 }
 function fencePanel(fz, mode, g, forKiosk) {
   const cls = fz.state === "in" ? "in" : fz.state === "out" || (fz.state === "nogps" && mode !== "RECORD") ? "out" : "";
-  const blocked = mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps"); const ask = mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps");
+  const blocked = fz.state !== "wait" && fenceBlocks(fz, mode); const ask = fenceAsks(fz, mode);
   const who = forKiosk ? "This worker" : "You";
   const note = fz.state === "in" ? (g?.acc ? `GPS accuracy ±${g.acc} m.` : "") : blocked ? (fz.state === "nogps" ? "Turn on location for this page, then refresh. Time in and out only work inside the site area." : `Time in and out only work inside the site area. Move closer, or ${forKiosk ? "check the worker's assignment" : "use Ask HR if you're on official business"}.`)
     : ask ? `${who} can still punch, but HR has to approve it before it counts.` : fz.state === "out" ? "The punch is saved and flagged for HR." : fz.state === "nogps" ? "The punch is saved without a location and HR checks it." : "";
   return `<div class="gf-panel ${cls}" data-fence="${fz.state}">${fenceRadar(g, fz.f)}<div class="gf-text"><b>${esc(fz.text)}</b>${note ? `<span>${esc(note)}</span>` : ""}
     <button type="button" class="link" data-geo-refresh="${forKiosk ? "kiosk" : "self"}">Refresh location</button></div></div>
-    ${ask ? `<div class="field"><label for="${forKiosk ? "kc-why" : "sf-why"}">Reason for punching outside the area <span class="req">*</span></label><input class="input" id="${forKiosk ? "kc-why" : "sf-why"}" maxlength="200" placeholder="e.g. Site meeting at the client's office" autocomplete="off"></div>` : ""}`;
+    ${ask ? `<div class="field"><label for="${forKiosk ? "kc-why" : "sf-why"}">${fz.state === "nogps" ? "Reason there's no location" : "Reason for punching outside the area"} <span class="req">*</span></label><input class="input" id="${forKiosk ? "kc-why" : "sf-why"}" maxlength="200" placeholder="e.g. Site meeting at the client's office" autocomplete="off"></div>` : ""}`;
 }
-const fenceBlocks = (fz, mode) => (mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps")) || (mode !== "RECORD" && fz.state === "wait");
-const fenceAsks = (fz, mode) => mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps");
+// MIXED (Glenn 2026-10-17): outside the area is blocked; no location is allowed with a reason and waits for HR's approval.
+const fenceBlocks = (fz, mode) => ((mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps")) || (mode === "MIXED" && fz.state === "out")) || (mode !== "RECORD" && fz.state === "wait");
+const fenceAsks = (fz, mode) => (mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps")) || (mode === "MIXED" && fz.state === "nogps");
 const GRID = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
 
 /* ---------- employee's own phone ---------- */
@@ -10033,7 +10035,7 @@ function subMeSum() { if (!S.meSumSub && S.self?.uid && S.db) { S.meSumSub = tru
 selfPunch = async function (type) {
   const M = S.self; if (!M.photo) return; const s = S.meSum; const mode = s?.fenceMode || "RECORD"; const fz = phoneFence(M.geo, s);
   if (fenceBlocks(fz, mode)) { toast(fz.state === "nogps" ? "Turn on location first. Time in and out only work inside the site area." : "You're outside the site area, so this punch can't be saved."); return; }
-  let why = null; if (fenceAsks(fz, mode)) { why = ($("#sf-why")?.value || "").trim(); if (!why) { toast("Give the reason for punching outside the site area."); $("#sf-why")?.focus(); return; } }
+  let why = null; if (fenceAsks(fz, mode)) { why = ($("#sf-why")?.value || "").trim(); if (!why) { toast(fz.state === "nogps" ? "Give the reason there's no location." : "Give the reason for punching outside the site area."); $("#sf-why")?.focus(); return; } }
   M.busy = true; render();
   try {
     const c = await shrinkCanvas(M.photo, 160); const g = M.geo || {};
@@ -10056,7 +10058,7 @@ selfPunch = async function (type) {
 kioskPunch = async function (type) {
   const K = S.kiosk; const e = S.emps.get(K.emp); if (!e || !K.photo) return; const g = K.geo || {}; const mode = fenceMode(); const fz = fence({ ...g, lat: g.lat ?? null, site: K.site });
   if (fenceBlocks(fz, mode)) { toast("This phone is outside the site area, so the punch can't be saved."); return; }
-  let why = null; if (fenceAsks(fz, mode)) { why = ($("#kc-why")?.value || "").trim(); if (!why) { toast("Give the reason for punching outside the site area."); $("#kc-why")?.focus(); return; } }
+  let why = null; if (fenceAsks(fz, mode)) { why = ($("#kc-why")?.value || "").trim(); if (!why) { toast(fz.state === "nogps" ? "Give the reason there's no location." : "Give the reason for punching outside the site area."); $("#kc-why")?.focus(); return; } }
   K.busy = true; render();
   try {
     let photo = null;
@@ -10093,11 +10095,11 @@ VIEWS.geofence = () => {
   const stChip = (p) => p.rev === "OK" ? '<span class="chip c-ok">Approved</span>' : p.rev === "REJ" ? '<span class="chip c-bad">Rejected</span>' : p.needsOk ? '<span class="chip c-warn">Waiting</span>' : '<span class="chip c-gray">Not reviewed</span>';
   const ed = S.canEdit;
   return head("Punches made outside a site area or without a location", "Geofence review", `<button class="btn btn-ghost" style="background:#fff" data-go="clockin">${icon("phone")}Phone clock-in</button>`) + `
-    <section class="stats">${dxTile("Inside the area", fenced ? `${Math.round((n("in") / fenced) * 100)}%` : "—", `${n("in")} of ${fenced} punches with an area`, "t-ok")}${dxTile("Outside the area", n("out"), "in this date range", n("out") ? "t-bad" : "t-muted")}${dxTile("No location", n("nogps"), "phone didn't share it", n("nogps") ? "t-warn" : "t-muted")}${dxTile("Waiting for review", waiting.length, fenceMode() === "APPROVE" ? "not on the time sheet yet" : "flagged punches", waiting.length ? "t-warn" : "t-muted")}</section>
+    <section class="stats">${dxTile("Inside the area", fenced ? `${Math.round((n("in") / fenced) * 100)}%` : "—", `${n("in")} of ${fenced} punches with an area`, "t-ok")}${dxTile("Outside the area", n("out"), "in this date range", n("out") ? "t-bad" : "t-muted")}${dxTile("No location", n("nogps"), "phone didn't share it", n("nogps") ? "t-warn" : "t-muted")}${dxTile("Waiting for review", waiting.length, ["APPROVE", "MIXED"].includes(fenceMode()) ? "not on the time sheet yet" : "flagged punches", waiting.length ? "t-warn" : "t-muted")}</section>
     <section class="card"><div class="card-head"><h2>Flagged punches</h2><span style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
       <label class="field" style="margin:0"><span class="lbl">From</span><input class="input" type="date" id="gf-from" value="${from}" max="${to}"></label><label class="field" style="margin:0"><span class="lbl">To</span><input class="input" type="date" id="gf-to" value="${to}" max="${todayISO()}"></label></span></div>
       <div class="tabs" role="tablist" style="margin-bottom:12px">${[["WAIT", `Waiting (${waiting.length})`], ["OUT", "Outside"], ["GPS", "No location"], ["ALL", "All flagged"]].map(([k, l]) => `<button class="tab" role="tab" aria-selected="${F.st === k}" data-gf-st="${k}">${l}</button>`).join("")}</div>
-      <p class="t-muted" style="margin:0 0 10px;font-size:13px">Rule now: ${esc(FENCE_MODES.find(([k]) => k === fenceMode())[1].split(":")[0])}. Rejected punches are left off the time sheet${fenceMode() === "APPROVE" ? ", and punches waiting for approval stay off until approved" : ""}. <button class="link" data-clock-tab="sites">Change the rule</button></p>
+      <p class="t-muted" style="margin:0 0 10px;font-size:13px">Rule now: ${esc(FENCE_MODES.find(([k]) => k === fenceMode())[1].split(":")[0])}. Rejected punches are left off the time sheet${["APPROVE", "MIXED"].includes(fenceMode()) ? ", and punches waiting for approval stay off until approved" : ""}. <button class="link" data-clock-tab="sites">Change the rule</button></p>
       ${S.clockLoading.size ? '<p class="t-muted" style="margin:0 0 10px;font-size:14px">Loading punches…</p>' : ""}
       <div class="table-wrap"><table class="gf-table"><thead><tr><th>Photo</th><th>Employee</th><th>When</th><th>Where</th><th>Reason</th><th>Status</th>${ed ? "<th></th>" : ""}</tr></thead><tbody>
       ${list.map(({ p, f }) => { const e = S.emps.get(p.empId); const key = `${p.dev}|${p.d}|${p.id}`;
@@ -13576,7 +13578,7 @@ async function cfUnmark(e) { if (!cfCanAct()) return; await saveEmp({ ...e, conf
 function cfCsv(kind) {
   const id = S.periodId || curPeriod(); const p = PAY.period(id); const list = cfEmps();
   if (kind === "register") { const run = cfRun(id); return offer(`confidential-payroll-${id}.csv`, toCSV([["Employee No", "Name", "Pay type", "Rate", "Days", "Gross", "SSS", "PhilHealth", "Pag-IBIG", "Tax", "Loans & other", "Net pay", "Bank", "Account No", "Status"],
-    ...list.filter((e) => run.lines?.[e.id]).map((e) => { const l = run.lines[e.id]; return [e.no, fullName(e), e.payType === "DAILY" ? "Daily" : "Monthly", e.basicPay || 0, l.days, l.gross, l.sss, l.ph, l.hd, l.tax, PAY.r2((l.ded || 0) + (l.loanTot || 0)), l.net, e.bank || "", e.bankAcct || "", run.final ? "Final" : "Draft"]; })])); }
+    ...list.filter((e) => run.lines?.[e.id]).map((e) => { const l = run.lines[e.id]; return [e.no, fullName(e), ptLabel(e.payType), e.basicPay || 0, l.days, l.gross, l.sss, l.ph, l.hd, l.tax, PAY.r2((l.ded || 0) + (l.loanTot || 0)), l.net, e.bank || "", e.bankAcct || "", run.final ? "Final" : "Draft"]; })])); }
   const month = p.start.slice(0, 7); const rows = [];
   for (const e of list) { const o = [0, 0, 0, 0, 0, 0, 0, 0, 0]; for (const x of [`${month}-1`, `${month}-2`]) { const l = cfRun(x).lines?.[e.id]; if (l) ["gross", "sss", "sssEr", "ec", "ph", "phEr", "hd", "hdEr", "tax"].forEach((k, i) => { o[i] = PAY.r2(o[i] + (Number(l[k]) || 0)); }); } if (o.some(Boolean)) rows.push([e.no, fullName(e), e.tin || "", e.sss || "", e.philhealth || "", e.pagibig || "", ...o]); }
   return offer(`confidential-remittances-${month}.csv`, toCSV([["Employee No", "Name", "TIN", "SSS No", "PhilHealth No", "Pag-IBIG No", "Gross", "SSS (employee)", "SSS (employer)", "EC", "PhilHealth (employee)", "PhilHealth (employer)", "Pag-IBIG (employee)", "Pag-IBIG (employer)", "Tax withheld"], ...rows]));
@@ -14143,7 +14145,7 @@ VIEWS.employeeForm = () => {
     if (k === M2K.empStatus) return Sel("status", label, Object.entries(STATUS).map(([s, w]) => [s, w[0]]), null, true);
     if (e) { const ln = m2Link(e, k); if (ln) return m2LinkedField(`ef-m2-${k}`, label, ln); }
     return extra(x); };
-  const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
+  const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
     ${Sel("shiftId", "SHIFT", SET().shifts.map((s) => [s.id, `${s.name} (${s.start} to ${s.end})`]), null)}</div>`;
   const section = (sec) => { const f = M2.filter((x) => x[3] === sec); const body = `<div class="form-grid">${f.map(field).join("")}</div>`; const isPay = sec === "Payroll and system setup";
     const filled = e ? m2Filled(e, m, sec) : null;
@@ -15856,6 +15858,72 @@ function myLive() {
   Object.defineProperty(S, "meSum", { configurable: true, enumerable: true, get: () => myLive()?.sum ?? MY.stSum, set: (v) => { MY.stSum = v; } });
   MY.stP = had.P; MY.stSum = had.sum; }
 { const b = epSub; epSub = () => { const first = !S.epSub; b(); if (first && S.epSub) myLoad(); }; }
+
+/* ---------- Shift picker (Glenn 2026-10-17): Day shift 08:30 to 17:30, and shift times typed in by hand ----------
+   Every employee shift list offers the standard shifts even where HR saved its own list before they existed, plus
+   "Other times". A standard shift that isn't in the saved list, or typed times, are added to the company's shifts
+   (Time settings) when the form is saved, so schedules, lates and overtime read them like any other shift. */
+const SH_STD = [{ id: "day830", name: "Day shift", start: "08:30", end: "17:30" }];
+const SH_OTHER = "__other";
+const shLabel = (s) => `${s.name} (${s.start} to ${s.end})`;
+const shSame = (a, b) => a.start === b.start && a.end === b.end;
+function shDecorate(root) {
+  for (const sel of root.querySelectorAll('select[name="shiftId"]:not([data-shx])')) {
+    sel.dataset.shx = "1"; const have = SET().shifts;
+    for (const s of SH_STD) if (!have.some((h) => h.id === s.id || shSame(h, s))) sel.add(new Option(shLabel(s), s.id));
+    sel.add(new Option("Other times (type them)…", SH_OTHER));
+  }
+}
+function shTimes(sel, on) {
+  const box = sel.closest(".field"); let t = box?.nextElementSibling?.classList.contains("shx-times") ? box.nextElementSibling : null;
+  if (!on) { t?.remove(); return; } if (t || !box) return;
+  box.insertAdjacentHTML("afterend", `<div class="field shx-times"><label for="shx-start">Shift times <span class="req">*</span></label><div style="display:flex;gap:8px;align-items:center"><input class="input" type="time" id="shx-start" required aria-label="Shift start"><span>to</span><input class="input" type="time" id="shx-end" required aria-label="Shift end"></div></div>`);
+  document.getElementById("shx-start")?.focus();
+}
+{ const b = render; render = (...a) => { const r = b(...a); try { shDecorate(document); } catch {} return r; }; }
+document.addEventListener("change", (ev) => { const sel = ev.target; if (sel?.name === "shiftId" && sel.dataset.shx) shTimes(sel, sel.value === SH_OTHER); });
+window.addEventListener("submit", async (ev) => {
+  const f = ev.target; const sel = f.querySelector?.('select[name="shiftId"][data-shx]'); if (!sel) return;
+  const have = SET().shifts; let want = null;
+  if (sel.value === SH_OTHER) { const start = f.querySelector("#shx-start")?.value, end = f.querySelector("#shx-end")?.value;
+    if (!start || !end) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Type the shift's start and end times."); return; }
+    if (start === end) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("The shift can't start and end at the same time."); return; }
+    want = have.find((h) => shSame(h, { start, end })) || { id: uid(), name: "Shift", start, end };
+  } else { const std = SH_STD.find((s) => s.id === sel.value); if (std && !have.some((h) => h.id === std.id)) want = have.find((h) => shSame(h, std)) || std; }
+  if (!want) return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if (!have.some((h) => h.id === want.id)) {
+    if (!S.canEdit) { toast("Only HR can add a shift."); return; }
+    try { const next = { ...SET(), shifts: [...have, want] }; await S.db.doc("org/settings").set(JSON.parse(JSON.stringify(next))); S.settings = next; S.ver++; logActivity(`Added shift ${shLabel(want)}`); }
+    catch { toast("Couldn't add the shift. Check your connection and try again."); return; }
+  }
+  if (![...sel.options].some((o) => o.value === want.id)) sel.add(new Option(shLabel(want), want.id));
+  sel.value = want.id; shTimes(sel, false); f.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); // the form's own save runs with the saved shift
+}, true);
+
+/* Pay type (Glenn 2026-10-17): Semi-monthly is monthly-rated (Basic pay is the monthly rate) and paid half each cutoff,
+   so pay, 13th month and leave conversion treat it like Monthly; only the label differs. */
+function ptLabel(t) { return t === "DAILY" ? "Daily" : t === "SEMI" ? "Semi-monthly" : "Monthly"; }
+
+/* 201 file photo (Glenn 2026-10-17): drag a picture onto the photo card instead of browsing for it. The dropped file goes
+   into the Photo field, so the preview and the save work exactly as if it had been picked. */
+const PH_OK = ["image/jpeg", "image/png", "image/webp"];
+function phDecorate() {
+  const inp = document.getElementById("ef-photo"); const card = inp?.closest("section"); if (!card || card.dataset.drop) return;
+  card.dataset.drop = "photo"; card.classList.add("ph-drop");
+  inp.closest(".field")?.insertAdjacentHTML("beforeend", '<span class="t-muted" style="font-size:13px">or drag a photo onto this box</span>');
+}
+{ const b = render; render = (...a) => { const r = b(...a); try { phDecorate(); } catch {} return r; }; }
+const phZone = (ev) => ev.target.closest?.('[data-drop="photo"]');
+for (const type of ["dragenter", "dragover"]) document.addEventListener(type, (ev) => { const z = phZone(ev); if (!z || !hasFiles(ev)) return; ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; z.classList.add("drag"); });
+document.addEventListener("dragleave", (ev) => { const z = phZone(ev); if (z && !z.contains(ev.relatedTarget)) z.classList.remove("drag"); });
+document.addEventListener("drop", (ev) => {
+  const z = phZone(ev); if (!z) return; ev.preventDefault(); ev.stopImmediatePropagation(); z.classList.remove("drag");
+  const f = [...(ev.dataTransfer?.files || [])].find((x) => PH_OK.includes(x.type)); const inp = document.getElementById("ef-photo");
+  if (!f) { toast("Drop a JPG, PNG or WebP picture."); return; } if (!inp) return;
+  const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event("change", { bubbles: true })); S.dirty = true;
+}, true);
+{ const st = document.createElement("style"); st.textContent = ".ph-drop{transition:box-shadow .15s,background .15s}.ph-drop.drag{box-shadow:0 0 0 2px var(--gold) inset;background:var(--blue-soft)}"; document.head.appendChild(st); }
 
 /* ---------- Speed (audit 2026-10-17) ----------
    Punches by person, and the leave and holiday context, are worked out once per change instead of once per employee:

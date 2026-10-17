@@ -304,7 +304,7 @@ VIEWS.employeeForm = () => {
     if (k === M2K.empStatus) return Sel("status", label, Object.entries(STATUS).map(([s, w]) => [s, w[0]]), null, true);
     if (e) { const ln = m2Link(e, k); if (ln) return m2LinkedField(`ef-m2-${k}`, label, ln); }
     return extra(x); };
-  const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
+  const pay = `<div class="form-grid" style="margin-bottom:14px">${Sel("payType", "PAY TYPE", [["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]], null, true)}${F("basicPay", "BASIC PAY (PHP a month, or a day if daily)", "number", false, "0.00")}
     ${Sel("shiftId", "SHIFT", SET().shifts.map((s) => [s.id, `${s.name} (${s.start} to ${s.end})`]), null)}</div>`;
   const section = (sec) => { const f = M2.filter((x) => x[3] === sec); const body = `<div class="form-grid">${f.map(field).join("")}</div>`; const isPay = sec === "Payroll and system setup";
     const filled = e ? m2Filled(e, m, sec) : null;

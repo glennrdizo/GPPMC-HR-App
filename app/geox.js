@@ -1,6 +1,6 @@
 /* ---------- Geofence: rules (record, needs HR approval, or block), live area check on the phone and kiosk, and HR's review of punches made outside a site area ---------- */
 Object.assign(S, { geoAll: false, geoF: { from: null, to: null, st: "WAIT" } });
-const FENCE_MODES = [["RECORD", "Record only: allow the punch and flag it for HR"], ["APPROVE", "Needs HR approval: the employee gives a reason, and the punch counts once HR approves"], ["BLOCK", "Block: no time in or out outside the site area"]];
+const FENCE_MODES = [["RECORD", "Record only: allow the punch and flag it for HR"], ["APPROVE", "Needs HR approval: the employee gives a reason, and the punch counts once HR approves"], ["BLOCK", "Block: no time in or out outside the site area"], ["MIXED", "Block outside, approve without location: no time in or out outside the site area, and a punch with no location counts once HR approves"]];
 const fenceMode = () => SET().fenceMode || "RECORD";
 {
   const tk = NAV.find(([g]) => g === "Timekeeping");
@@ -48,16 +48,17 @@ function fenceRadar(g, f) {
 }
 function fencePanel(fz, mode, g, forKiosk) {
   const cls = fz.state === "in" ? "in" : fz.state === "out" || (fz.state === "nogps" && mode !== "RECORD") ? "out" : "";
-  const blocked = mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps"); const ask = mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps");
+  const blocked = fz.state !== "wait" && fenceBlocks(fz, mode); const ask = fenceAsks(fz, mode);
   const who = forKiosk ? "This worker" : "You";
   const note = fz.state === "in" ? (g?.acc ? `GPS accuracy ±${g.acc} m.` : "") : blocked ? (fz.state === "nogps" ? "Turn on location for this page, then refresh. Time in and out only work inside the site area." : `Time in and out only work inside the site area. Move closer, or ${forKiosk ? "check the worker's assignment" : "use Ask HR if you're on official business"}.`)
     : ask ? `${who} can still punch, but HR has to approve it before it counts.` : fz.state === "out" ? "The punch is saved and flagged for HR." : fz.state === "nogps" ? "The punch is saved without a location and HR checks it." : "";
   return `<div class="gf-panel ${cls}" data-fence="${fz.state}">${fenceRadar(g, fz.f)}<div class="gf-text"><b>${esc(fz.text)}</b>${note ? `<span>${esc(note)}</span>` : ""}
     <button type="button" class="link" data-geo-refresh="${forKiosk ? "kiosk" : "self"}">Refresh location</button></div></div>
-    ${ask ? `<div class="field"><label for="${forKiosk ? "kc-why" : "sf-why"}">Reason for punching outside the area <span class="req">*</span></label><input class="input" id="${forKiosk ? "kc-why" : "sf-why"}" maxlength="200" placeholder="e.g. Site meeting at the client's office" autocomplete="off"></div>` : ""}`;
+    ${ask ? `<div class="field"><label for="${forKiosk ? "kc-why" : "sf-why"}">${fz.state === "nogps" ? "Reason there's no location" : "Reason for punching outside the area"} <span class="req">*</span></label><input class="input" id="${forKiosk ? "kc-why" : "sf-why"}" maxlength="200" placeholder="e.g. Site meeting at the client's office" autocomplete="off"></div>` : ""}`;
 }
-const fenceBlocks = (fz, mode) => (mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps")) || (mode !== "RECORD" && fz.state === "wait");
-const fenceAsks = (fz, mode) => mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps");
+// MIXED (Glenn 2026-10-17): outside the area is blocked; no location is allowed with a reason and waits for HR's approval.
+const fenceBlocks = (fz, mode) => ((mode === "BLOCK" && (fz.state === "out" || fz.state === "nogps")) || (mode === "MIXED" && fz.state === "out")) || (mode !== "RECORD" && fz.state === "wait");
+const fenceAsks = (fz, mode) => (mode === "APPROVE" && (fz.state === "out" || fz.state === "nogps")) || (mode === "MIXED" && fz.state === "nogps");
 const GRID = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
 
 /* ---------- employee's own phone ---------- */
@@ -72,7 +73,7 @@ function subMeSum() { if (!S.meSumSub && S.self?.uid && S.db) { S.meSumSub = tru
 selfPunch = async function (type) {
   const M = S.self; if (!M.photo) return; const s = S.meSum; const mode = s?.fenceMode || "RECORD"; const fz = phoneFence(M.geo, s);
   if (fenceBlocks(fz, mode)) { toast(fz.state === "nogps" ? "Turn on location first. Time in and out only work inside the site area." : "You're outside the site area, so this punch can't be saved."); return; }
-  let why = null; if (fenceAsks(fz, mode)) { why = ($("#sf-why")?.value || "").trim(); if (!why) { toast("Give the reason for punching outside the site area."); $("#sf-why")?.focus(); return; } }
+  let why = null; if (fenceAsks(fz, mode)) { why = ($("#sf-why")?.value || "").trim(); if (!why) { toast(fz.state === "nogps" ? "Give the reason there's no location." : "Give the reason for punching outside the site area."); $("#sf-why")?.focus(); return; } }
   M.busy = true; render();
   try {
     const c = await shrinkCanvas(M.photo, 160); const g = M.geo || {};
@@ -95,7 +96,7 @@ selfPunch = async function (type) {
 kioskPunch = async function (type) {
   const K = S.kiosk; const e = S.emps.get(K.emp); if (!e || !K.photo) return; const g = K.geo || {}; const mode = fenceMode(); const fz = fence({ ...g, lat: g.lat ?? null, site: K.site });
   if (fenceBlocks(fz, mode)) { toast("This phone is outside the site area, so the punch can't be saved."); return; }
-  let why = null; if (fenceAsks(fz, mode)) { why = ($("#kc-why")?.value || "").trim(); if (!why) { toast("Give the reason for punching outside the site area."); $("#kc-why")?.focus(); return; } }
+  let why = null; if (fenceAsks(fz, mode)) { why = ($("#kc-why")?.value || "").trim(); if (!why) { toast(fz.state === "nogps" ? "Give the reason there's no location." : "Give the reason for punching outside the site area."); $("#kc-why")?.focus(); return; } }
   K.busy = true; render();
   try {
     let photo = null;
@@ -132,11 +133,11 @@ VIEWS.geofence = () => {
   const stChip = (p) => p.rev === "OK" ? '<span class="chip c-ok">Approved</span>' : p.rev === "REJ" ? '<span class="chip c-bad">Rejected</span>' : p.needsOk ? '<span class="chip c-warn">Waiting</span>' : '<span class="chip c-gray">Not reviewed</span>';
   const ed = S.canEdit;
   return head("Punches made outside a site area or without a location", "Geofence review", `<button class="btn btn-ghost" style="background:#fff" data-go="clockin">${icon("phone")}Phone clock-in</button>`) + `
-    <section class="stats">${dxTile("Inside the area", fenced ? `${Math.round((n("in") / fenced) * 100)}%` : "—", `${n("in")} of ${fenced} punches with an area`, "t-ok")}${dxTile("Outside the area", n("out"), "in this date range", n("out") ? "t-bad" : "t-muted")}${dxTile("No location", n("nogps"), "phone didn't share it", n("nogps") ? "t-warn" : "t-muted")}${dxTile("Waiting for review", waiting.length, fenceMode() === "APPROVE" ? "not on the time sheet yet" : "flagged punches", waiting.length ? "t-warn" : "t-muted")}</section>
+    <section class="stats">${dxTile("Inside the area", fenced ? `${Math.round((n("in") / fenced) * 100)}%` : "—", `${n("in")} of ${fenced} punches with an area`, "t-ok")}${dxTile("Outside the area", n("out"), "in this date range", n("out") ? "t-bad" : "t-muted")}${dxTile("No location", n("nogps"), "phone didn't share it", n("nogps") ? "t-warn" : "t-muted")}${dxTile("Waiting for review", waiting.length, ["APPROVE", "MIXED"].includes(fenceMode()) ? "not on the time sheet yet" : "flagged punches", waiting.length ? "t-warn" : "t-muted")}</section>
     <section class="card"><div class="card-head"><h2>Flagged punches</h2><span style="display:flex;gap:10px;align-items:end;flex-wrap:wrap">
       <label class="field" style="margin:0"><span class="lbl">From</span><input class="input" type="date" id="gf-from" value="${from}" max="${to}"></label><label class="field" style="margin:0"><span class="lbl">To</span><input class="input" type="date" id="gf-to" value="${to}" max="${todayISO()}"></label></span></div>
       <div class="tabs" role="tablist" style="margin-bottom:12px">${[["WAIT", `Waiting (${waiting.length})`], ["OUT", "Outside"], ["GPS", "No location"], ["ALL", "All flagged"]].map(([k, l]) => `<button class="tab" role="tab" aria-selected="${F.st === k}" data-gf-st="${k}">${l}</button>`).join("")}</div>
-      <p class="t-muted" style="margin:0 0 10px;font-size:13px">Rule now: ${esc(FENCE_MODES.find(([k]) => k === fenceMode())[1].split(":")[0])}. Rejected punches are left off the time sheet${fenceMode() === "APPROVE" ? ", and punches waiting for approval stay off until approved" : ""}. <button class="link" data-clock-tab="sites">Change the rule</button></p>
+      <p class="t-muted" style="margin:0 0 10px;font-size:13px">Rule now: ${esc(FENCE_MODES.find(([k]) => k === fenceMode())[1].split(":")[0])}. Rejected punches are left off the time sheet${["APPROVE", "MIXED"].includes(fenceMode()) ? ", and punches waiting for approval stay off until approved" : ""}. <button class="link" data-clock-tab="sites">Change the rule</button></p>
       ${S.clockLoading.size ? '<p class="t-muted" style="margin:0 0 10px;font-size:14px">Loading punches…</p>' : ""}
       <div class="table-wrap"><table class="gf-table"><thead><tr><th>Photo</th><th>Employee</th><th>When</th><th>Where</th><th>Reason</th><th>Status</th>${ed ? "<th></th>" : ""}</tr></thead><tbody>
       ${list.map(({ p, f }) => { const e = S.emps.get(p.empId); const key = `${p.dev}|${p.d}|${p.id}`;
