@@ -30,6 +30,7 @@ const PAY = (() => {
     ],
     shifts: [
       { id: "day", name: "Day shift", start: "08:00", end: "17:00" },
+      { id: "day830", name: "Day shift", start: "08:30", end: "17:30" },
       { id: "night", name: "Night shift", start: "22:00", end: "07:00" },
     ],
     /* Recurring allowances. De minimis items are tax-free up to the cap (RR 2-98 as amended by RR 4-2025); the rest is taxable. */

@@ -208,7 +208,7 @@ VIEWS.mprForm = () => {
       <div class="field"><label for="mf-type">Type of request</label><select class="input" id="mf-type" name="type">${opts(MPR_TYPES.map((x) => [x, x]), v.type)}</select></div>
       ${F("replaces", "Replacing (name)", "text", false, 'placeholder="Only for a replacement"')}
       <div class="field"><label for="mf-empType">Employment status</label><select class="input" id="mf-empType" name="empType">${opts(Object.entries(STATUS).map(([k, x]) => [k, x[0]]), v.empType)}</select></div>
-      <div class="field"><label for="mf-payType">Pay basis</label><select class="input" id="mf-payType" name="payType">${opts([["MONTHLY", "Monthly"], ["DAILY", "Daily"]], v.payType)}</select></div>
+      <div class="field"><label for="mf-payType">Pay basis</label><select class="input" id="mf-payType" name="payType">${opts([["MONTHLY", "Monthly"], ["SEMI", "Semi-monthly"], ["DAILY", "Daily"]], v.payType)}</select></div>
       ${F("rate", "Budgeted pay (PHP)", "number", false, 'min="0" step="0.01"')}
     </div>
     <div class="field"><label for="mf-reason">Reason for the request <span class="req">*</span></label><textarea class="input" id="mf-reason" name="reason" rows="3" placeholder="Why these people are needed now">${esc(v.reason || "")}</textarea></div>

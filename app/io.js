@@ -151,7 +151,7 @@ const DS = {
   employees: { label: "Employees", group: "People", pages: ["employees", "employee", "import"],
     cols: ["Employee No", "First Name", "Middle Name", "Last Name", "Suffix", "Title", "Position", "Department", "Status", "Hire Date", "Birth Date", "Sex", "Civil Status", "Mobile", "Email", "Address", "TIN", "SSS", "PhilHealth", "Pag-IBIG", "Pay Type", "Basic Pay", "Project Code"],
     note: "Adds new employees. Rows whose Employee No already exists are skipped, so change existing 201 files on the employee's page.",
-    rows: () => [...S.emps.values()].filter((e) => !e.separated).sort((a, b) => String(a.no).localeCompare(String(b.no))).map((e) => [e.no, e.first, e.middle, e.last, e.suffix, e.title, pos(e.posId)?.title, dept(e.deptId)?.name, STATUS[e.status]?.[0], e.hire, e.birth, e.gender === "F" ? "Female" : e.gender === "M" ? "Male" : "", e.civil, e.mobile, e.email, e.address, e.tin, e.sss, e.philhealth, e.pagibig, e.payType === "DAILY" ? "Daily" : "Monthly", e.basicPay, S.projects.get(e.projectId)?.code]) },
+    rows: () => [...S.emps.values()].filter((e) => !e.separated).sort((a, b) => String(a.no).localeCompare(String(b.no))).map((e) => [e.no, e.first, e.middle, e.last, e.suffix, e.title, pos(e.posId)?.title, dept(e.deptId)?.name, STATUS[e.status]?.[0], e.hire, e.birth, e.gender === "F" ? "Female" : e.gender === "M" ? "Male" : "", e.civil, e.mobile, e.email, e.address, e.tin, e.sss, e.philhealth, e.pagibig, ptLabel(e.payType), e.basicPay, S.projects.get(e.projectId)?.code]) },
   projects: { label: "Projects", group: "People", pages: ["projects", "project", "projcodes"], key: "Project Code",
     cols: ["Project Code", "Project Name", "Client", "Location", "Region", "Status", "Start Date", "End Date", "Description"],
     note: "Rows with an existing project code update that project; new codes are added.",
@@ -229,13 +229,13 @@ const DS = {
     } },
   jobs: { label: "Jobs", group: "Talent", pages: ["hiring", "hireho", "hireprj", "job"], col: "jobs",
     cols: ["Job Title", "Position", "Department Code", "Project Code", "People Needed", "Employment Type", "Pay Type", "Rate", "Status", "Date Opened", "Description", "Record ID"],
-    rows: () => listOf(S.jobs).map((j) => [j.title, pos(j.posId)?.title, dept(j.deptId)?.code, S.projects.get(j.projectId)?.code, j.slots, lbl(STATUS, j.empType), j.payType === "DAILY" ? "Daily" : "Monthly", j.rate, lbl(JSTATUS, j.status), j.opened, j.desc, j.id]),
+    rows: () => listOf(S.jobs).map((j) => [j.title, pos(j.posId)?.title, dept(j.deptId)?.code, S.projects.get(j.projectId)?.code, j.slots, lbl(STATUS, j.empType), ptLabel(j.payType), j.rate, lbl(JSTATUS, j.status), j.opened, j.desc, j.id]),
     read(g, v, _s, prev) {
       const title = g("Job Title") || prev?.title; if (!title) return "needs a Job Title.";
       const p = g("Position") ? (S.org.positions || []).find((x) => x.title.toLowerCase() === g("Position").toLowerCase()) : null;
       const pr = projByCode(g("Project Code")); if (g("Project Code") && !pr) return `project ${g("Project Code")} isn't on file.`;
       return { ...(prev || { id: uid(), mgrId: null }), title, posId: p?.id || prev?.posId || null, deptId: deptByCode(g("Department Code"))?.id || prev?.deptId || null, projectId: pr?.id || (g("Project Code") === "" ? prev?.projectId || null : null),
-        slots: Math.max(1, Math.floor(numv(g("People Needed")) || prev?.slots || 1)), empType: pickK(mapList(STATUS), g("Employment Type")) || prev?.empType || "PROBATIONARY", payType: /^d/i.test(g("Pay Type")) ? "DAILY" : g("Pay Type") ? "MONTHLY" : prev?.payType || "MONTHLY",
+        slots: Math.max(1, Math.floor(numv(g("People Needed")) || prev?.slots || 1)), empType: pickK(mapList(STATUS), g("Employment Type")) || prev?.empType || "PROBATIONARY", payType: /^d/i.test(g("Pay Type")) ? "DAILY" : /^semi/i.test(g("Pay Type")) ? "SEMI" : g("Pay Type") ? "MONTHLY" : prev?.payType || "MONTHLY",
         rate: numv(g("Rate")) || prev?.rate || 0, status: pickK(mapList(JSTATUS), g("Status")) || prev?.status || "OPEN", opened: dateIn(g("Date Opened")) || prev?.opened || todayISO(), desc: v("Description", prev?.desc) };
     } },
   applicants: { label: "Applicants", group: "Talent", pages: ["applicant"], col: "applicants",

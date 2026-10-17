@@ -26,7 +26,7 @@ function audVal(f, v) {
   if (v == null || v === "") return "";
   if (f === "posId") return pos(v)?.title || v; if (f === "deptId") return dept(v)?.name || v; if (f === "projectId") return S.projects.get(v)?.name || v;
   if (f === "supervisorId") { const s = S.emps.get(v); return s ? fullName(s) : v; } if (f === "status") return STATUS[v]?.[0] || v;
-  if (f === "shiftId") return SET().shifts.find((s) => s.id === v)?.name || v; if (f === "payType") return v === "DAILY" ? "Daily" : "Monthly";
+  if (f === "shiftId") return SET().shifts.find((s) => s.id === v)?.name || v; if (f === "payType") return ptLabel(v);
   if (f === "basicPay") return peso.format(v); if (f === "allow") return Array.isArray(v) ? v.map((a) => `${a.name || a.code || ""} ${a.amt != null ? peso.format(a.amt) : ""}`.trim()).join(", ") : JSON.stringify(v);
   if (f === "separated") return v.date ? `${fmtDate(v.date)} · ${v.reason || ""}` : ""; if (/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return fmtDate(v);
   return typeof v === "object" ? JSON.stringify(v) : String(v);
