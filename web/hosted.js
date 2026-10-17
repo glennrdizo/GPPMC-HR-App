@@ -1,11 +1,18 @@
 /* ---------- website version (Supabase): sign-in by email replaces claude.ai sharing ---------- */
 // HR editor access in the database follows the Users list: giving someone a role lets them see records; Delete takes it away.
 { const b = saveAccess; saveAccess = async (patch, msg) => {
-    const before = { ...(S.access?.users || {}) }; await b(patch, msg); const after = S.access?.users || {};
+    const a0 = S.access || {}; const before = { ...(a0.users || {}) }; const seen0 = { ...(a0.seen || {}) }; const inv0 = { ...(a0.invites || {}) };
+    await b(patch, msg); const a1 = S.access || {}; const after = a1.users || {}; const seen1 = a1.seen || {}; const inv1 = a1.invites || {};
     // "No access" keeps someone off the records in the database too, not just off the menu.
-    const has = (u) => !!u?.role && u.role !== "none";
-    for (const id of Object.keys(after)) if (has(after[id]) !== has(before[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: has(after[id]) });
-    for (const id of Object.keys(before)) if (!after[id] && has(before[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: false });
+    const has = (u) => !!u?.role && u.role !== "none"; const off = new Set();
+    for (const id of Object.keys(after)) if (has(after[id]) !== has(before[id])) { if (has(after[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: true }); else off.add(id); }
+    // Deleting someone from the Users list (with or without a saved role) takes their record access away (Glenn 2026-10-17:
+    // a deleted person still saw everything as View only, since an account without a role gets the default role).
+    for (const id of new Set([...Object.keys(before), ...Object.keys(seen0)])) if (!after[id] && !seen1[id] && id !== S.myId) off.add(id);
+    // So does deleting an invitation that the person already took up by signing in.
+    const P = S.profiles || {};
+    for (const [k, v] of Object.entries(inv0)) if (!inv1[k] && v?.email) for (const [id, p] of Object.entries(P)) if (String(p?.email || "").toLowerCase() === String(v.email).toLowerCase() && !has(after[id]) && id !== S.myId) off.add(id);
+    for (const id of off) window.__sb?.rpc("hr_set_editor", { target: id, allow: false });
   }; }
 // Invitations are claimed by the email the person signed up with (or, as before, by name).
 claimInvite = async () => {
