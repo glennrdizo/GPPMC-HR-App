@@ -687,7 +687,7 @@ const pageDropOk = () => S.canEdit && S.assets && !S.io && S.viewAs !== "emp" &&
 const hasFiles = (ev) => [...(ev.dataTransfer?.types || [])].includes("Files");
 let pdDepth = 0;
 const pdShow = (on) => { let o = $("#page-drop"); if (on && !o) { o = document.createElement("div"); o.id = "page-drop"; o.className = "page-drop no-print"; o.innerHTML = `<div>${icon("clip", 34)}<b>Drop to attach to ${esc(pageLabel())}</b><span>PDF, images, video, Word, Excel, PowerPoint or ZIP</span></div>`; document.body.appendChild(o); } if (!on && o) o.remove(); };
-const otherZone = (t) => t.closest?.(".io-drop, #jp-photo-drop, input[type=file], [data-drop]");
+const otherZone = (t) => t.closest?.(".io-drop, #jp-photo-drop, input[type=file], [data-drop], .fz") || (typeof dzInput === "function" && dzInput(t));
 window.addEventListener("dragenter", (ev) => { if (!hasFiles(ev) || !pageDropOk() || otherZone(ev.target)) return; pdDepth++; pdShow(true); });
 window.addEventListener("dragleave", (ev) => { if (!hasFiles(ev)) return; pdDepth = Math.max(0, pdDepth - 1); if (!pdDepth) pdShow(false); });
 window.addEventListener("dragover", (ev) => { if (hasFiles(ev) && pageDropOk() && !otherZone(ev.target)) { ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; } });
