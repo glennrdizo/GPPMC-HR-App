@@ -66,3 +66,18 @@ update storage.buckets set allowed_mime_types = array['image/jpeg','image/png','
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation','application/zip','application/x-zip-compressed']
   where id = 'hr-files';
+
+-- Reliability audit RL3: one HR browser takes a phone record (fix, request, supervisor decision) in a single
+-- compare-and-set, so two open HR tabs can't both file it. Runs as the caller: RLS still decides who may write.
+create or replace function public.hr_take(p text, tab text) returns boolean
+language sql security invoker set search_path = public as $$
+  with u as (
+    update public.hr_docs set data = data || jsonb_build_object('claim', jsonb_build_object('by', left(tab, 80), 'at', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
+     where path = p and p like 'clockins/%' and public.hr_is_editor() and coalesce(data->>'done', 'false') <> 'true'
+       and (data->'claim' is null or data->'claim'->>'by' = left(tab, 80)
+            or coalesce((data->'claim'->>'at')::timestamptz, 'epoch') < now() - interval '60 seconds')
+    returning 1)
+  select exists (select 1 from u);
+$$;
+revoke execute on function public.hr_take(text, text) from anon, public;
+grant execute on function public.hr_take(text, text) to authenticated;

@@ -33,20 +33,22 @@ const rpc = (fn: string, args: Doc, auth = `Bearer ${SVC}`, key = SVC) => fetch(
   .then(async (r) => (r.ok ? r.json() : null)).catch(() => null);
 
 /* ---------- senders ---------- */
+// A provider that hangs must not stall the whole run: each call gives up after 10 s and the message is tried again later.
+const fetchT = (u: string, i: RequestInit) => fetch(u, { ...i, signal: AbortSignal.timeout(10_000) });
 const sender = () => (env("RESEND_API_KEY") ? "resend" : env("BREVO_API_KEY") ? "brevo" : null);
 async function sendEmail(to: string, subject: string, text: string): Promise<{ ok: boolean; via: string | null; err?: string }> {
   const via = sender(); const from = env("MAIL_FROM");
   if (!via || !from) return { ok: false, via, err: !via ? "No email sender set up" : "MAIL_FROM is not set" };
   let r: Response;
-  if (via === "resend") r = await fetch("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [to], subject, text, html: toHtml(text) }) });
-  else { const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/); r = await fetch("https://api.brevo.com/v3/smtp/email", { method: "POST", headers: { "api-key": env("BREVO_API_KEY"), "content-type": "application/json" },
+  if (via === "resend") r = await fetchT("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [to], subject, text, html: toHtml(text) }) });
+  else { const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/); r = await fetchT("https://api.brevo.com/v3/smtp/email", { method: "POST", headers: { "api-key": env("BREVO_API_KEY"), "content-type": "application/json" },
     body: JSON.stringify({ sender: m ? { name: m[1] || "HR", email: m[2] } : { email: from }, to: [{ email: to }], subject, textContent: text, htmlContent: toHtml(text) }) }); }
   return r.ok ? { ok: true, via } : { ok: false, via, err: `${r.status} ${(await r.text()).slice(0, 160)}` };
 }
 async function sendSms(num: string, message: string): Promise<{ ok: boolean; err?: string }> {
   const key = env("SEMAPHORE_API_KEY"); if (!key) return { ok: false, err: "No SMS account set up" };
   const f = new URLSearchParams({ apikey: key, number: num, message: message.slice(0, 300) }); if (env("SEMAPHORE_SENDER")) f.set("sendername", env("SEMAPHORE_SENDER"));
-  const r = await fetch("https://api.semaphore.co/api/v4/messages", { method: "POST", body: f });
+  const r = await fetchT("https://api.semaphore.co/api/v4/messages", { method: "POST", body: f });
   return r.ok ? { ok: true } : { ok: false, err: `${r.status} ${(await r.text()).slice(0, 160)}` };
 }
 
@@ -88,15 +90,17 @@ async function run(force = false) {
       status: !isEmail(n.to) ? "SKIPPED" : sender() && env("MAIL_FROM") ? "QUEUED" : "NO_SENDER", sms_status: mob ? (smsOn ? "QUEUED" : "NO_SENDER") : null }; })
     .filter((r) => r.to_email || r.mobile);
   for (let i = 0; i < rows.length; i += 200) await putOut(rows.slice(i, i + 200)); queued = rows.length;
-  if (events.length) await rest(`hr_events?id=lte.${events[events.length - 1].id}`, { method: "DELETE" }, { prefer: "return=minimal" });
+  // Delete exactly the events read: ids are not in commit order, so "up to the last id" could drop one committed later.
+  for (let i = 0; i < events.length; i += 100) await rest(`hr_events?id=in.(${events.slice(i, i + 100).map((e) => Number(e.id)).join(",")})`, { method: "DELETE" }, { prefer: "return=minimal" });
   // Send what is waiting, about two a second so the email service doesn't refuse them.
   let sent = 0, failed = 0;
   if (settings.on) {
     const due = ((await rpc("hr_outbox_claim", { n: 80 })) as Doc[]) || [];
     for (const m of due) { const upd: Doc = { updated_at: new Date().toISOString(), claim_at: null };
-      if (m.status === "QUEUED") { const r = await sendEmail(m.to_email, m.subject, m.body); upd.tries = (m.tries || 0) + 1; upd.via = r.via;
+      const safe = async <T>(f: () => Promise<T>, err: (e: unknown) => T) => { try { return await f(); } catch (e) { return err(e); } };
+      if (m.status === "QUEUED") { const r = await safe(() => sendEmail(m.to_email, m.subject, m.body), (e) => ({ ok: false, via: sender(), err: String(e).slice(0, 160) })); upd.tries = (m.tries || 0) + 1; upd.via = r.via;
         if (r.ok) { upd.status = "SENT"; upd.sent_at = new Date().toISOString(); upd.err = null; sent++; } else { upd.err = r.err; upd.status = upd.tries >= 3 || !r.via ? "FAILED" : "QUEUED"; failed++; } }
-      if (m.sms_status === "QUEUED") { const r = await sendSms(m.mobile, m.sms || m.subject); upd.sms_tries = (m.sms_tries || 0) + 1; upd.sms_status = r.ok ? "SENT" : upd.sms_tries >= 3 ? "FAILED" : "QUEUED"; if (!r.ok) upd.err = [upd.err, `SMS: ${r.err}`].filter(Boolean).join("; "); }
+      if (m.sms_status === "QUEUED") { const r = await safe(() => sendSms(m.mobile, m.sms || m.subject), (e) => ({ ok: false, err: String(e).slice(0, 160) })); upd.sms_tries = (m.sms_tries || 0) + 1; upd.sms_status = r.ok ? "SENT" : upd.sms_tries >= 3 ? "FAILED" : "QUEUED"; if (!r.ok) upd.err = [upd.err, `SMS: ${r.err}`].filter(Boolean).join("; "); }
       await rest(`hr_outbox?id=eq.${encodeURIComponent(m.id)}`, { method: "PATCH", body: JSON.stringify(upd) }, { prefer: "return=minimal" }); await sleep(550); }
   }
   // Keep 90 days of messages and run notes.

@@ -2128,11 +2128,15 @@ async function finalizePayroll(id) {
   if (!$("#final-ok")?.checked) { toast("Tick the box to confirm the time records are complete."); return; }
   const p = PAY.period(id); const { lines, totals } = PAY.run([...S.emps.values()], p, periodDoc(id).rows || {}, SET(), allLeaves(), payExt(id));
   const at = new Date().toISOString();
-  await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
-  if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
-  else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  // The period is marked FINAL last: if the connection drops partway it stays open, and finalizing again redoes every
+  // step (each one only sets this period's values, so repeating it is safe).
+  try {
+    await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
+    await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
+    if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
+    else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  } catch (err) { toast("Finalizing stopped partway. Nothing is final yet: press Finalize again to finish."); render(); return; }
   S.runs.set(id, { start: p.start, end: p.end, at, lines, totals }); S.periods.set(id, { ...periodDoc(id), start: p.start, end: p.end, status: "FINAL", finalAt: at, totals }); S.ver++;
-  await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
   logActivity(`Finalized payroll for ${p.label}: net ${peso.format(totals.net)}`); toast("Payroll finalized."); render();
 }
 async function reopenPayroll(id) {
@@ -2143,7 +2147,8 @@ async function reopenPayroll(id) {
 
 /* ---------- payslip ---------- */
 VIEWS.payslip = () => {
-  const { pid, emp } = S.view; const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid);
+  const { pid, emp } = S.view; if (!pid || !emp) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
+  const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid).catch(() => {});
   const run = payrun(pid); const l = run.lines[emp];
   if (!e || !l) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
   return `<div class="no-print"><button class="link" style="color:#fff" data-go="payroll">${icon("back", 16)} Payroll</button></div>` +
@@ -4233,7 +4238,13 @@ async function savePunch(dev, punch, devInfo) {
 }
 
 /* ---------- reading clock-ins (HR) ---------- */
-async function loadClock(from, to, force) {
+// A second caller for the same range waits for the read already running instead of getting half-loaded punches.
+const clockInflight = new Map();
+function loadClock(from, to, force) {
+  const key = `${from}:${to}`; if (clockInflight.has(key)) return clockInflight.get(key);
+  const p = loadClock1(from, to, force).finally(() => clockInflight.delete(key)); clockInflight.set(key, p); return p;
+}
+async function loadClock1(from, to, force) {
   const key = `${from}:${to}`; if (!S.db || S.clockLoading.has(key) || (!force && S.clockLoaded.has(key))) return;
   S.clockLoading.add(key);
   try {
@@ -15460,6 +15471,8 @@ const fxDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/fixes/${f
 // Every open HR app runs this; a short claim on the phone's record makes sure only one of them acts on it.
 const FX_TAB = uid();
 async function fxClaim(path) {
+  // On the website the database takes the claim in one step; if that isn't available yet, fall back to claim-and-recheck.
+  if (window.__sb) { const { data, error } = await window.__sb.rpc("hr_take", { p: path, tab: FX_TAB }); if (!error) return data === true; }
   const ref = S.db.doc(path); const cur = await ref.get(); const x = cur.exists ? cur.data() : null; if (!x || x.done) return false;
   if (x.claim && x.claim.by !== FX_TAB && Date.now() - Date.parse(x.claim.at) < 60000) return false;
   await ref.update({ claim: { by: FX_TAB, at: new Date().toISOString() } }); await new Promise((r) => setTimeout(r, 1500));

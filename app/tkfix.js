@@ -127,6 +127,8 @@ const fxDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/fixes/${f
 // Every open HR app runs this; a short claim on the phone's record makes sure only one of them acts on it.
 const FX_TAB = uid();
 async function fxClaim(path) {
+  // On the website the database takes the claim in one step; if that isn't available yet, fall back to claim-and-recheck.
+  if (window.__sb) { const { data, error } = await window.__sb.rpc("hr_take", { p: path, tab: FX_TAB }); if (!error) return data === true; }
   const ref = S.db.doc(path); const cur = await ref.get(); const x = cur.exists ? cur.data() : null; if (!x || x.done) return false;
   if (x.claim && x.claim.by !== FX_TAB && Date.now() - Date.parse(x.claim.at) < 60000) return false;
   await ref.update({ claim: { by: FX_TAB, at: new Date().toISOString() } }); await new Promise((r) => setTimeout(r, 1500));
