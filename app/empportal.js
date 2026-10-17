@@ -76,9 +76,11 @@ async function rqOne(f) {
     const t = leaveType(f.type); if (!t) return bad("Choose the leave type again.");
     if (!day(f.from) || !day(f.to) || f.to < f.from) return bad("Check the dates.");
     if (!reason) return bad("Give the reason.");
+    const clash = allLeaves().find((l) => l.empId === e.id && ["PENDING", "APPROVED"].includes(l.status) && l.from <= f.to && l.to >= f.from);
+    if (clash) return bad(`You already have leave on ${fmtDate(clash.from > f.from ? clash.from : f.from)}.`);
     const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) };
-    item.days = PAY.leaveDays(item, SET(), t) || (item.half ? 0.5 : 1); const month = f.from.slice(0, 7);
-    if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+    item.days = PAY.leaveDays(item, SET(), t); if (!item.days) return bad("Those dates are rest days or holidays."); const month = f.from.slice(0, 7);
+    await leaveMonthAdd(month, { [id]: item });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
     await rqDone(f, { done: true, req: `lv:${month}:${id}` }); logActivity(`${fullName(e)} filed ${t.name.toLowerCase()} from their account (${fmtDate(f.from)}${f.to !== f.from ? ` to ${fmtDate(f.to)}` : ""})`); return true; }
   if (f.kind === "adjust" || f.kind === "ot") {
@@ -92,6 +94,7 @@ async function rqOne(f) {
       await rqDone(f, { done: true, req: `ar:${id}` }); logActivity(`${fullName(e)} asked for an attendance change from their account (${fmtDate(f.d)})`); return true; }
     if (S.otReqs.has(id)) return rqDone(f, { done: true, req: `ot:${id}` }).then(() => true);
     const h = Math.round((Number(f.hours) || 0) * 2) / 2; if (!(h > 0 && h <= 16)) return bad("Enter the overtime hours again.");
+    if (listOf(S.otReqs).some((r) => r.empId === e.id && r.d === f.d && r.hours === h && r.status !== "REJECTED")) return bad("You already filed this overtime.");
     await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
     await rqDone(f, { done: true, req: `ot:${id}` }); logActivity(`${fullName(e)} filed ${h} h of overtime from their account (${fmtDate(f.d)})`); return true; }
   if (f.kind === "cert") {

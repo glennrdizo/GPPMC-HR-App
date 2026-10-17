@@ -102,8 +102,11 @@ VIEWS.attreqs = () => {
 };
 async function applyReq(r) {
   if (r.kind === "ADJUST") {
-    for (const [type, hhmm] of [["IN", r.in], ["OUT", r.out]]) if (hhmm) await savePunch("adjust", { t: new Date(atManila(r.d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: r.reason || null }, { name: "HR adjustments", kiosk: true, adjust: true });
-    if (r.out && r.in && r.out < r.in) { /* overnight: the out time belongs to the next day */ }
+    // Overnight: a time out earlier than the time in (or, with no time in, earlier than a night shift's start) is the
+    // next morning, so it pairs with that night's time in instead of landing before it.
+    const e = S.emps.get(r.empId); const sh = (e && shiftById(planCode(e, r.d))) || shiftOf(e) || { start: "08:00", end: "17:00" };
+    const night = sh.end < sh.start; const outDay = r.out && ((r.in && r.out < r.in) || (!r.in && night && r.out < sh.start)) ? addDays(r.d, 1) : r.d;
+    for (const [type, hhmm] of [["IN", r.in], ["OUT", r.out]]) if (hhmm) await savePunch("adjust", { t: new Date(atManila(type === "OUT" ? outDay : r.d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: r.reason || null }, { name: "HR adjustments", kiosk: true, adjust: true });
     S.clockLoaded.clear(); return;
   }
   if (r.kind === "SWAP") {

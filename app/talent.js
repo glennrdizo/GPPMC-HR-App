@@ -650,7 +650,7 @@ VIEWS.review = () => {
       <section class="card"><div class="card-head"><h2>Competencies</h2><span class="t-muted" style="font-size:13px">1 poor · 2 needs improvement · 3 satisfactory · 4 very satisfactory · 5 outstanding</span></div>
         <ul class="list" style="gap:0">${comps.map((c, i) => `<li class="score-row"><span style="font-weight:600;flex:1;min-width:160px">${esc(c)}</span>${seg("sc-" + i, r?.scores?.[c])}</li>`).join("")}</ul></section>
       <section class="card"><div class="card-head"><h2>Goals</h2><span class="t-muted" style="font-size:13px">Optional. Scored goals count toward the overall rating.</span></div>
-        <ul class="list" style="gap:0">${goals.map((g, i) => `<li class="score-row"><input class="input" style="flex:1;min-width:200px" id="g-t-${i}" value="${esc(g.t)}" placeholder="Goal ${i + 1}" ${dis}>${seg("g-s-" + i, g.s)}</li>`).join("")}</ul></section>
+        <ul class="list" style="gap:0">${goals.map((g, i) => `<li class="score-row"><input class="input" style="flex:1;min-width:200px" id="g-t-${i}" aria-label="Goal ${i + 1}" value="${esc(g.t)}" placeholder="Goal ${i + 1}" ${dis}>${seg("g-s-" + i, g.s)}</li>`).join("")}</ul></section>
       <section class="card"><div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label for="rv-str">Strengths</label><textarea class="input" id="rv-str" rows="3" ${dis}>${esc(r?.strengths || "")}</textarea></div>
         <div class="field"><label for="rv-imp">Areas to improve</label><textarea class="input" id="rv-imp" rows="3" ${dis}>${esc(r?.improve || "")}</textarea></div>

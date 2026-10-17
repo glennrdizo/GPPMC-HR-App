@@ -196,7 +196,7 @@ const DS = {
       const days = numv(g("Days")) || PAY.leaveDays(d, SET(), leaveType(type)); if (!days) return "those dates are rest days or holidays only.";
       const item = { ...d, days, filed: dateIn(g("Filed")) || todayISO(), decided: status === "PENDING" ? null : todayISO() }; seen.push(item); return item;
     },
-    async save(list) { const byM = {}; for (const x of list) (byM[x.from.slice(0, 7)] ||= {})[uid()] = x; for (const [m, items] of Object.entries(byM)) { if (S.leaveDocs.has(m)) await S.db.doc("leaves/" + m).update({ items }); else await S.db.doc("leaves/" + m).set({ month: m, items }); } } },
+    async save(list) { const byM = {}; for (const x of list) (byM[x.from.slice(0, 7)] ||= {})[uid()] = x; for (const [m, items] of Object.entries(byM)) await leaveMonthAdd(m, items); } },
   otreqs: { label: "Overtime requests", group: "Timekeeping", pages: ["ot", "otForm"], col: "otreqs",
     cols: ["Employee No", "Employee Name", "Date", "Hours", "Reason", "Status", "Record ID"],
     rows: () => listOf(S.otReqs || new Map()).sort((a, b) => (b.d || "").localeCompare(a.d || "")).map((r) => [empNo(r.empId), empNm(r.empId), r.d, r.hours, r.reason, lbl(OT_STATUS, r.status), r.id]),
