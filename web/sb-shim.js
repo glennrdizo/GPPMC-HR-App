@@ -118,7 +118,14 @@
   const extOf = (t) => ({ "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "application/pdf": "pdf", "image/svg+xml": "svg", "audio/webm": "webm", "video/webm": "webm", "audio/mp4": "m4a", "video/mp4": "mp4", "audio/ogg": "ogg" }[t] || "bin");
   const assets = {
     upload: async (blob, opts) => {
-      const type = (opts?.type || blob?.type || "application/octet-stream").replace(/;.*$/, "");
+      // Some phones send files with no type: it is worked out from the file name. The file store takes only known kinds.
+      const byExt = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", heic: "image/heic", heif: "image/heif", pdf: "application/pdf",
+        mp4: "video/mp4", mov: "video/quicktime", webm: "video/webm", mp3: "audio/mpeg", m4a: "audio/mp4", ogg: "audio/ogg", txt: "text/plain", csv: "text/csv", md: "text/markdown",
+        doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", xls: "application/vnd.ms-excel",
+        xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", ppt: "application/vnd.ms-powerpoint",
+        pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation", zip: "application/zip" };
+      const type = (opts?.type || blob?.type || byExt[String(blob?.name || "").split(".").pop().toLowerCase()] || "").replace(/;.*$/, "");
+      if (!type || type === "application/octet-stream") throw fail("unsupported", "This kind of file can't be attached. Use a photo, PDF, Word, Excel or PowerPoint file.");
       const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}.${extOf(type)}`;
       const { error } = await sb.storage.from(BUCKET).upload(id, blob, { contentType: type, upsert: false });
       if (error) throw fail(/size|large/i.test(error.message) ? "too_large" : "unavailable", error.message);

@@ -151,7 +151,7 @@ async function fxOne(f) {
   else if (f.mode === "leave" && iss.kind === "ABS") { const ex = allLeaves().find((l) => l.fixId === fixId); if (ex) req = `lv:${ex.month}:${ex.id}`;
     else { const t = leaveType(f.type) || SET().leaveTypes[0]; const item = { empId: e.id, type: t.code, from: d, to: d, half: false, reason, status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId };
       item.days = PAY.leaveDays(item, SET(), t) || 1; const id = `fx_${fxSafe(fixId)}`; const month = d.slice(0, 7);
-      if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+      await leaveMonthAdd(month, { [id]: item });
       const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++; req = `lv:${month}:${id}`; } }
   else { const tin = FX_HM.test(f.in || "") ? f.in : null, tout = FX_HM.test(f.out || "") ? f.out : null;
     if (!tin && !tout) { await fxDone(f, { done: true, note: "Enter the time in or out again." }); return true; }

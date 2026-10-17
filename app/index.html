@@ -1534,6 +1534,95 @@ async function clearSample() {
   } catch { btn.disabled = false; btn.textContent = "Delete sample data"; toast("Couldn't finish deleting. Try again."); }
 }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -2054,8 +2143,7 @@ async function submitLeave() {
   const id = uid(); const month = d.from.slice(0, 7);
   const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null, ...(files.length ? { files } : {}) };
   try {
-    if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } });
-    else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+    await leaveMonthAdd(month, { [id]: item });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
     logActivity(`Filed ${days} ${days === 1 ? "day" : "days"} of ${t.name.toLowerCase()} for ${fullName(e)}`);
     toast("Leave saved."); S.view.emp ? go("employee", { id: e.id }) : go("leave");
@@ -2065,7 +2153,9 @@ async function setLeaveStatus(month, id, status) {
   const doc = S.leaveDocs.get(month); const l = doc?.items?.[id]; if (!l) return;
   if (status === "APPROVED" && isFinal(PAY.periodOf(l.from))) { toast("Payroll for that period is final. Reopen it first."); return; }
   if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, yearOf(l.from)).find((x) => x.code === l.type);
-    if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; } }
+    if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; }
+    // two approved leaves on the same days would be deducted or paid twice
+    if (allLeaves().some((x) => x.id !== id && x.empId === l.empId && x.status === "APPROVED" && x.from <= l.to && x.to >= l.from)) { toast("Another approved leave already covers these dates."); return; } }
   await S.db.doc("leaves/" + month).update({ items: { [id]: { status, decided: todayISO() } } });
   S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status, decided: todayISO() } } }); S.ver++;
   const e = S.emps.get(l.empId); logActivity(`${LSTATUS[status][0]} ${leaveType(l.type)?.name.toLowerCase() || "leave"} for ${e ? fullName(e) : "an employee"}`);
@@ -2143,6 +2233,15 @@ async function reopenPayroll(id) {
   await S.db.doc("periods/" + id).update({ status: "OPEN" }); await S.db.doc("payruns/" + id).delete(); await undoLoanPayments(id); await undoFlexPaid(id);
   S.runs.delete(id); S.periods.set(id, { ...periodDoc(id), status: "OPEN" }); S.ver++;
   logActivity(`Reopened payroll for ${PAY.period(id).label}`); toast("Payroll reopened."); render();
+}
+
+/* Adds leave items to a month's record. HR's screen holds only the newest 24 months, so a month missing from it may still
+   exist: it is updated when it does and created only when it doesn't (creating it over an existing one wiped that
+   month's other leaves). */
+async function leaveMonthAdd(month, items) {
+  const ref = S.db.doc("leaves/" + month);
+  if (S.leaveDocs.has(month)) return ref.update({ items });
+  try { await ref.update({ items }); } catch (err) { if ((await ref.get().catch(() => null))?.exists) throw err; await ref.set({ month, items }); }
 }
 
 /* ---------- payslip ---------- */
@@ -3003,7 +3102,7 @@ VIEWS.review = () => {
       <section class="card"><div class="card-head"><h2>Competencies</h2><span class="t-muted" style="font-size:13px">1 poor · 2 needs improvement · 3 satisfactory · 4 very satisfactory · 5 outstanding</span></div>
         <ul class="list" style="gap:0">${comps.map((c, i) => `<li class="score-row"><span style="font-weight:600;flex:1;min-width:160px">${esc(c)}</span>${seg("sc-" + i, r?.scores?.[c])}</li>`).join("")}</ul></section>
       <section class="card"><div class="card-head"><h2>Goals</h2><span class="t-muted" style="font-size:13px">Optional. Scored goals count toward the overall rating.</span></div>
-        <ul class="list" style="gap:0">${goals.map((g, i) => `<li class="score-row"><input class="input" style="flex:1;min-width:200px" id="g-t-${i}" value="${esc(g.t)}" placeholder="Goal ${i + 1}" ${dis}>${seg("g-s-" + i, g.s)}</li>`).join("")}</ul></section>
+        <ul class="list" style="gap:0">${goals.map((g, i) => `<li class="score-row"><input class="input" style="flex:1;min-width:200px" id="g-t-${i}" aria-label="Goal ${i + 1}" value="${esc(g.t)}" placeholder="Goal ${i + 1}" ${dis}>${seg("g-s-" + i, g.s)}</li>`).join("")}</ul></section>
       <section class="card"><div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
         <div class="field"><label for="rv-str">Strengths</label><textarea class="input" id="rv-str" rows="3" ${dis}>${esc(r?.strengths || "")}</textarea></div>
         <div class="field"><label for="rv-imp">Areas to improve</label><textarea class="input" id="rv-imp" rows="3" ${dis}>${esc(r?.improve || "")}</textarea></div>
@@ -5950,7 +6049,7 @@ const DS = {
       const days = numv(g("Days")) || PAY.leaveDays(d, SET(), leaveType(type)); if (!days) return "those dates are rest days or holidays only.";
       const item = { ...d, days, filed: dateIn(g("Filed")) || todayISO(), decided: status === "PENDING" ? null : todayISO() }; seen.push(item); return item;
     },
-    async save(list) { const byM = {}; for (const x of list) (byM[x.from.slice(0, 7)] ||= {})[uid()] = x; for (const [m, items] of Object.entries(byM)) { if (S.leaveDocs.has(m)) await S.db.doc("leaves/" + m).update({ items }); else await S.db.doc("leaves/" + m).set({ month: m, items }); } } },
+    async save(list) { const byM = {}; for (const x of list) (byM[x.from.slice(0, 7)] ||= {})[uid()] = x; for (const [m, items] of Object.entries(byM)) await leaveMonthAdd(m, items); } },
   otreqs: { label: "Overtime requests", group: "Timekeeping", pages: ["ot", "otForm"], col: "otreqs",
     cols: ["Employee No", "Employee Name", "Date", "Hours", "Reason", "Status", "Record ID"],
     rows: () => listOf(S.otReqs || new Map()).sort((a, b) => (b.d || "").localeCompare(a.d || "")).map((r) => [empNo(r.empId), empNm(r.empId), r.d, r.hours, r.reason, lbl(OT_STATUS, r.status), r.id]),
@@ -7949,8 +8048,11 @@ VIEWS.attreqs = () => {
 };
 async function applyReq(r) {
   if (r.kind === "ADJUST") {
-    for (const [type, hhmm] of [["IN", r.in], ["OUT", r.out]]) if (hhmm) await savePunch("adjust", { t: new Date(atManila(r.d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: r.reason || null }, { name: "HR adjustments", kiosk: true, adjust: true });
-    if (r.out && r.in && r.out < r.in) { /* overnight: the out time belongs to the next day */ }
+    // Overnight: a time out earlier than the time in (or, with no time in, earlier than a night shift's start) is the
+    // next morning, so it pairs with that night's time in instead of landing before it.
+    const e = S.emps.get(r.empId); const sh = (e && shiftById(planCode(e, r.d))) || shiftOf(e) || { start: "08:00", end: "17:00" };
+    const night = sh.end < sh.start; const outDay = r.out && ((r.in && r.out < r.in) || (!r.in && night && r.out < sh.start)) ? addDays(r.d, 1) : r.d;
+    for (const [type, hhmm] of [["IN", r.in], ["OUT", r.out]]) if (hhmm) await savePunch("adjust", { t: new Date(atManila(type === "OUT" ? outDay : r.d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: r.reason || null }, { name: "HR adjustments", kiosk: true, adjust: true });
     S.clockLoaded.clear(); return;
   }
   if (r.kind === "SWAP") {
@@ -9692,7 +9794,8 @@ alias("utreq", { before: () => { S.arF = { kind: "UT", st: "PENDING" }; }, view:
 function addMinutes(hhmm, m) { const [h, mm] = hhmm.split(":").map(Number); const t = Math.max(0, h * 60 + mm + m); return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; }
 { const b = applyReq; applyReq = async (r) => { if (r.kind === "UT") return; if (r.kind !== "OB") return b(r); const e = S.emps.get(r.empId);
   for (let d = r.from; d <= (r.to || r.from); d = addDays(d, 1)) { if (planCode(e, d) === "R") continue; const sh = shiftById(planCode(e, d)) || shiftOf(e) || { start: "08:00", end: "17:00" };
-    for (const [type, hhmm] of [["IN", r.tin || sh.start], ["OUT", r.tout || sh.end]]) await savePunch("adjust", { t: new Date(atManila(d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: `Official business: ${r.place || ""}` }, { name: "HR adjustments", kiosk: true, adjust: true }); }
+    const tin = r.tin || sh.start, tout = r.tout || sh.end; // a time back earlier than the time out is the next morning
+    for (const [type, hhmm] of [["IN", tin], ["OUT", tout]]) await savePunch("adjust", { t: new Date(atManila(type === "OUT" && tout < tin ? addDays(d, 1) : d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: `Official business: ${r.place || ""}` }, { name: "HR adjustments", kiosk: true, adjust: true }); }
   S.clockLoaded.clear(); }; }
 window.addEventListener("submit", async (ev) => {
   const f = ev.target; if (f.id !== "ar2-form") return; ev.preventDefault(); ev.stopImmediatePropagation(); if (!S.realEdit) return;
@@ -11115,7 +11218,7 @@ VIEWS.report = () => {
     </div></section>
     <section class="card"><div class="card-head"><h2>Analysis</h2></div><div class="ex-findings">${areas.map((a) => `<div class="ex-area"><h3>${esc(a)}</h3>${F.filter((f) => f.area === a).map((f) => `<p><span class="chip ${TONE[f.tone][1]}">${TONE[f.tone][0]}</span> ${esc(f.text)}</p>`).join("")}</div>`).join("") || '<p class="t-muted">Not enough records this month for an analysis.</p>'}</div></section>
     <section class="card"><div class="card-head"><h2>Recommended actions</h2></div>${acts.length ? `<ol class="ex-acts">${acts.map((f) => `<li><b>${esc(f.area)}:</b> ${esc(f.act)}</li>`).join("")}</ol>` : '<p class="t-muted" style="margin:0">Nothing needs action this month.</p>'}</section>
-    <section class="card"><div class="card-head"><h2>Management comments</h2></div>${S.canEdit ? `<textarea class="input" id="ex-note" rows="3" placeholder="Add your own comments for management; they print in the report.">${esc(X.note?.text || "")}</textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-primary btn-sm" data-ex-note>Save comments</button></div>` : `<p style="margin:0">${esc(X.note?.text || "None.")}</p>`}</section>
+    <section class="card"><div class="card-head"><h2>Management comments</h2></div>${S.canEdit ? `<textarea class="input" id="ex-note" aria-label="Management comments" rows="3" placeholder="Add your own comments for management; they print in the report.">${esc(X.note?.text || "")}</textarea><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn-primary btn-sm" data-ex-note>Save comments</button></div>` : `<p style="margin:0">${esc(X.note?.text || "None.")}</p>`}</section>
     <details class="card ex-appendix"><summary><h2 style="display:inline">Appendix: detailed tables</h2> <span class="t-muted" style="font-size:13px">${R.sections.length} tables</span></summary>
     <div class="rep-grid" style="margin-top:12px">${R.sections.map((s) => `<section class="card rep-sec${s.head.length > 5 || s.title === "Compliance alerts" ? " rep-wide" : ""}"><div class="card-head"><h2>${esc(s.title)}</h2></div>
       ${s.rows.length ? `<div class="table-wrap"><table><thead><tr>${s.head.map((h, i) => `<th${s.fmt[i] && s.fmt[i] !== "t" && s.fmt[i] !== "d" ? ' class="num"' : ""}>${esc(h)}</th>`).join("")}</tr></thead><tbody>${s.rows.map((r) => `<tr>${r.map((v, i) => `<td${s.fmt[i] && s.fmt[i] !== "t" && s.fmt[i] !== "d" ? ' class="num"' : ""}>${esc(fmtV(v, s.fmt[i]))}</td>`).join("")}</tr>`).join("")}</tbody></table></div>` : '<p class="t-muted" style="margin:0">Nothing recorded for this month.</p>'}
@@ -15495,7 +15598,7 @@ async function fxOne(f) {
   else if (f.mode === "leave" && iss.kind === "ABS") { const ex = allLeaves().find((l) => l.fixId === fixId); if (ex) req = `lv:${ex.month}:${ex.id}`;
     else { const t = leaveType(f.type) || SET().leaveTypes[0]; const item = { empId: e.id, type: t.code, from: d, to: d, half: false, reason, status: "PENDING", filed: todayISO(), decided: null, src: "phone", fixId };
       item.days = PAY.leaveDays(item, SET(), t) || 1; const id = `fx_${fxSafe(fixId)}`; const month = d.slice(0, 7);
-      if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+      await leaveMonthAdd(month, { [id]: item });
       const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++; req = `lv:${month}:${id}`; } }
   else { const tin = FX_HM.test(f.in || "") ? f.in : null, tout = FX_HM.test(f.out || "") ? f.out : null;
     if (!tin && !tout) { await fxDone(f, { done: true, note: "Enter the time in or out again." }); return true; }
@@ -15728,9 +15831,11 @@ async function rqOne(f) {
     const t = leaveType(f.type); if (!t) return bad("Choose the leave type again.");
     if (!day(f.from) || !day(f.to) || f.to < f.from) return bad("Check the dates.");
     if (!reason) return bad("Give the reason.");
+    const clash = allLeaves().find((l) => l.empId === e.id && ["PENDING", "APPROVED"].includes(l.status) && l.from <= f.to && l.to >= f.from);
+    if (clash) return bad(`You already have leave on ${fmtDate(clash.from > f.from ? clash.from : f.from)}.`);
     const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) };
-    item.days = PAY.leaveDays(item, SET(), t) || (item.half ? 0.5 : 1); const month = f.from.slice(0, 7);
-    if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+    item.days = PAY.leaveDays(item, SET(), t); if (!item.days) return bad("Those dates are rest days or holidays."); const month = f.from.slice(0, 7);
+    await leaveMonthAdd(month, { [id]: item });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
     await rqDone(f, { done: true, req: `lv:${month}:${id}` }); logActivity(`${fullName(e)} filed ${t.name.toLowerCase()} from their account (${fmtDate(f.from)}${f.to !== f.from ? ` to ${fmtDate(f.to)}` : ""})`); return true; }
   if (f.kind === "adjust" || f.kind === "ot") {
@@ -15744,6 +15849,7 @@ async function rqOne(f) {
       await rqDone(f, { done: true, req: `ar:${id}` }); logActivity(`${fullName(e)} asked for an attendance change from their account (${fmtDate(f.d)})`); return true; }
     if (S.otReqs.has(id)) return rqDone(f, { done: true, req: `ot:${id}` }).then(() => true);
     const h = Math.round((Number(f.hours) || 0) * 2) / 2; if (!(h > 0 && h <= 16)) return bad("Enter the overtime hours again.");
+    if (listOf(S.otReqs).some((r) => r.empId === e.id && r.d === f.d && r.hours === h && r.status !== "REJECTED")) return bad("You already filed this overtime.");
     await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
     await rqDone(f, { done: true, req: `ot:${id}` }); logActivity(`${fullName(e)} filed ${h} h of overtime from their account (${fmtDate(f.d)})`); return true; }
   if (f.kind === "cert") {
@@ -16124,6 +16230,15 @@ document.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-pay
 { const b = finalizePayroll; finalizePayroll = async (id, ...a) => { if ($("#final-ok")?.checked && !isFinal(id)) { const g = payGaps(id);
       if (g.noPay.length) { toast(`${g.noPay.length} ${g.noPay.length === 1 ? "person has" : "people have"} no basic pay. Enter it in the 201 file before finalizing.`); return; } }
     return b(id, ...a); }; }
+
+/* Code review 2026-10-17 (screens and forms). Form checks and the one-save-per-tap guard are in guard.js. */
+// The Overtime report's cost columns let anyone work out a person's pay rate: they show only to roles with Payroll.
+{ const b = VIEWS.otrep; VIEWS.otrep = (...a) => { const html = b(...a); if (typeof navAllowed !== "function" || navAllowed("Payroll")) return html;
+  const t = document.createElement("template"); t.innerHTML = html;
+  for (const tb of t.content.querySelectorAll("table")) { const hs = [...tb.querySelectorAll("thead th")]; const cut = hs.map((h, i) => (/cost|₱|amount/i.test(h.textContent) ? i : -1)).filter((i) => i >= 0);
+    if (!cut.length) continue; for (const tr of tb.querySelectorAll("tr")) { const cells = [...tr.children]; for (const i of cut) cells[i]?.remove(); } }
+  for (const el of t.content.querySelectorAll(".stat")) if (/cost/i.test(el.textContent)) el.remove();
+  return t.innerHTML; }; }
 
 /* HRIS audit 2026-10-17 (phones and tablets).
    Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's

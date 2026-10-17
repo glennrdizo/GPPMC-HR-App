@@ -26,7 +26,7 @@ begin
     if n >= 5000 then raise exception 'Too many records' using errcode = '54000'; end if;
   end if;
   -- daily caps on what an employee's account can add (audit 2026-10-17 S1/S4): counted on the server's updated_at
-  if tg_op = 'INSERT' and sub in ('reqs', 'loans', 'loanfiles', 'tickets') then
+  if tg_op = 'INSERT' and sub in ('reqs', 'loans', 'loanfiles', 'tickets') and not exists (select 1 from public.hr_docs where path = new.path) then
     select count(*) into n from public.hr_docs where col = base || '/' || sub and updated_at > now() - interval '1 day';
     if n >= (case sub when 'reqs' then 30 when 'loans' then 10 when 'loanfiles' then 120 else 30 end) then
       raise exception 'Too many today. Try again tomorrow or ask HR.' using errcode = '54000';
@@ -64,7 +64,8 @@ update storage.buckets set allowed_mime_types = array['image/jpeg','image/png','
   'application/pdf','video/mp4','video/webm','video/quicktime','audio/mpeg','audio/mp4','audio/webm','text/plain','text/csv','text/markdown',
   'application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation','application/zip','application/x-zip-compressed']
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation','application/zip','application/x-zip-compressed',
+  'audio/ogg','video/ogg','application/json','application/octet-stream'] -- unknown types are served as downloads by sw.js
   where id = 'hr-files';
 
 -- Reliability audit RL3: one HR browser takes a phone record (fix, request, supervisor decision) in a single
