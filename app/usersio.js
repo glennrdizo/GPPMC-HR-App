@@ -43,7 +43,7 @@ async function uioImport(file) {
     const name = col(row, "Name").replace(/\s+/g, " ").slice(0, 80); const id = col(row, "User ID"); const ln = i + 2;
     if (!name && !id) continue; const roleTxt = col(row, "Role"); const rk = uioRoleKey(roleTxt); const email = col(row, "Email"); const no = col(row, "Employee no.");
     if (roleTxt && rk === null && normH(roleTxt) !== "owner") { bad.push(`Row ${ln}: unknown role "${roleTxt}"`); continue; }
-    if (!iAmOwner() && ((rk && RL_TOP.has(rk) && !(id && rlRoleOf(id) === rk)) || (id && rlLocked(id) && id !== S.myId))) { bad.push(`Row ${ln}: only an Owner can change HR Admins and Owners`); continue; }
+    if (!iAmOwner() && ((rk && RL_TOP.has(rk) && !(id && rlRoleOf(id) === rk)) || (id && rlLocked(id) && id !== S.myId))) { bad.push(`Row ${ln}: only an Owner can change HR Managers and Owners`); continue; }
     if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { bad.push(`Row ${ln}: check the email "${email}"`); continue; }
     const emp = no ? byNo.get(normH(no)) : null; if (no && !emp) { bad.push(`Row ${ln}: no employee with number ${no}`); continue; }
     if (id) {

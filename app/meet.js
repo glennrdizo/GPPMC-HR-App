@@ -104,7 +104,7 @@ function mtMinCard(m) {
 }
 VIEWS.meetRoom = () => {
   const id = S.view.id; if (!id) return VIEWS.meet(); const saved = S.meets.get(id);
-  if (saved && !mtSees(saved)) return backLink('data-go="meet"', "Meeting notes") + head("Meeting notes", "Confidential meeting") + '<section class="card"><p>Only HR Admin and the person who wrote it can open this meeting.</p></section>';
+  if (saved && !mtSees(saved)) return backLink('data-go="meet"', "Meeting notes") + head("Meeting notes", "Confidential meeting") + '<section class="card"><p>Only HR Manager and the person who wrote it can open this meeting.</p></section>';
   const m = mtDraft(id); const ed = S.canEdit; const dis = ed ? "" : "disabled";
   const names = active().map((e) => fullName(e)).sort();
   return backLink('data-go="meet"', "Meeting notes") + head(mtKind(m.kind), esc(m.title || "New meeting"), ed ? `<span class="t-muted" id="mt-dirty" style="font-size:13px">${S.mtDirty ? "Not saved yet" : saved ? "Saved" : ""}</span><button type="button" class="btn btn-primary" data-mt-save>Save</button>${saved ? '<button type="button" class="btn btn-ghost" data-mt-del>Delete</button>' : ""}` : "") + `
@@ -119,7 +119,7 @@ VIEWS.meetRoom = () => {
       <div class="field" style="grid-column:1/-1"><label for="mt-attendees">Attendees <span class="t-muted" style="font-weight:400">(one per line)</span></label>${mtTa("attendees", m.attendees, 3, "Type names, or add employees below", dis)}
         ${ed ? `<div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap"><input class="input" id="mt-addp" list="mt-people" placeholder="Add an employee" style="max-width:280px" aria-label="Add an employee"><button type="button" class="btn btn-ghost btn-sm" data-mt-addp>Add</button></div>` : ""}</div>
       <div class="field" style="grid-column:1/-1"><label for="mt-agenda">Agenda <span class="t-muted" style="font-weight:400">(optional, helps Claude organize the minutes)</span></label>${mtTa("agenda", m.agenda, 3, "1. Attendance and overtime\n2. New hires for Riverside\n3. Other matters", dis)}</div>
-      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="mt-conf" data-mt-f="conf" ${m.conf ? "checked" : ""} ${dis}><span>Confidential: only HR Admin and the person who wrote it can open it (e.g. administrative hearings)</span></label>
+      <label class="check" style="grid-column:1/-1"><input type="checkbox" id="mt-conf" data-mt-f="conf" ${m.conf ? "checked" : ""} ${dis}><span>Confidential: only HR Manager and the person who wrote it can open it (e.g. administrative hearings)</span></label>
     </div></section>
     ${mtRecCard(m)}
     <section class="card"><div class="card-head"><h2>Transcript and notes</h2>${ed ? `<label class="btn btn-ghost btn-sm" style="cursor:pointer">${icon("upload", 16)}Upload a transcript<input type="file" id="mt-txfile" accept=".txt,.vtt,.srt,text/plain,text/vtt" hidden></label>` : ""}</div>

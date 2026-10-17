@@ -1,7 +1,7 @@
 /* ---------- users & permissions: roles that decide which modules each editor sees and whether they can change records ---------- */
 const PERM_MODS = ["People", "Talent", "Timekeeping", "Payroll", "Training", "Compliance", "Records"];
 const ROLES = {
-  admin: { name: "HR Admin", mods: PERM_MODS, edit: true, note: "Everything, including this page" },
+  admin: { name: "HR Manager", mods: PERM_MODS, edit: true, note: "Everything, including this page" },
   payroll: { name: "Payroll", mods: ["People", "Timekeeping", "Payroll"], edit: true, note: "Time sheets, payroll, loans, contributions, tax" },
   timekeeper: { name: "Timekeeper", mods: ["Timekeeping"], edit: true, note: "Daily time records, clock-ins, overtime, leave" },
   talent: { name: "Recruitment & Training", mods: ["People", "Talent", "Training"], edit: true, note: "Hiring, onboarding, performance, training" },
@@ -35,7 +35,7 @@ const menuModsOf = (views) => [...new Set(navKeys().filter((k) => k.g !== "Overv
 const descOf = (keys, v) => { const out = []; const walk = (p, n) => { if (n > 4) return; for (const k of keys) if (k.parent === p && !out.includes(k.v)) { out.push(k.v); walk(k.v, n + 1); } }; walk(v, 0); return out; };
 const ancOf = (keys, v) => { const out = []; let p = keys.find((k) => k.v === v)?.parent; while (p && !out.includes(p)) { out.push(p); p = keys.find((k) => k.v === p)?.parent; } return out; };
 const pmLvl = (k) => `pm-l${(k.d ?? (k.parent ? 1 : 0)) + 1}`;
-/* What this viewer may do, from org/access. The owner is always HR Admin. */
+/* What this viewer may do, from org/access. The owner is always HR Manager. */
 function myRole() {
   if (S.isOwner) return { key: "admin", ...ROLES.admin, views: null };
   const a = S.access || {}; const u = S.myId ? a.users?.[S.myId] : null;
@@ -59,7 +59,7 @@ function viewAllowed(name) {
   const vs = S.perm.views; if (!vs) return true; const key = SECTION_OF[name] || SECTION_OF[baseView(name)] || name;
   return !navKeys().some((k) => k.v === key) || vs.has(key);
 }
-const noAccess = () => head("Access", "This page isn't part of your role") + `<section class="card"><div class="empty-state"><span class="es-ic">${icon("shield", 22)}</span><p>Your role is <b>${esc(S.perm?.name || "")}</b>. Ask an HR Admin to add this module if you need it.</p><button class="btn btn-ghost btn-sm" data-go="dash">Go to the dashboard</button></div></section>`;
+const noAccess = () => head("Access", "This page isn't part of your role") + `<section class="card"><div class="empty-state"><span class="es-ic">${icon("shield", 22)}</span><p>Your role is <b>${esc(S.perm?.name || "")}</b>. Ask an HR Manager to add this module if you need it.</p><button class="btn btn-ghost btn-sm" data-go="dash">Go to the dashboard</button></div></section>`;
 
 function bootPerm(db) {
   db.doc("org/access").onSnapshot((d) => {
@@ -151,7 +151,7 @@ function permMatrix(ids, users, a, nm) {
         ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${pmLvl(k)}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${cols.map((c) => cell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
       <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users & permissions</th>${cols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
-    <p class="t-muted" style="margin:10px 0 0;font-size:13px">Users & permissions is only for HR Admins. The dashboard is open to everyone, and shows only the sections of the modules a person has.</p></section>`;
+    <p class="t-muted" style="margin:10px 0 0;font-size:13px">Users & permissions is only for HR Managers. The dashboard is open to everyone, and shows only the sections of the modules a person has.</p></section>`;
 }
 document.addEventListener("change", async (ev) => {
   const t = ev.target; if (!(t.dataset.pv || t.dataset.pg || t.dataset.pe) || !isPermAdmin()) return; ev.stopImmediatePropagation();

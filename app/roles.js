@@ -2,26 +2,48 @@
 /* ---------- Users & Roles grid (Glenn 2026-10-12): roles and users side by side, a tick box for every module and sub-module. ---------- */
 // Role templates live in org/access.roles = { key: { name, views: [navKeys], edit } }: built-in roles can be re-ticked, new roles added.
 // A user on a role follows that role's ticks; ticking a user's own box makes that user Custom (as before).
-// Owner and Executive (Glenn 2026-10-12). Owners manage everyone's roles and access, HR Admins included; HR Admins manage everyone else.
+// Owner and Executive (Glenn 2026-10-12). Owners manage everyone's roles and access, HR Managers included; HR Managers manage everyone else.
+// Role list (Glenn 2026-10-17): Owner, Executive, HR Manager, HR Asst. Manager, Recruitment - Rank and File, Recruitment - Officers and
+// Managers, Training and Development, Timekeeping, Payroll, Operations Manager, Cluster Head, View Only, Custom, No Access.
+// Keys stay as before where a role was renamed (admin = HR Manager, talent = Training and Development, timekeeper = Timekeeping), so
+// saved ticks and the people on them carry over.
 { const old = { ...ROLES }; for (const k of Object.keys(ROLES)) delete ROLES[k];
-  Object.assign(ROLES, { owner: { name: "Owner", mods: PERM_MODS, edit: true, note: "Everything. Only Owners can change HR Admins and Owners" }, exec: { name: "Executive", mods: PERM_MODS, edit: false, note: "Sees every module and report" } }, old); }
+  Object.assign(ROLES, {
+    owner: { name: "Owner", mods: PERM_MODS, edit: true, note: "Everything. Only Owners can change HR Managers and Owners" },
+    exec: { name: "Executive", mods: PERM_MODS, edit: false, note: "Sees every module and report" },
+    admin: { ...old.admin, name: "HR Manager", note: "Everything, including Users & Roles" },
+    hram: { name: "HR Asst. Manager", mods: PERM_MODS, edit: true, note: "Every module except Users & Roles" },
+    rec_rf: { name: "Recruitment - Rank and File", mods: ["People", "Talent"], edit: true, note: "Talent Management with rank-and-file project hiring, plus manpower planning and 201 files" },
+    rec_om: { name: "Recruitment - Officers and Managers", mods: ["People", "Talent"], edit: true, note: "Talent Management with officers-and-managers project hiring, plus manpower planning and 201 files" },
+    talent: { ...old.talent, name: "Training and Development", mods: ["Training"] },
+    timekeeper: { ...old.timekeeper, name: "Timekeeping" },
+    payroll: { ...old.payroll },
+    opsmgr: { name: "Operations Manager", mods: ["Timekeeping"], edit: true, note: "Property Workforce Operations, manpower planning, their people's attendance, leave and performance" },
+    cluster: { name: "Cluster Head", mods: ["Timekeeping"], edit: false, note: "Same pages as Operations Manager, view only" },
+    viewer: { ...old.viewer, name: "View Only" }, custom: { ...old.custom }, none: { ...old.none, name: "No Access" } }); }
 const ROLES_BASE = JSON.parse(JSON.stringify(ROLES));
 const RL_FIXED = new Set(["owner", "custom", "none"]);
 const RL_TOP = new Set(["owner", "admin"]);
 const RL_PEOPLE_ONLY = true;
 const iAmOwner = () => !!S.isOwner || S.access?.users?.[S.myId]?.role === "owner";
-const rlRoleOf = (id) => { const a = S.access || {}; return a.users?.[id]?.role || a.defaultRole || "admin"; };
+const rlRoleOf = (id) => { const a = S.access || {}; if (String(id).startsWith("inv:")) return a.invites?.[id.slice(4)]?.role || "viewer"; return a.users?.[id]?.role || a.defaultRole || "admin"; };
 const rlLocked = (id) => !iAmOwner() && (RL_TOP.has(rlRoleOf(id)) || id === S.myId);
 // Built-in roles on the new menu (Glenn 2026-10-15): whole modules (mods) plus single sub-modules (subs, with everything under them).
 // A role re-ticked in Users & Roles (org/access.roles) keeps its own ticks; Reset brings back these.
 const RL_MENU = {
   payroll: { mods: ["Timekeeping & Leave", "Payroll & Benefits"], subs: ["Employee Records & 201 Files", "Employee Movement", "Separation & Offboarding"], bot: true, note: "Timekeeping and Payroll (attendance, leave, payroll, compensation, benefits), plus 201 files, employee movement and separation" },
   timekeeper: { mods: ["Timekeeping & Leave"], subs: [], bot: false, note: "Timekeeping: attendance and leave" },
-  talent: { mods: ["Talent Management", "Employee Development"], subs: ["Manpower Planning", "Employee Records & 201 Files"], bot: true, note: "Talent Management and Employee Development, plus manpower planning and 201 files" },
+  talent: { mods: ["Employee Development"], subs: [], bot: true, note: "Employee Development: performance, learning and development, leadership and succession" },
+  hram: { all: true, mods: [], subs: [], bot: true, note: "Every module except Users & Roles" },
+  rec_rf: { mods: ["Talent Management"], subs: ["Manpower Planning", "Employee Records & 201 Files"], not: ["hireprj_om"], bot: true, note: "Talent Management with rank-and-file project hiring, plus manpower planning and 201 files" },
+  rec_om: { mods: ["Talent Management"], subs: ["Manpower Planning", "Employee Records & 201 Files"], not: ["hireprj_rf"], bot: true, note: "Talent Management with officers-and-managers project hiring, plus manpower planning and 201 files" },
+  opsmgr: { mods: ["Property Workforce Operations"], subs: ["Manpower Planning", "Timekeeping & Attendance", "Leave Administration", "Performance Management"], bot: true, note: "Property Workforce Operations, manpower planning, attendance, leave and performance" },
+  cluster: { mods: ["Property Workforce Operations"], subs: ["Manpower Planning", "Timekeeping & Attendance", "Leave Administration", "Performance Management"], bot: true, note: "Same pages as Operations Manager, view only" },
 };
 function rlMenuViews(spec) {
-  const keys = navKeys(); const out = new Set(keys.filter((k) => (k.g === "Overview" && (spec.bot || k.v !== "hrbot")) || spec.mods.includes(k.g)).map((k) => k.v));
+  const keys = navKeys(); const out = new Set(keys.filter((k) => (k.g === "Overview" && (spec.bot || k.v !== "hrbot")) || (spec.all ? k.g !== "Users & Permissions" : spec.mods.includes(k.g))).map((k) => k.v));
   for (const l of spec.subs) for (const k of keys.filter((x) => x.d === 0 && x.l === l)) { out.add(k.v); for (const v of descOf(keys, k.v)) out.add(v); }
+  for (const v of spec.not || []) { out.delete(v); for (const x of descOf(keys, v)) out.delete(x); }
   return out;
 }
 function rlSync() {
@@ -30,7 +52,7 @@ function rlSync() {
   for (const [k, b] of Object.entries(ROLES_BASE)) ROLES[k] = { ...b, mods: [...b.mods] };
   for (const [k, spec] of Object.entries(RL_MENU)) if (ROLES[k]) { const v = rlMenuViews(spec); ROLES[k] = { ...ROLES[k], views: [...v], mods: modsOf(v), note: spec.note }; }
   for (const [k, r] of Object.entries(R)) { if (RL_FIXED.has(k) || !r) continue; const views = Array.isArray(r.views) ? r.views : null; const base = ROLES_BASE[k];
-    ROLES[k] = { name: r.name || base?.name || "Role", edit: r.edit ?? base?.edit ?? false, note: r.note || (views ? "" : ROLES[k]?.note) || base?.note || "Made in Users & Roles", views: views || ROLES[k]?.views || null, mods: views ? modsOf(new Set(views)) : ROLES[k]?.mods || base?.mods || [], made: !base }; if (!ROLES[k].views) delete ROLES[k].views; }
+    ROLES[k] = { name: base?.name || r.name || "Role", edit: r.edit ?? base?.edit ?? false, note: r.note || (views ? "" : ROLES[k]?.note) || base?.note || "Made in Users & Roles", views: views || ROLES[k]?.views || null, mods: views ? modsOf(new Set(views)) : ROLES[k]?.mods || base?.mods || [], made: !base }; if (!ROLES[k].views) delete ROLES[k].views; }
 }
 { const b = myRole; myRole = (...x) => { const r = b(...x); const a = S.access || {}; const u = S.myId ? a.users?.[S.myId] : null; const key = S.isOwner ? "owner" : u?.role || a.defaultRole || "admin";
     if (key === "owner") return { ...ROLES.admin, ...r, key: "admin", ownerRole: true, name: "Owner", views: null, mods: PERM_MODS, edit: true };
@@ -56,12 +78,14 @@ const rlStd = (k, keys) => (RL_MENU[k] ? rlMenuViews(RL_MENU[k]) : ROLES_BASE[k]
 { const b = rlSync; rlSync = () => { const a = S.access || {}; const keys = navKeys(); S.rlKeys = keys; S.rlKnown = rlKnownOf(a);
     const std = Object.fromEntries(Object.keys(a.roles || {}).map((k) => [k, rlStd(k, keys)])); b();
     for (const [k, r] of Object.entries(a.roles || {})) if (!RL_FIXED.has(k) && Array.isArray(r?.views) && ROLES[k]) { const v = rlInfer(r.views, std[k], keys, S.rlKnown); ROLES[k].views = [...v]; ROLES[k].mods = modsOf(v); } }; }
-// Saving writes the pages each role and Custom person now has, and the current list of pages. HR Admins who aren't Owners can't
-// change the Owner, Executive and HR Admin roles, so those keep following the older list until an Owner saves.
+// Saving writes the pages each role and Custom person now has, and the current list of pages. HR Managers who aren't Owners can't
+// change the Owner, Executive and HR Manager roles, so those keep following the older list until an Owner saves.
 { const b = saveAccess; saveAccess = (patch, msg) => { const a = { ...(S.access || {}), ...patch }; const keys = S.rlKeys || navKeys(); const known = rlKnownOf(S.access); const own = iAmOwner(); // known: before this change, which may already carry a new page
-    const roles = Object.fromEntries(Object.entries(a.roles || {}).map(([k, r]) => [k, !RL_FIXED.has(k) && Array.isArray(r?.views) && (own || !["owner", "exec", "admin"].includes(k)) ? { ...r, views: [...rlInfer(r.views, rlStd(k, keys), keys, known)].filter((v) => !ALWAYS.has(v)) } : r]));
+    const roles = Object.fromEntries(Object.entries(a.roles || {}).map(([k, r]) => [k, !RL_FIXED.has(k) && Array.isArray(r?.views) && (own || !["owner", "exec", "admin"].includes(k)) ? { ...r, name: ROLES_BASE[k]?.name || r.name, views: [...rlInfer(r.views, rlStd(k, keys), keys, known)].filter((v) => !ALWAYS.has(v)) } : r]));
     const users = Object.fromEntries(Object.entries(a.users || {}).map(([id, u]) => [id, u?.role === "custom" && Array.isArray(u.views) ? { ...u, views: [...rlInfer(u.views, null, keys, known)].filter((v) => !ALWAYS.has(v)) } : u]));
-    return b({ ...patch, ...(a.roles ? { roles } : {}), ...(a.users ? { users } : {}), navKnown: own ? keys.map((k) => k.v) : [...known] }, msg); }; }
+    const invites = Object.fromEntries(Object.entries(a.invites || {}).map(([k, v]) => [k, v?.role === "custom" && Array.isArray(v.views) ? { ...v, views: [...rlInfer(v.views, null, keys, known)].filter((x) => !ALWAYS.has(x)) } : v]));
+    if (own) for (const [k, r] of Object.entries(ROLES_BASE)) if (RL_MENU[k] && !r.edit && !roles[k]) roles[k] = { name: r.name, edit: false };
+    return b({ ...patch, roles, ...(a.users ? { users } : {}), ...(patch.invites ? { invites } : {}), navKnown: own ? keys.map((k) => k.v) : [...known] }, msg); }; }
 // Roles summary: the modules a role has in full, the ones it has in part, and what it covers.
 const RL_ALLG = () => NAV.filter(([g]) => g !== "Overview" && g !== "Users & Permissions").map(([g]) => g);
 function rlParts(rk) {
@@ -90,34 +114,38 @@ S.permTab = "list"; S.rlNew = false;
 function rlGrid() {
   const a = S.access || {}; const users = a.users || {}; const P = S.profiles || {};
   const ids = [...new Set([...(S.myId ? [S.myId] : []), ...Object.keys(users), ...Object.keys(a.seen || {})])];
-  const nm = (id) => users[id]?.name || P[id]?.name || (id === S.myId ? "You" : "Someone");
+  const invs = Object.entries(a.invites || {}).sort((x, y) => String(x[1].name).localeCompare(String(y[1].name)));
+  const nm = (id) => (String(id).startsWith("inv:") ? a.invites?.[id.slice(4)]?.name || "Invited user" : users[id]?.name || P[id]?.name || (id === S.myId ? "You" : "Someone"));
   const keys = navKeys(); const groups = [...new Set(keys.map((k) => k.g))];
   // People only (Glenn 2026-10-17: role and people columns side by side were confusing). Roles are still picked per person.
   const roleCols = RL_PEOPLE_ONLY ? [] : Object.entries(ROLES).filter(([k]) => !RL_FIXED.has(k) && (k !== "admin" || iAmOwner())).map(([k, r]) => ({ k, r, views: viewsOf({}, k), edit: !!r.edit }));
   const userCols = ids.map((id) => { const u = users[id] || {}; const owner = id === S.myId && S.isOwner; const key = owner ? "admin" : u.role || a.defaultRole || "admin";
     return { id, owner, key, listed: !!users[id], views: owner || key === "admin" ? null : viewsOf(u, key), edit: owner ? true : key === "custom" ? u.edit !== false : !!ROLES[key]?.edit }; });
+  // Invited people (Glenn 2026-10-17): a column as soon as they're added, so their pages can be ticked before they sign in.
+  for (const [k, v] of invs) { const key = ROLES[v.role] ? v.role : "viewer"; const all = key === "owner" || (key === "admin" && !Array.isArray(ROLES.admin?.views));
+    userCols.push({ id: `inv:${k}`, inv: true, lock: key === "owner", key, listed: true, views: all ? null : viewsOf(v, key), edit: key === "owner" ? true : key === "custom" ? v.edit !== false : !!ROLES[key]?.edit }); }
   const has = (vs, v) => !vs || vs.has(v);
   const gState = (vs, g) => { const ks = keys.filter((k) => k.g === g && !ALWAYS.has(k.v)); const n = ks.filter((k) => has(vs, k.v)).length; return { all: ks.length && n === ks.length, mixed: n && n < ks.length, none: !ks.length }; };
-  const roleOpts = (cur, listed) => Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(r.name)}</option>`).join("") + (listed ? "" : `<option value="" selected>Default (${esc(ROLES[a.defaultRole || "admin"]?.name || "HR Admin")})</option>`);
+  const roleOpts = (cur, listed) => Object.entries(ROLES).map(([k, r]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(r.name)}</option>`).join("") + (listed ? "" : `<option value="" selected>Default (${esc(ROLES[a.defaultRole || "admin"]?.name || "HR Manager")})</option>`);
   const rCell = (c, v, l) => `<td class="pm-c pm-rc"><input type="checkbox" data-rv="${esc(c.k)}|${esc(v)}" ${has(c.views, v) ? "checked" : ""} ${ALWAYS.has(v) ? "disabled" : ""} aria-label="${esc(l)} for the ${esc(c.r.name)} role"></td>`;
-  const uCell = (c, v, l) => `<td class="pm-c"><input type="checkbox" data-pv="${esc(c.id)}|${esc(v)}" ${has(c.views, v) ? "checked" : ""} ${c.owner || ALWAYS.has(v) ? "disabled" : ""} aria-label="${esc(l)} for ${esc(nm(c.id))}"></td>`;
+  const uCell = (c, v, l) => `<td class="pm-c"><input type="checkbox" data-pv="${esc(c.id)}|${esc(v)}" ${has(c.views, v) ? "checked" : ""} ${c.owner || c.lock || ALWAYS.has(v) ? "disabled" : ""} aria-label="${esc(l)} for ${esc(nm(c.id))}"></td>`;
   const rG = (c, g) => { const s = gState(c.views, g); return `<td class="pm-c pm-rc"><input type="checkbox" data-rg="${esc(c.k)}|${esc(g)}" ${s.all ? "checked" : ""} ${s.mixed ? 'data-mixed="1"' : ""} ${s.none ? "disabled" : ""} aria-label="All of ${esc(GL(g))} for the ${esc(c.r.name)} role"></td>`; };
-  const uG = (c, g) => { const s = gState(c.views, g); return `<td class="pm-c"><input type="checkbox" data-pg="${esc(c.id)}|${esc(g)}" ${s.all ? "checked" : ""} ${s.mixed ? 'data-mixed="1"' : ""} ${c.owner || s.none ? "disabled" : ""} aria-label="All of ${esc(GL(g))} for ${esc(nm(c.id))}"></td>`; };
+  const uG = (c, g) => { const s = gState(c.views, g); return `<td class="pm-c"><input type="checkbox" data-pg="${esc(c.id)}|${esc(g)}" ${s.all ? "checked" : ""} ${s.mixed ? 'data-mixed="1"' : ""} ${c.owner || c.lock || s.none ? "disabled" : ""} aria-label="All of ${esc(GL(g))} for ${esc(nm(c.id))}"></td>`; };
   const count = (k) => userCols.filter((c) => c.key === k).length;
   return `<section class="card rl-card"><div class="card-head"><h2>Users &amp; Roles</h2>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">${RL_PEOPLE_ONLY ? "" : S.rlNew ? `<form id="rl-new" style="display:flex;gap:6px" data-keep><input class="input" id="rl-name" placeholder="New role name, e.g. Site HR Officer" maxlength="40" style="min-width:240px" required><button class="btn btn-primary btn-sm">Add role</button><button type="button" class="btn btn-ghost btn-sm" data-rl-new>Cancel</button></form>` : `<button class="btn btn-gold btn-sm" data-rl-new>${icon("plus")}New role</button>`}</div></div>
-    ${RL_PEOPLE_ONLY ? `<p class="t-muted" style="margin:0 0 12px;font-size:13.5px;max-width:110ch">One column per person. Pick their <b>Role</b> to give them that role's pages, or tick boxes to choose their pages yourself (they then show as <b>Custom</b>). The list follows the menu: each module, its sub-modules, and their sub-sub-modules (indented). A module's row ticks or clears everything under it, and a page's tick includes the pages under it. Every change saves right away.</p>` : `<p class="t-muted" style="margin:0 0 12px;font-size:13.5px;max-width:110ch"><b>Roles</b> (gold columns) are templates: tick what each role can open, and everyone on that role follows it. <b>People</b> (white columns): pick a role, or tick boxes for that person only, which makes them <b>Custom</b>. The list follows the menu: each module, its sub-modules, and their sub-sub-modules (indented). A module's row ticks or clears everything under it, and a page's tick includes the pages under it. Every change saves right away.</p>`}
+    ${RL_PEOPLE_ONLY ? `<p class="t-muted" style="margin:0 0 12px;font-size:13.5px;max-width:110ch">One column per person. Pick a <b>Role</b>, or tick boxes to choose their pages yourself (they then show as <b>Custom</b>). People you invite get a column straight away, so their pages can be set before they sign in. A module's row ticks everything under it. Changes save right away.</p>` : `<p class="t-muted" style="margin:0 0 12px;font-size:13.5px;max-width:110ch"><b>Roles</b> (gold columns) are templates: tick what each role can open, and everyone on that role follows it. <b>People</b> (white columns): pick a role, or tick boxes for that person only, which makes them <b>Custom</b>. The list follows the menu: each module, its sub-modules, and their sub-sub-modules (indented). A module's row ticks or clears everything under it, and a page's tick includes the pages under it. Every change saves right away.</p>`}
     <div class="table-wrap pm-wrap rl-wrap"><table class="pm rl${RL_PEOPLE_ONLY ? " rl-pp" : ""}"><thead>
       ${RL_PEOPLE_ONLY ? "" : `<tr class="rl-kind"><th class="pm-k"></th>${roleCols.length ? `<th class="rl-kh rl-kr" colspan="${roleCols.length}">Roles</th>` : ""}<th class="rl-kh" colspan="${userCols.length}">People</th></tr>`}
-      <tr><th class="pm-k">Name</th>${roleCols.map((c) => `<th class="pm-p pm-rc"><span class="rl-rn">${esc(c.r.name)}</span><small class="t-muted">${count(c.k)} ${count(c.k) === 1 ? "person" : "people"}</small>${c.r.made ? `<button class="link danger rl-x" data-rl-del="${esc(c.k)}" aria-label="Delete the ${esc(c.r.name)} role">Delete</button>` : S.access?.roles?.[c.k] ? `<button class="link rl-x" data-rl-reset="${esc(c.k)}">Reset</button>` : ""}</th>`).join("")}${userCols.map((c) => `<th class="pm-p">${esc(nm(c.id))}${c.id === S.myId ? " (you)" : ""}</th>`).join("")}</tr>
+      <tr><th class="pm-k">Name</th>${roleCols.map((c) => `<th class="pm-p pm-rc"><span class="rl-rn">${esc(c.r.name)}</span><small class="t-muted">${count(c.k)} ${count(c.k) === 1 ? "person" : "people"}</small>${c.r.made ? `<button class="link danger rl-x" data-rl-del="${esc(c.k)}" aria-label="Delete the ${esc(c.r.name)} role">Delete</button>` : S.access?.roles?.[c.k] ? `<button class="link rl-x" data-rl-reset="${esc(c.k)}">Reset</button>` : ""}</th>`).join("")}${userCols.map((c) => `<th class="pm-p${c.inv ? " rl-inv" : ""}">${esc(nm(c.id))}${c.id === S.myId ? " (you)" : ""}${c.inv ? '<small class="t-muted">Invited, not signed in yet</small>' : ""}</th>`).join("")}</tr>
       <tr><th class="pm-k">Role</th>${roleCols.map(() => '<td class="pm-c pm-rc"><span class="t-muted" style="font-size:12px">template</span></td>').join("")}${userCols.map((c) => `<td class="pm-c">${c.owner ? "<b>Owner</b>" : `<select class="input pm-role" data-perm-role="${esc(c.id)}" aria-label="Role for ${esc(nm(c.id))}">${roleOpts(c.listed ? c.key : "", c.listed)}</select>`}</td>`).join("")}</tr>
-      <tr><th class="pm-k">Can change records</th>${roleCols.map((c) => `<td class="pm-c pm-rc"><input type="checkbox" data-re="${esc(c.k)}" ${c.edit ? "checked" : ""} aria-label="The ${esc(c.r.name)} role can change records"></td>`).join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" data-pe="${esc(c.id)}" ${c.edit ? "checked" : ""} ${c.owner ? "disabled" : ""} aria-label="Can change records for ${esc(nm(c.id))}"></td>`).join("")}</tr>
+      <tr><th class="pm-k">Can change records</th>${roleCols.map((c) => `<td class="pm-c pm-rc"><input type="checkbox" data-re="${esc(c.k)}" ${c.edit ? "checked" : ""} aria-label="The ${esc(c.r.name)} role can change records"></td>`).join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" data-pe="${esc(c.id)}" ${c.edit ? "checked" : ""} ${c.owner || c.lock ? "disabled" : ""} aria-label="Can change records for ${esc(nm(c.id))}"></td>`).join("")}</tr>
     </thead><tbody>
       ${groups.map((g) => `<tr class="pm-g"><th class="pm-k"><span class="pm-gl">${icon(MOD_ICON[g] || "dash", 16)}${esc(GL(g))}</span></th>${roleCols.map((c) => rG(c, g)).join("")}${userCols.map((c) => uG(c, g)).join("")}</tr>
         ${keys.filter((k) => k.g === g).map((k) => `<tr><th class="pm-k ${pmLvl(k)}">${icon(k.ic || "file", 15)}${esc(k.l)}${ALWAYS.has(k.v) ? ' <span class="t-muted" style="font-weight:400">(everyone)</span>' : ""}</th>${roleCols.map((c) => rCell(c, k.v, k.l)).join("")}${userCols.map((c) => uCell(c, k.v, k.l)).join("")}</tr>`).join("")}`).join("")}
-      <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users &amp; permissions</th>${roleCols.map(() => '<td class="pm-c pm-rc"><input type="checkbox" disabled aria-label="Users and permissions"></td>').join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
+      <tr><th class="pm-k pm-l1">${icon("shield", 15)}Users &amp; permissions</th>${roleCols.map(() => '<td class="pm-c pm-rc"><input type="checkbox" disabled aria-label="Users and permissions"></td>').join("")}${userCols.map((c) => `<td class="pm-c"><input type="checkbox" disabled ${c.owner || c.key === "admin" || c.key === "owner" ? "checked" : ""} aria-label="Users and permissions"></td>`).join("")}</tr>
     </tbody></table></div>
-    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? (RL_PEOPLE_ONLY ? "Owners always see everything. Only an Owner can change HR Admins and Owners." : "Owners always see everything. You can narrow the HR Admin role here; HR Admins keep this page.") : "Owners and HR Admins manage this page. Only an Owner can change HR Admins and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user in the Users card above.</p></section>`;
+    <p class="t-muted" style="margin:10px 0 0;font-size:13px">${iAmOwner() ? (RL_PEOPLE_ONLY ? "Owners always see everything. Only an Owner can change HR Managers and Owners." : "Owners always see everything. You can narrow the HR Manager role here; HR Managers keep this page.") : "Owners and HR Managers manage this page. Only an Owner can change HR Managers and Owners, so their columns are locked for you."} The dashboard is open to everyone and shows only the parts of the modules a person has. To add someone, use Add user in the Users card above.</p></section>`;
 }
 { const b = VIEWS.perms; VIEWS.perms = (...x) => { const h = b(...x); if (!isPermAdmin()) return h;
   // One page (Glenn 2026-10-15): the Users list, then the Users & Roles tick boxes, then the roles summary.
@@ -161,12 +189,12 @@ window.addEventListener("submit", async (ev) => {
 .rl.rl-pp thead tr:nth-child(1)>*{top:0}.rl.rl-pp thead tr:nth-child(2)>*{top:38px}.rl.rl-pp thead tr:nth-child(3)>*{top:99px}
 .rl .pm-k{position:sticky;left:0;z-index:1;background:var(--card,#fff);min-width:230px}.rl thead .pm-k{z-index:3}
 .rl .pm-rc{background:rgba(201,164,92,.10) !important}.rl thead .pm-rc{background:#F6EEDC !important}.rl-kh{text-align:center;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted,#6A7080)}.rl-kr{background:#F6EEDC !important;color:#7a5a1c}
-.rl .pm-p{min-width:120px;vertical-align:bottom}.rl .pm-p small{display:block;font-weight:400}.rl-rn{display:block;color:#7a5a1c}.rl-x{font-size:12px;margin-top:2px}
+.rl .pm-p{min-width:120px;vertical-align:bottom}.rl .rl-inv{font-style:italic}.rl .rl-inv small{font-style:normal}.rl .pm-p small{display:block;font-weight:400}.rl-rn{display:block;color:#7a5a1c}.rl-x{font-size:12px;margin-top:2px}
 .rl input[type=checkbox]{width:18px;height:18px;accent-color:#C9A45C;cursor:pointer}.rl input[type=checkbox]:disabled{cursor:not-allowed}
 [data-theme=dark] .rl thead th,[data-theme=dark] .rl thead td,[data-theme=dark] .rl .pm-k{background:#13203A}[data-theme=dark] .rl thead .pm-rc,[data-theme=dark] .rl-kr{background:#2A2A22 !important;color:#E4C98E}[data-theme=dark] .rl-rn{color:#E4C98E}`; document.head.appendChild(st); }
 
-/* ---------- only Owners change HR Admins and Owners ---------- */
-const RL_MSG = "Only an Owner can change HR Admins and Owners.";
+/* ---------- only Owners change HR Managers and Owners ---------- */
+const RL_MSG = "Only an Owner can change HR Managers and Owners.";
 function rlLockUi() {
   if (iAmOwner()) return;
   const idOf = (el) => (el.dataset.permRole || el.dataset.pv || el.dataset.pg || el.dataset.pe || el.dataset.permDel || el.dataset.puDel || el.closest("#pu-form")?.dataset.id || "").split("|")[0];
@@ -202,3 +230,32 @@ let rlOwnerSet = false;
       put(); requestAnimationFrame(put); setTimeout(put, 120); }
     if (fa) { const n = [...document.querySelectorAll(`[${fa}]`)].find((x) => x.getAttribute(fa) === fv); n?.focus({ preventScroll: true }); }
     return r; }; }
+
+// Ticks, role and "can change records" for an invited person are saved on the invitation; they get them when they first sign in.
+window.addEventListener("change", async (ev) => {
+  const t = ev.target; const raw = t.dataset?.permRole ?? t.dataset?.pv ?? t.dataset?.pg ?? t.dataset?.pe; if (!raw || !String(raw).startsWith("inv:") || S.view.name !== "perms") return;
+  ev.stopImmediatePropagation(); if (!isPermAdmin()) return;
+  const id = raw.split("|")[0]; const k = id.slice(4); const invites = { ...(S.access?.invites || {}) }; const v = invites[k]; if (!v) return;
+  const key = ROLES[v.role] ? v.role : "viewer"; const keys = navKeys(); let what;
+  if (t.dataset.permRole != null) { const nr = ROLES[t.value] ? t.value : "viewer"; const next = { ...v, role: nr }; delete next.views; delete next.mods; delete next.edit;
+    if (nr === "custom") { const vs = viewsOf(v, key); next.views = [...vs].filter((x) => !ALWAYS.has(x)); next.mods = modsOf(vs); next.edit = key === "custom" ? v.edit !== false : !!ROLES[key]?.edit; }
+    invites[k] = next; what = `Changed the invitation for ${v.name} to ${ROLES[nr].name}`; }
+  else { if (key === "owner") return; const views = viewsOf(v, key); const edit = key === "custom" ? v.edit !== false : !!ROLES[key]?.edit;
+    if (t.dataset.pv) { const p = t.dataset.pv.slice(id.length + 1); for (const x of [p, ...descOf(keys, p)]) t.checked ? views.add(x) : views.delete(x); if (t.checked) for (const q of ancOf(keys, p)) views.add(q);
+      what = `${t.checked ? "Gave" : "Removed"} ${keys.find((x) => x.v === p)?.l || p} ${t.checked ? "to" : "from"} ${v.name} (invited)`; }
+    else if (t.dataset.pg) { const g = t.dataset.pg.slice(id.length + 1); for (const x of keys) if (x.g === g && !ALWAYS.has(x.v)) t.checked ? views.add(x.v) : views.delete(x.v);
+      what = `${t.checked ? "Gave" : "Removed"} all of ${GL(g)} ${t.checked ? "to" : "from"} ${v.name} (invited)`; }
+    else what = `${v.name} (invited) ${t.checked ? "can change records" : "is view only"}`;
+    invites[k] = { ...v, role: "custom", views: [...views].filter((x) => !ALWAYS.has(x)), mods: modsOf(views), edit: t.dataset.pe ? t.checked : edit }; }
+  try { await saveAccess({ invites: JSON.parse(JSON.stringify(invites)) }, what); } catch { toast("Couldn't save. Check your connection and try again."); }
+}, true);
+// Compact tick-box table (Glenn 2026-10-17): tighter rows and narrower columns; the header rows stay stuck on top at their real heights.
+{ const st = document.createElement("style"); st.textContent = `.rl.rl-pp th,.rl.rl-pp td{padding:3px 8px;font-size:13px;line-height:1.25}
+.rl.rl-pp{width:auto}.rl.rl-pp .pm-k{min-width:0;white-space:nowrap}.rl.rl-pp .pm-l1{padding-left:16px}.rl.rl-pp .pm-l2{padding-left:30px}.rl.rl-pp .pm-l3{padding-left:44px;font-size:12.5px}
+.rl.rl-pp .pm-k svg{width:13px;height:13px;margin-right:5px}.rl.rl-pp .pm-gl{gap:5px;font-size:13px}.rl.rl-pp tr.pm-g>*{padding-top:6px;padding-bottom:6px}
+.rl.rl-pp .pm-p{min-width:96px;max-width:140px;white-space:normal;font-size:12.5px;line-height:1.2;padding:6px 6px}.rl.rl-pp .pm-p small{font-size:11px}
+.rl.rl-pp select.pm-role{font-size:12px;padding:2px 18px 2px 4px;min-height:0;height:26px;max-width:136px;width:100%}
+.rl.rl-pp input[type=checkbox]{width:15px;height:15px;margin:0;vertical-align:middle}
+.rl-wrap{max-height:80vh}`; document.head.appendChild(st); }
+{ const prev = after.perms; after.perms = () => { prev?.(); const t = document.querySelector("#rl-grid table.rl-pp"); if (!t) return; let top = 0;
+    for (const tr of t.tHead?.rows || []) { for (const c of tr.cells) c.style.top = `${top}px`; top += tr.getBoundingClientRect().height; } }; }

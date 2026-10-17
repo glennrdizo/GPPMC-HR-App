@@ -34,7 +34,7 @@ function opDecided(kind, r) {
 }
 const opEmp = (r) => (S.allEmps || S.emps).get(r.empId) || null;
 const opUserIds = () => { const a = S.access || {}; return [...new Set([...Object.keys(a.users || {}), ...Object.keys(a.seen || {}), ...(S.myId ? [S.myId] : [])])].sort((x, y) => personName(x).localeCompare(personName(y))); };
-const opWho = (id) => (id ? personName(id) : "HR Admin");
+const opWho = (id) => (id ? personName(id) : "HR Manager");
 
 /* Pending approvals with age, target and escalation */
 function opsPending() {
@@ -133,7 +133,7 @@ function opsRules() {
       ${can ? [0, 1].map((i) => `<td><input class="input" name="ch-${k}-${i}-n" value="${esc(ch[i]?.name || "")}" placeholder="${i ? "e.g. HR Manager" : "e.g. Department head"}" style="min-width:150px"></td><td>${sel(`ch-${k}-${i}-u`, ch[i]?.uid)}</td>`).join("") : '<td colspan="4" class="t-muted">No endorsement step; decided on its own page</td>'}</tr>`; }).join("")}</tbody></table></div></section>
     <section class="card"><div class="card-head"><h2>Escalation and deadlines</h2></div><div class="form-grid">
       <div class="field"><label for="ops-escd">Escalate after this many days past target</label><input class="input" id="ops-escd" name="escDays" type="number" min="0" max="30" value="${O.escDays}"></div>
-      <div class="field"><label>Escalate to</label>${sel("escTo", O.escTo, "HR Admin (anyone with full access)")}</div>
+      <div class="field"><label>Escalate to</label>${sel("escTo", O.escTo, "HR Manager (anyone with full access)")}</div>
       <div class="field"><label for="ops-nte">Days for the employee's reply to a notice to explain</label><input class="input" id="ops-nte" name="nteDays" type="number" min="5" max="30" value="${O.nteDays}"></div>
       <div class="field"><label for="ops-dec">Days to decide a case after the reply</label><input class="input" id="ops-dec" name="decDays" type="number" min="1" max="60" value="${O.decDays}"></div>
       ${REMIT.map(([k, l]) => `<div class="field"><label for="ops-due-${k}">${esc(l)}: day of the next month it is due (0 = last day)</label><input class="input" id="ops-due-${k}" name="due-${k}" type="number" min="0" max="31" value="${O.due[k]}"></div>`).join("")}

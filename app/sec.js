@@ -40,7 +40,7 @@ RL_TOP.add("exec");
 
 // Removing someone drops them to the default role. While that is a top role, only an Owner may remove people.
 window.addEventListener("click", (ev) => { if (iAmOwner()) return; const t = ev.target.closest?.("[data-perm-del],[data-pu-del]"); if (!t) return;
-  const d = S.access?.defaultRole || "admin"; if (RL_TOP.has(d)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Only an Owner can remove people while the default role is " + (ROLES[d]?.name || "HR Admin") + "."); } }, true);
+  const d = S.access?.defaultRole || "admin"; if (RL_TOP.has(d)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Only an Owner can remove people while the default role is " + (ROLES[d]?.name || "HR Manager") + "."); } }, true);
 
 // Audit log: entries with a bad date or name are skipped instead of blanking the page.
 { let data = AU.data; Object.defineProperty(AU, "data", { configurable: true, enumerable: true, get: () => data, set: (m) => {
