@@ -4,7 +4,10 @@
   const SB_URL = "https://dkrxetzvzxkmhdnvrnqd.supabase.co";
   const SB_KEY = "sb_publishable_BacTOm5RH5cw7ruQO9KHUw_ocKoTBkX";
   const BUCKET = "hr-files";
-  const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  // A request on a weak mobile signal gives up instead of hanging (punch buttons used to stay disabled): 25 s for data,
+  // 3 minutes for file uploads and downloads.
+  const tfetch = (u, o = {}) => o.signal || !AbortSignal.timeout ? fetch(u, o) : fetch(u, { ...o, signal: AbortSignal.timeout(/\/storage\/v1\//.test(String(u?.url || u)) ? 180000 : 25000) });
+  const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: tfetch } });
   window.__sb = sb;
   window.__hosted = true;
 

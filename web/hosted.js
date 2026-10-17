@@ -44,6 +44,13 @@ async function loadSignups(force) {
 }
 setInterval(() => loadSignups().catch(() => {}), 60000);
 const suPending = () => (S.signups || []).filter((r) => r.status === "pending");
+// Automatic linking needs more than the employee number (numbers are printed on IDs): the name on the request must match
+// the record, and when the record has a mobile number the request's mobile must match it too. Anything else waits for HR.
+const suDigits = (x) => String(x || "").replace(/\D/g, "").slice(-10);
+function suSamePerson(r, e) {
+  const same = normName(fullName(e)).split(" ").filter((w) => w.length > 1 && normName(r.name || "").split(" ").includes(w)).length >= 2;
+  const onFile = suDigits(e.mobile || e.phone); return same && (!onFile || (onFile.length === 10 && suDigits(r.mobile) === onFile));
+}
 function suMatch(r) {
   const no = normH(r.emp_no || ""); if (!no) return '<span class="chip c-gray">No employee number given</span>';
   const e = [...(S.allEmps || S.emps).values()].find((x) => normH(x.no) === no); if (!e) return `<span class="chip c-bad">No employee with number ${esc(r.emp_no)}</span>`;
@@ -80,7 +87,8 @@ document.addEventListener("click", async (ev) => {
   logActivity(`${ok ? "Approved" : r?.status === "approved" ? "Removed access for" : "Rejected"} the account of ${nm}`); toast(ok ? `${nm} is approved.` : "Saved."); await loadSignups(true); render(); });
 // Every approved employee gets their own pages without a second step (Glenn 2026-10-17): an approved account whose employee number
 // belongs to exactly one active employee is linked to that employee, and its time clock is set up for them. HR's approval, which
-// checks the request against the employee records, is the identity check; numbers that match no one, or someone already linked, wait for HR.
+// checks the request against the employee records, is the identity check; numbers that match no one, someone already linked, or a
+// different name or mobile (suSamePerson) wait for HR.
 let suLinkBusy = false;
 async function suAutoLink() {
   if (suLinkBusy || !S.realEdit || !S.canEdit || !S.db || !S.signups || !S.clockDevs || !S.emps.size) return; suLinkBusy = true;
@@ -88,7 +96,7 @@ async function suAutoLink() {
     const byNo = new Map(); for (const e of active()) { const k = normH(e.no); if (k) byNo.set(k, byNo.has(k) ? null : e); }
     const links = { ...(S.clockLinks || {}) }; const taken = new Set(Object.values(links)); const added = [];
     for (const r of S.signups) {
-      if (r.status !== "approved" || !r.emp_no || !r.user_id || links[r.user_id]) continue; const e = byNo.get(normH(r.emp_no)); if (!e || e.sample || taken.has(e.id)) continue;
+      if (r.status !== "approved" || !r.emp_no || !r.user_id || links[r.user_id]) continue; const e = byNo.get(normH(r.emp_no)); if (!e || e.sample || taken.has(e.id) || !suSamePerson(r, e)) continue;
       const d = S.clockDevs.get(r.user_id); if (d && (d.kiosk || d.bio || d.adjust)) continue;
       if (!d) { const info = { at: new Date().toISOString(), name: r.name || fullName(e), empNo: e.no }; await S.db.doc(`clockins/${r.user_id}`).set(info); S.clockDevs.set(r.user_id, { id: r.user_id, ...info }); }
       links[r.user_id] = e.id; taken.add(e.id); added.push([r.user_id, e]); }
