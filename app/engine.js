@@ -124,11 +124,11 @@ const PAY = (() => {
   function autoRow(e, p, S, leaves) {
     const from = e.hire > p.start ? e.hire : p.start;
     const to = e.separated?.date && e.separated.date < p.end ? e.separated.date : p.end;
-    const reg = new Set(S.holidays.filter((h) => h.type === "REG").map((h) => h.d));
+    const regN = {}; for (const h of S.holidays) if (h.type === "REG") regN[h.d] = (regN[h.d] || 0) + 1; const reg = new Set(Object.keys(regN));
     const allHol = new Set(S.holidays.map((h) => h.d));
     const types = Object.fromEntries(S.leaveTypes.map((t) => [t.code, t]));
-    let wd = 0, rh = 0, lv = 0, lwop = 0;
-    if (from <= to) eachDay(from, to, (d, s) => { if (isRest(d, S)) return; if (reg.has(s)) rh++; else if (!allHol.has(s)) wd++; });
+    let wd = 0, rh = 0, rh2 = 0, lv = 0, lwop = 0; // rh2: the second regular holiday on a double holiday (paid 200% unworked)
+    if (from <= to) eachDay(from, to, (d, s) => { if (isRest(d, S)) return; if (reg.has(s)) { rh++; rh2 += regN[s] - 1; } else if (!allHol.has(s)) wd++; });
     for (const l of leaves) {
       if (l.empId !== e.id || l.status !== "APPROVED" || l.to < from || l.from > to) continue;
       let n = 0;
@@ -137,7 +137,7 @@ const PAY = (() => {
       if (types[l.type]?.paid === false) lwop += n; else lv += n;
     }
     const partial = from > p.start || to < p.end;
-    return { wd, rh, lv, lwop, partial };
+    return { wd, rh, rh2, lv, lwop, partial };
   }
 
   const ZERO = { abs: 0, late: 0, ut: 0, ot: 0, rd: 0, rhw: 0, sh: 0, rdot: 0, rhot: 0, rhrd: 0, dhw: 0, rhrdot: 0, dhot: 0, shrd: 0, shrdot: 0, rhx: 0, nd: 0, bp: 0, comm: 0, adj: 0, adjN: 0, ded: 0, taxAdj: 0 };
@@ -169,6 +169,7 @@ const PAY = (() => {
       days = Math.max(0, auto.wd - auto.lv - auto.lwop - r.abs);
       basic = daily * days; hol = daily * Math.max(0, auto.rh - (Number(r.rhx) || 0)); leave = daily * auto.lv;
     }
+    if (auto.rh2 && !((Number(r.rhx) || 0) >= auto.rh)) hol += daily * auto.rh2; // a double holiday pays one more day (200% unworked)
     const tardy = (hourly * (r.late + r.ut)) / 60;
     const ot = hourly * r.ot * 1.25, rd = hourly * r.rd * 1.3, rhw = hourly * r.rhw, sh = hourly * r.sh * (isM ? 0.3 : 1.3), nd = hourly * r.nd * 0.1;
     // Regular holiday worked: 200%. The holiday's own 100% is already in the pay (monthly rate, or the daily holiday pay), so the hours add 100%.
