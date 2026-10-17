@@ -109,7 +109,7 @@ const PAY = (() => {
   const shiftPeriod = (id, n) => { const p = period(id); let k = p.y * 24 + (p.m - 1) * 2 + (p.half - 1) + n; return `${Math.floor(k / 24)}-${String(Math.floor((k % 24) / 2) + 1).padStart(2, "0")}-${(k % 2) + 1}`; };
 
   const isRest = (d, S) => d.getDay() === 0 || (S.factor <= 261 && d.getDay() === 6);
-  function eachDay(from, to, fn) { for (let d = day(from); iso(d) <= to; d.setDate(d.getDate() + 1)) fn(new Date(d), iso(d)); }
+  function eachDay(from, to, fn) { for (let d = day(from), n = 0; !isNaN(d) && iso(d) <= to && n < 4000; d.setDate(d.getDate() + 1), n++) fn(new Date(d), iso(d)); } // a bad date or a span over 10 years stops
 
   /* Days a leave uses: working days (no rest days or holidays), or calendar days for long statutory leaves. */
   function leaveDays(lv, S, lt) {

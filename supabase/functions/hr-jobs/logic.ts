@@ -19,10 +19,14 @@ export const NOTIFY_DEF: Settings = {
   careersUrl: "https://gppmc-hr-app1.vercel.app/careers", digestHour: 7, digestTo: [], approverTo: [], sms: false,
   kinds: { decided: true, approval: true, payslip: true, applicant: true, digest: true },
 };
+export const URL_HOSTS = ["gppmc-hr-app1.vercel.app", "hr.gd-prime.com"];
 export function readSettings(d: Doc | null | undefined): Settings {
   const o = d || {};
   const list = (x: unknown) => (Array.isArray(x) ? x : String(x || "").split(/[,;\s]+/)).map((s) => String(s).trim().toLowerCase()).filter(isEmail);
-  return { ...NOTIFY_DEF, ...o, on: o.on === true, sms: o.sms === true, digestHour: Math.min(23, Math.max(0, Number(o.digestHour ?? 7) || 0)),
+  // Links and the company name go into every email: only our own https addresses, and a plain name.
+  const okUrl = (u: unknown, def: string) => { try { const x = new URL(String(u || "")); return x.protocol === "https:" && URL_HOSTS.includes(x.hostname) ? x.href : def; } catch { return def; } };
+  const company = String(o.company || "").replace(/[\u0000-\u001f\u007f<>]|https?:\/\/\S*/gi, " ").replace(/\s+/g, " ").trim().slice(0, 120) || NOTIFY_DEF.company;
+  return { ...NOTIFY_DEF, ...o, company, appUrl: okUrl(o.appUrl, NOTIFY_DEF.appUrl), careersUrl: okUrl(o.careersUrl, NOTIFY_DEF.careersUrl), on: o.on === true, sms: o.sms === true, digestHour: Math.min(23, Math.max(0, Number(o.digestHour ?? 7) || 0)),
     digestTo: list(o.digestTo), approverTo: list(o.approverTo), kinds: { ...NOTIFY_DEF.kinds, ...(o.kinds || {}) } };
 }
 export const isEmail = (s: unknown) => typeof s === "string" && /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i.test(s.trim());

@@ -24,12 +24,15 @@ function tkAutoPatch(pid, force) {
 async function tkAutoSync(opts = {}) {
   const A = S.tkAuto; if (A.busy || !S.db || !S.realEdit || !S.canEdit || S.selfMode || !tkAutoOn()) return;
   if (!opts.force && A.ver === S.ver) return;
-  A.busy = true; let changed = 0, kept = 0;
+  A.busy = true; A.err = false; let changed = 0, kept = 0;
   try {
     for (const pid of opts.pid ? [opts.pid] : tkOpenCutoffs()) { if (isFinal(pid)) continue; const p = PAY.period(pid);
-      try { await loadClock(p.start, p.end < todayISO() ? p.end : todayISO(), !!opts.reload); } catch {}
+      const to = p.end < todayISO() ? p.end : todayISO();
+      try { await loadClock(p.start, to, !!opts.reload); } catch {}
+      // Never fill from half-read punches (a dropped connection would turn worked days into absences).
+      if (!S.clockLoaded.has(`${p.start}:${to}`)) { A.err = true; continue; }
       const r = tkAutoPatch(pid); kept += r.kept;
-      if (Object.keys(r.patch).length) { await savePeriodRows(pid, r.patch); changed += r.n; } }
+      if (Object.keys(r.patch).length) { S.auSys = "Automatic time sheet"; try { await savePeriodRows(pid, r.patch); } finally { S.auSys = null; } changed += r.n; } }
     A.at = new Date().toISOString(); A.n = changed; A.kept = kept;
   } finally { A.ver = S.ver; A.busy = false; }
   if (changed && ["attendance", "payroll", "payslips"].includes(baseView(S.view?.name || "")) && !S.dirty && !document.activeElement?.closest?.("#ts-rows")) render();
@@ -37,7 +40,9 @@ async function tkAutoSync(opts = {}) {
 // Every 20 s: refresh when anything changed (punches, approvals, leave, roster); every 10 min re-read the phones and kiosks too.
 { const b = bootIO; bootIO = (db) => { b(db); let k = 0; setTimeout(function tick() { k++; tkAutoSync({ force: k % 30 === 0, reload: k % 30 === 0 }).catch(() => {}); setTimeout(tick, 20000); }, 12000); }; }
 // Payroll is finalized on the latest time records.
-{ const b = finalizePayroll; finalizePayroll = async (id) => { if ($("#final-ok")?.checked && !isFinal(id)) { try { await tkAutoSync({ pid: id, force: true }); } catch {} } return b(id); }; }
+{ const b = finalizePayroll; finalizePayroll = async (id) => { if ($("#final-ok")?.checked && !isFinal(id) && tkAutoOn() && S.realEdit) { for (let i = 0; S.tkAuto.busy && i < 100; i++) await new Promise((r) => setTimeout(r, 200)); S.tkAuto.err = false; try { await tkAutoSync({ pid: id, force: true, reload: true }); } catch { S.tkAuto.err = true; }
+    if (S.tkAuto.err && !(await askConfirm("The latest time records couldn't be read, so the time sheet may be out of date. Finalize anyway?", "Finalize anyway"))) return; }
+  return b(id); }; }
 // The manual button also records what it filled, so later automatic updates know which boxes HR changed.
 { const b = savePeriodRows; savePeriodRows = async (id, patch) => { if (S.tkManualFill) { for (const [k, v] of Object.entries(patch)) if (v && TK_F.every((f) => f in v)) patch[k] = { ...v, dtrAuto: Object.fromEntries(TK_F.map((f) => [f, v[f] || 0])) }; } return b(id, patch); }; }
 { const b = lkLoadDtr; lkLoadDtr = async (pid) => { S.tkManualFill = true; try { return await b(pid); } finally { S.tkManualFill = false; } }; }

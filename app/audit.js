@@ -83,7 +83,7 @@ function auRecord(kind, path, before, val, opt) {
 }
 function auPush(it) {
   if (!auOn()) return;
-  AU.buf.push({ at: new Date().toISOString(), ...auPage(), ...it });
+  AU.buf.push({ at: new Date().toISOString(), ...auPage(), ...(S.auSys ? { pageL: `${S.auSys} (done by the app)`, auto: true } : {}), ...it });
   clearTimeout(AU.t); AU.t = setTimeout(auFlush, 1500);
 }
 async function auFlush() {
