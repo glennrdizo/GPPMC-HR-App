@@ -87,16 +87,18 @@ const readNote = (by, r) => by === "emp" ? "Employee-entered figures from the ph
 
 /* ---------- shared form ---------- */
 function lpFields(v, idp) {
+  const emp = idp === "sl" || idp === "el"; const rq = emp ? ' <span class="req">*</span>' : ""; const R = emp ? " required" : "";
   return `<div class="form-grid">
     <div class="field"><label for="${idp}-type">Loan</label><select class="input" id="${idp}-type">${opts(LP_TYPES, v.type || "SSS_SAL")}</select></div>
-    <div class="field"><label for="${idp}-ref">Loan no.</label><input class="input" id="${idp}-ref" value="${esc(v.ref || "")}"></div>
+    <div class="field"><label for="${idp}-ref">Loan no.${rq}</label><input class="input" id="${idp}-ref"${R} maxlength="40" value="${esc(v.ref || "")}"></div>
     <div class="field"><label for="${idp}-monthly">Monthly amortization (PHP) <span class="req">*</span></label><input class="input" id="${idp}-monthly" type="number" min="1" step="0.01" required value="${v.monthly ?? ""}"></div>
     <div class="field"><label for="${idp}-start">First deduction month <span class="req">*</span></label><input class="input" id="${idp}-start" type="month" required value="${esc(v.start || "")}"></div>
     <div class="field"><label for="${idp}-end">Last deduction month <span class="req">*</span></label><input class="input" id="${idp}-end" type="month" required value="${esc(v.end || "")}"></div>
-    <div class="field"><label for="${idp}-amt">Loan amount (optional)</label><input class="input" id="${idp}-amt" type="number" min="0" step="0.01" value="${v.principal ?? ""}"></div></div>`;
+    <div class="field"><label for="${idp}-amt">Loan amount${emp ? rq : " (optional)"}</label><input class="input" id="${idp}-amt" type="number" min="0" step="0.01"${R} value="${v.principal ?? ""}"></div>
+    ${emp || v.purpose ? `<div class="field" style="grid-column:1/-1"><label for="${idp}-why">Purpose or remarks${rq}</label><input class="input" id="${idp}-why"${R} maxlength="200" placeholder="e.g. Salary loan for tuition" value="${esc(v.purpose || "")}"></div>` : ""}</div>`;
 }
-const lpVals = (idp) => ({ type: $(`#${idp}-type`).value, ref: $(`#${idp}-ref`).value.trim() || null, monthly: Number($(`#${idp}-monthly`).value) || null, start: ym($(`#${idp}-start`).value), end: ym($(`#${idp}-end`).value), principal: Number($(`#${idp}-amt`).value) || null });
-const lpCheck = (v) => !v.monthly ? "Enter the monthly amortization." : !v.start || !v.end ? "Enter the first and last deduction months." : v.end < v.start ? "The last month is before the first." : ymDiff(v.start, v.end) > 360 ? "Check the months: that is over 30 years." : null;
+const lpVals = (idp) => ({ type: $(`#${idp}-type`).value, ref: $(`#${idp}-ref`).value.trim() || null, monthly: Number($(`#${idp}-monthly`).value) || null, start: ym($(`#${idp}-start`).value), end: ym($(`#${idp}-end`).value), principal: Number($(`#${idp}-amt`).value) || null, ...($(`#${idp}-why`) ? { purpose: $(`#${idp}-why`).value.trim().slice(0, 200) || null } : {}) });
+const lpCheck = (v, emp) => emp && !v.ref ? "Enter the loan number." : emp && !v.principal ? "Enter the loan amount." : emp && !v.purpose ? "Enter the purpose or remarks." : !v.monthly ? "Enter the monthly amortization." : !v.start || !v.end ? "Enter the first and last deduction months." : v.end < v.start ? "The last month is before the first." : ymDiff(v.start, v.end) > 360 ? "Check the months: that is over 30 years." : null;
 const dropBox = (id, label) => `<label class="ld-drop" data-drop="${id}" tabindex="0">${icon("upload", 26)}<b>${label}</b><span>Photo or PDF of the approved loan: approval notice, disclosure statement, voucher or billing</span><input type="file" id="${id}" accept="image/*,application/pdf" hidden></label>`;
 const pagesHtml = (urls) => { urls = urls.filter(safeImgUrl); return urls.length ? `<div class="ld-pages">${urls.map((u, i) => `<img src="${esc(u)}" alt="Loan document page ${i + 1}">`).join("")}</div>` : ""; };
 
@@ -110,19 +112,24 @@ function selfLoans() {
   return head(`${esc(S.self.claim.name || "")} · ${esc(S.self.claim.empNo || "")}`, "My loans") + `
     <section class="card stack" style="gap:14px;max-width:640px"><h2 style="font-size:18px;margin:0">Post an approved loan</h2>
       <p class="t-muted" style="margin:0;font-size:14px">For SSS and Pag-IBIG loans already approved. HR checks it, then payroll deducts it from your pay every cutoff until the last month.</p>
-      ${D?.busy ? `<p class="ld-busy">${esc(D.step || "Reading…")}</p>` : D?.r ? lpDraftForm(D, "sl") : dropBox("sl-file", "Take a photo or choose the file")}</section>
+      ${D?.busy ? `<p class="ld-busy">${esc(D.step || "Reading…")}</p>` : lpDraftForm(D || LP_BLANK, "sl")}</section>
     <section class="card" style="max-width:640px"><h2 style="font-size:18px;margin:0 0 10px">My loan posts</h2>${mine.length ? `<ul class="list" style="font-size:14px">${mine.map((p) => `<li style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><span><b>${esc(LTYPE[p.type] || "Loan")}</b>${p.ref ? ` · ${esc(p.ref)}` : ""}<div class="t-muted" style="font-size:13px">${money(p.monthly)} a month · ${ymLabel(p.start)} to ${ymLabel(p.end)}</div>${p.reason ? `<div class="t-bad" style="font-size:13px">${esc(p.reason)}</div>` : ""}</span><span class="chip ${LP_ST[p.status]?.[1] || "c-gray"}">${LP_ST[p.status]?.[0] || ""}</span></li>`).join("")}</ul>` : '<p class="t-muted" style="margin:0">Nothing posted yet.</p>'}</section>`;
 }
+const LP_BLANK = { r: {}, by: null, parts: { pages: [] }, file: null };
 function lpDraftForm(D, idp) {
-  return `<form id="${idp}-form" class="stack" style="gap:12px" data-keep><p class="ld-note ${D.by === "none" ? "t-warn" : ""}">${icon(D.by === "none" ? "alert" : "shield", 16)} ${esc(readNote(D.by, D.r))}</p>
-    ${pagesHtml(D.parts.pages.map((p) => p.url))}${lpFields(D.r, idp)}
-    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap"><button type="button" class="btn btn-ghost" data-lp-reset="1">Choose another file</button><button class="btn btn-primary">Send to HR</button></div></form>`;
+  const has = !!D.file;
+  return `<form id="${idp}-form" class="stack" style="gap:12px" data-keep>
+    <div class="field"><span class="lbl">Approved loan document <span class="req">*</span></span>${has ? `<p class="ld-note ${D.by === "none" ? "t-warn" : ""}">${icon(D.by === "none" ? "alert" : "shield", 16)} ${esc(D.file.name)} · ${esc(readNote(D.by, D.r))}</p>${pagesHtml(D.parts.pages.map((p) => p.url))}` : dropBox(`${idp}-file`, "Drag the approved loan here, or take a photo or choose the file")}</div>
+    ${lpFields(D.r, idp)}${idp === "sl" ? fileZone("sl") : ""}
+    ${has ? "" : '<p class="t-warn" style="margin:0;font-size:14px">Attach the approved loan document first. It can\'t go to HR without it.</p>'}
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">${has ? '<button type="button" class="btn btn-ghost" data-lp-reset="1">Choose another file</button>' : ""}<button class="btn btn-primary"${has ? "" : " disabled"}>Send to HR</button></div></form>`;
 }
 async function startRead(file, after) {
   if (!file) return; if (file.size > 25 * 1048576) { toast("That file is over 25 MB."); return; }
   if (!/^image\//.test(file.type) && !/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { toast("Use a photo or a PDF of the loan document."); return; }
+  const idp = $("#sl-form") ? "sl" : $("#el-form") ? "el" : null; const typed = idp ? Object.fromEntries(Object.entries(lpVals(idp)).filter(([k, v]) => v != null && v !== "" && k !== "type")) : {};
   S.lpDraft = { busy: true, step: "Opening the document…", file }; render();
-  try { const x = await readLoanDoc(file, (s) => { S.lpDraft.step = s; render(); }); S.lpDraft = { ...x, file, busy: false }; after?.(); }
+  try { const x = await readLoanDoc(file, (s) => { S.lpDraft.step = s; render(); }); x.r = { ...x.r, ...Object.fromEntries(Object.entries(typed).filter(([k]) => k === "purpose" || x.r[k] == null)) }; S.lpDraft = { ...x, file, busy: false }; after?.(); }
   catch { S.lpDraft = null; toast("Couldn't open that file. Try a clear photo or the PDF."); }
   render();
 }
@@ -159,7 +166,7 @@ function lpReview(p) {
   const ed = S.canEdit && p.status === "PENDING";
   return `<section class="card"><div class="card-head"><h2>${esc(LTYPE[p.type] || "Loan")} · ${esc(e ? fullName(e) : p.claim?.name || "")}</h2><button class="link" data-lp-open="">Close</button></div>
     <div class="two" style="align-items:start"><div>${urls === null ? '<p class="t-muted">Loading the document…</p>' : urls.length ? (p.file?.asset && /pdf$/i.test(p.file.type || "") ? `<p><a class="btn btn-ghost btn-sm" href="${safeDocUrl(urls[0]) ? esc(urls[0]) : "#"}" target="_blank" rel="noopener">Open ${esc(p.file.name || "document")}</a></p>` : pagesHtml(urls)) : '<p class="t-muted">No document attached.</p>'}
-      <p class="ld-note" style="margin-top:8px">${esc(readNote(p.src === "self" ? "emp" : p.read?.by || "none", p.read))}</p></div>
+      <p class="ld-note" style="margin-top:8px">${esc(readNote(p.src === "self" ? "emp" : p.read?.by || "none", p.read))}</p>${p.purpose && !ed ? `<p style="margin:8px 0 0;font-size:14px"><b>Purpose:</b> ${esc(p.purpose)}</p>` : ""}${(p.files || []).length ? `<div style="margin-top:8px;font-size:14px"><b>Other documents</b>${fzLinks(p.files)}</div>` : ""}</div>
       <div>${ed ? `<form id="lpr-form" class="stack" style="gap:12px" data-key="${esc(p.key)}" data-keep>${lpFields(p, "lpr")}
           ${!e ? '<p class="t-warn" style="margin:0;font-size:14px">This phone isn\'t linked to an employee yet. Link it in Phone clock-in first.</p>' : ""}${dup ? `<p class="t-warn" style="margin:0;font-size:14px">${esc(fullName(e))} already has an active ${esc(LTYPE[dup.type].toLowerCase())}${dup.ref ? ` (${esc(dup.ref)})` : ""}. Check it isn't the same loan.</p>` : ""}
           <div class="field"><label for="lpr-why">Note to the employee if returned</label><input class="input" id="lpr-why" placeholder="e.g. Photo is blurred, please retake"></div>
@@ -249,13 +256,14 @@ document.addEventListener("drop", (ev) => { const z = ev.target.closest?.(".ld-d
 document.addEventListener("keydown", (ev) => { if ((ev.key === "Enter" || ev.key === " ") && ev.target.classList?.contains("ld-drop")) { ev.preventDefault(); ev.target.querySelector("input")?.click(); } });
 window.addEventListener("submit", async (ev) => {
   const f = ev.target; if (!["sl-form", "el-form", "lpr-form"].includes(f.id)) return; ev.preventDefault(); ev.stopImmediatePropagation();
-  const idp = f.id.split("-")[0]; const v = lpVals(idp); const bad = lpCheck(v); if (bad) { toast(bad); return; }
+  const idp = f.id.split("-")[0]; const v = lpVals(idp); const bad = lpCheck(v, idp !== "lpr"); if (bad) { toast(bad); return; }
+  if (idp !== "lpr" && !S.lpDraft?.file) { toast("Attach the approved loan document first."); return; }
   const btn = f.querySelector("button.btn-primary"); if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
   try {
     if (f.id === "lpr-form") { if (!S.realEdit) return; const p = lpAll().find((x) => x.key === f.dataset.key); const ln = await approvePost(p, v); S.lpOpen = null; toast(`Approved. ${peso.format(ln.amort)} comes off each cutoff from ${PAY.period(ln.start).label}.`); render(); return; }
     const D = S.lpDraft; const id = uid(); const read = { by: D.by, note: D.r?.note || null }; const months = ymDiff(v.start, v.end) + 1;
-    if (f.id === "sl-form") { const base = `clockins/${S.self.uid}`; const chunks = await savePages(`${base}/loanfiles`, id, D.parts.pages);
-      await S.db.doc(`${base}/loans/${id}`).set(JSON.parse(JSON.stringify({ ...v, months, read, file: { name: D.file.name.slice(0, 120), type: D.file.type, chunks }, status: "PENDING", filed: new Date().toISOString() })));
+    if (f.id === "sl-form") { const base = `clockins/${S.self.uid}`; const files = (S.fz.sl || []).length ? await fzUpload("sl") : []; const chunks = await savePages(`${base}/loanfiles`, id, D.parts.pages);
+      await S.db.doc(`${base}/loans/${id}`).set(JSON.parse(JSON.stringify({ ...v, months, read, file: { name: D.file.name.slice(0, 120), type: D.file.type, chunks }, ...(files.length ? { files } : {}), status: "PENDING", filed: new Date().toISOString() })));
       S.lpDraft = null; toast("Sent to HR. You'll see the status here."); render(); return; }
     if (!S.realEdit) return; const e = essEmp(); let file = { name: D.file.name.slice(0, 120), type: D.file.type };
     if (S.assets) { const u = await S.assets.upload(D.file); file.asset = u.id; }

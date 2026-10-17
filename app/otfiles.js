@@ -39,3 +39,11 @@ document.addEventListener("drop", (ev) => { const z = fzZone(ev); if (!z) return
 { const st = document.createElement("style"); st.textContent = `.fz-box{position:relative;display:flex;gap:10px;align-items:center;justify-content:center;min-height:64px;padding:12px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;font-size:14px;color:var(--muted,inherit)}
   .fz.drag .fz-box,.fz-box:hover{border-color:var(--gold);background:var(--blue-soft)}.fz-list{list-style:none;margin:8px 0 0;padding:0;font-size:14px}.fz-list li{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
   .fz-links{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:13px}.fz-links a{display:inline-flex;gap:4px;align-items:center}`; document.head.appendChild(st); }
+/* On the employee's own account the pages redraw when fresh records arrive (every 2 minutes, and right after sign-in).
+   A form being filled in keeps what was typed through that redraw, as long as the same form is still open. */
+{ const base = render; render = (...a) => {
+    if (!S.selfMode) return base(...a);
+    const at = [S.view, S.selfTab, S.epOpen]; const keep = [...document.querySelectorAll("form[data-keep] [id]")].filter((x) => "value" in x && x.type !== "file" && x.type !== "submit").map((x) => [x.id, x.type === "checkbox" ? x.checked : x.value]);
+    const r = base(...a);
+    if (at[0] === S.view && at[1] === S.selfTab && at[2] === S.epOpen) for (const [id, v] of keep) { const x = document.getElementById(id); if (!x || !x.closest("form[data-keep]")) continue; if (x.type === "checkbox") x.checked = v; else if (v !== "") x.value = v; }
+    return r; }; }

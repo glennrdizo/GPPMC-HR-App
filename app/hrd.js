@@ -6,13 +6,13 @@ const HRD_DATA = {"areas":[{"n":1,"obj":"Align human resource strategies with th
 const HRD_CATS = [
   ["Strategic HR Management", "star", [1, 2, 3]],
   ["Talent Management", "people", [4, 5, 6, 7]],
+  ["HR Administration", "file", [20, 21, 25, 26]], // before Timekeeping (Glenn 2026-10-17)
   // HR Operations split into two modules of their own (Glenn 2026-10-17). Menu shows them as "Timekeeping" and "Payroll" (GROUP_LABEL);
   // the keys differ from the old access modules Timekeeping/Payroll so a shown menu group never widens S.perm.mods.
   ["Timekeeping & Leave", "clock", [8, 9]],
   ["Payroll & Benefits", "pay", [10, 11, 12]],
   ["Employee Development", "cap", [13, 14, 15]],
   ["Employee Relations & Compliance", "shield", [16, 17, 18, 19]],
-  ["HR Administration", "file", [20, 21, 25, 26]],
   ["Employee Experience", "mega", [22, 23, 24]],
   ["HR Governance", "report", [27, 28, 29, 30]],
   ["Property Workforce Operations", "building", [31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]],
@@ -89,6 +89,11 @@ const HRD_LABEL = {}; // view -> menu name of new pages
     }
     groups.push([cat, items]); MOD_ICON[cat] = cic;
   }
+  // Benefits registers shown under HR Administration, right after Employee Records & 201 Files (Glenn 2026-10-17). Same pages and access.
+  { const adm = groups.find(([g]) => g === "HR Administration")?.[1]; const at = adm ? adm.findIndex(([, l]) => l === HRD_AREAS[20][0]) : -1;
+    if (at >= 0) { const moved = [];
+      for (const label of ["Employee Benefits Register", "HMO Enrollment Tracker", "Benefits Utilization Report"]) for (const [, items] of groups) for (const it of items) { const i = (it[3] || []).findIndex(([, l]) => l === label); if (i >= 0) moved.push(it[3].splice(i, 1)[0]); }
+      adm.splice(at + 1, 0, ...moved); } }
   // Pages the new layout repeats elsewhere (Training program = Training home, Training history = Training records) leave the menu but keep working.
   NAV.splice(0, NAV.length, ...(overview ? [overview] : []), ...groups);
   for (const v of [...Object.keys(HRD_REG), ...Object.keys(HRD_LABEL), ...Object.keys(HRD_EXTRA)]) if (!SECTION_OF[v]) SECTION_OF[v] = v;

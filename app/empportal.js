@@ -5,7 +5,7 @@
    files there (leave, attendance change, overtime, certificate) go to clockins/{uid}/reqs; HR's app turns them into the
    usual records, which wait for approval like any other request. */
 const EP_TAB = { esshome: "home", essask: "ask", essbot: "bot", essloans: "loans" }; // pages the employee's account already has
-const EP_FORM = { essleave: "leave", essreq: "adjust", essot: "ot", esshr: "cert" };
+const EP_FORM = { essleave: "leave", essreq: "adjust", essot: "ot", esshr: ["cert", "chg", "resign"] };
 const epPrevMonth = (m) => { const [y, n] = m.split("-").map(Number); return n === 1 ? `${y - 1}-12` : `${y}-${String(n - 1).padStart(2, "0")}`; };
 // What the HR app's page has that only works for HR: forms, HR buttons and the preview's own period pickers.
 function epClean(h) {
@@ -87,7 +87,7 @@ async function rqOne(f) {
     if (!reason) return bad("Give the reason.");
     if (f.kind === "adjust") { if (S.attReqs.has(id)) return rqDone(f, { done: true, req: `ar:${id}` }).then(() => true);
       const tin = FX_HM.test(f.in || "") ? f.in : null, tout = FX_HM.test(f.out || "") ? f.out : null; if (!tin && !tout) return bad("Enter the time in or out.");
-      const r = { empId: e.id, kind: "ADJUST", d: f.d, in: tin, out: tout, reason, status: "PENDING", filed: today, by: null, src: "phone", rqId };
+      const r = { empId: e.id, kind: "ADJUST", d: f.d, in: tin, out: tout, reason, status: "PENDING", filed: today, by: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) };
       await S.db.doc(`attreq/${id}`).set(JSON.parse(JSON.stringify(r))); S.attReqs.set(id, { id, ...r }); S.ver++;
       await rqDone(f, { done: true, req: `ar:${id}` }); logActivity(`${fullName(e)} asked for an attendance change from their account (${fmtDate(f.d)})`); return true; }
     if (S.otReqs.has(id)) return rqDone(f, { done: true, req: `ot:${id}` }).then(() => true);
@@ -97,8 +97,21 @@ async function rqOne(f) {
   if (f.kind === "cert") {
     if (S.certReqs.has(id)) return rqDone(f, { done: true, req: `cq:${id}` }).then(() => true);
     if (!CERTS.some((c) => c[0] === f.type)) return bad("Choose the certificate again."); const purpose = fxText(f.purpose, 120); if (!purpose) return bad("Give the purpose.");
-    await saveRec("certreq", id, { status: "PENDING", filed: today, by: null, empId: e.id, type: f.type, purpose, copies: Math.min(10, Math.max(1, Math.round(Number(f.copies) || 1))), need: day(f.need) ? f.need : null, src: "phone", rqId });
+    await saveRec("certreq", id, { status: "PENDING", filed: today, by: null, empId: e.id, type: f.type, purpose, copies: Math.min(10, Math.max(1, Math.round(Number(f.copies) || 1))), need: day(f.need) ? f.need : null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
     await rqDone(f, { done: true, req: `cq:${id}` }); logActivity(`${fullName(e)} asked for a ${certName(f.type).toLowerCase()} from their account`); return true; }
+  if (f.kind === "chg") {
+    if (S.chgReqs.has(id)) return rqDone(f, { done: true, req: `cr:${id}` }).then(() => true);
+    if (!CHG_FIELDS.some((c) => c[0] === f.field)) return bad("Choose what to change again."); const to = fxText(f.to, 200); if (!to) return bad("Enter the new value.");
+    const files = fzClean(f.files);
+    await saveRec("empchg", id, { status: "PENDING", filed: today, by: null, empId: e.id, field: f.field, from: e[f.field] || null, to, reason: reason || null, proof: files[0] ? { id: files[0].id, name: files[0].name } : null, ...(files.length ? { files } : {}), src: "phone", rqId });
+    await rqDone(f, { done: true, req: `cr:${id}` }); logActivity(`${fullName(e)} asked to change their ${chgLabel(f.field).toLowerCase()} from their account`); return true; }
+  if (f.kind === "resign") {
+    if (S.resigns.has(id)) return rqDone(f, { done: true, req: `rs:${id}` }).then(() => true);
+    if (listOf(S.resigns).some((r) => r.empId === e.id && r.status === "PENDING")) return bad("HR already has your resignation notice.");
+    const filed = FX_DAY.test(String(f.filed || "")) && f.filed >= addDays(today, -30) && f.filed <= addDays(today, 30) ? f.filed : today;
+    if (!FX_DAY.test(String(f.last || "")) || isNaN(parseISO(f.last)) || f.last < filed || f.last > addDays(today, 400)) return bad("Check the last day.");
+    await saveRec("resign", id, { empId: e.id, filed, last: f.last, reason: reason || null, text: fxText(f.text, 4000) || null, status: "PENDING", by: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
+    await rqDone(f, { done: true, req: `rs:${id}` }); logActivity(`${fullName(e)} submitted a resignation notice from their account (last day ${fmtDate(f.last)})`); return true; }
   return bad("This kind of request can't be sent from here. Use Ask HR.");
 }
 let rqBusy = false;
@@ -133,28 +146,32 @@ function epView(key) {
   let sw = "";
   if (v === "esstime" && P.pages.esstimePrev) sw = epSwitch([["esstime", "This pay period"], [`esstime@${P.pages.esstimePrev}`, "Previous pay period"]], key);
   if (v === "essatt" && P.pages.essattPrev) sw = epSwitch([["essatt", "This month"], [`essatt@${P.pages.essattPrev}`, "Previous month"]], key);
-  const form = EP_FORM[v] ? epForm(EP_FORM[v]) : v === "essreimb" ? '<section class="card"><p style="margin:0;font-size:15px">To get back what you spent, send the receipt through <button class="link" data-self-tab="ask">Ask HR</button>.</p></section>' : "";
+  const form = EP_FORM[v] ? [].concat(EP_FORM[v]).map(epForm).join("") : v === "essreimb" ? '<section class="card"><p style="margin:0;font-size:15px">To get back what you spent, send the receipt through <button class="link" data-self-tab="ask">Ask HR</button>.</p></section>' : "";
   const i = html.indexOf("</section>"); const hi = html.indexOf('<section class="hero'); const at = hi === 0 ? i + 10 : html.indexOf("<section", 1);
   html = at > 0 ? html.slice(0, at) + sw + form + html.slice(at) : html + sw + form;
   return html + `<p class="t-muted" style="font-size:13px;margin:0">Updated ${esc(timeAgo(P.at))}. For corrections, use Ask HR.</p>`;
 }
 const epSwitch = (opts, key) => `<div class="tabs" role="tablist" style="margin:0 0 12px">${opts.map(([k, l]) => `<button class="tab" role="tab" aria-selected="${k === key}" data-self-tab="p:${k}">${esc(l)}</button>`).join("")}</div>`;
-const EP_KIND = { leave: "Leave", adjust: "Attendance change", ot: "Overtime", cert: "Certificate" };
+const EP_KIND = { leave: "Leave", adjust: "Attendance change", ot: "Overtime", cert: "Certificate", chg: "Change to my record", resign: "Resignation notice" };
 function epForm(kind) {
   const open = S.epOpen === kind; const sent = (S.rqMine || []).filter((r) => r.kind === kind).slice(0, 5);
-  const label = { leave: "File a leave", adjust: "Ask for an attendance change", ot: "File overtime", cert: "Request a certificate" }[kind];
+  const label = { leave: "File a leave", adjust: "Ask for an attendance change", ot: "File overtime", cert: "Request a certificate", chg: "Request a change to my record", resign: "Submit a resignation notice" }[kind];
+  if (kind === "resign" && (listOf(S.resigns || new Map()).some((r) => r.empId === S.clockLinks?.[S.self?.uid] && ["PENDING", "ACCEPTED"].includes(r.status)) || sent.some((r) => !r.done))) return `<section class="card"><div class="card-head"><h2>${esc(label)}</h2></div><p style="margin:0;font-size:14px">HR has your resignation notice. You see its status under Resignation notice.</p></section>`;
   const today = todayISO(); const lt = (SET().leaveTypes || []).map((t) => [t.code, t.name]);
   const body = kind === "leave" ? `<div class="field"><label for="rq-type">Leave</label><select class="input" id="rq-type">${opts(lt, lt[0]?.[0])}</select></div>
       <div class="field"><label for="rq-from">From</label><input class="input" type="date" id="rq-from" value="${today}" required></div><div class="field"><label for="rq-to">To</label><input class="input" type="date" id="rq-to" value="${today}" required></div>
       <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rq-half"> Half day</label>${fileZone("rq")}`
-    : kind === "adjust" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-in">Time in</label><input class="input" type="time" id="rq-in"></div><div class="field"><label for="rq-out">Time out</label><input class="input" type="time" id="rq-out"></div>`
+    : kind === "adjust" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-in">Time in</label><input class="input" type="time" id="rq-in"></div><div class="field"><label for="rq-out">Time out</label><input class="input" type="time" id="rq-out"></div>${fileZone("rq")}`
+    : kind === "chg" ? `<div class="field"><label for="rq-fld">What to change</label><select class="input" id="rq-fld">${opts(CHG_FIELDS, "address")}</select></div><div class="field" style="grid-column:span 2"><label for="rq-to">New value</label><input class="input" id="rq-to" required maxlength="200"></div>${fileZone("rq")}`
+    : kind === "resign" ? `<div class="field"><label for="rq-filed">Letter date</label><input class="input" type="date" id="rq-filed" value="${today}" required></div><div class="field"><label for="rq-last">Last day of work</label><input class="input" type="date" id="rq-last" min="${today}" value="${addDays(today, 30)}" required></div>
+      <div class="field" style="grid-column:1/-1"><label for="rq-text">Letter (optional)</label><textarea class="input" id="rq-text" rows="4" maxlength="4000" placeholder="Or attach your signed letter below"></textarea></div>${fileZone("rq")}`
     : kind === "ot" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-h">Hours</label><input class="input" type="number" id="rq-h" min="0.5" max="16" step="0.5" required></div>${fileZone("rq")}`
     : `<div class="field"><label for="rq-ct">Certificate</label><select class="input" id="rq-ct">${opts(CERTS, "COE")}</select></div><div class="field"><label for="rq-pp">Purpose</label><input class="input" id="rq-pp" required placeholder="e.g. Bank loan"></div>
-      <div class="field"><label for="rq-cp">Copies</label><input class="input" type="number" id="rq-cp" min="1" max="10" value="1"></div><div class="field"><label for="rq-need">Needed by</label><input class="input" type="date" id="rq-need" value="${addDays(today, 3)}"></div>`;
-  const why = kind === "cert" ? "" : `<div class="field" style="grid-column:1/-1"><label for="rq-why">Reason</label><input class="input" id="rq-why" required maxlength="200"></div>`;
+      <div class="field"><label for="rq-cp">Copies</label><input class="input" type="number" id="rq-cp" min="1" max="10" value="1"></div><div class="field"><label for="rq-need">Needed by</label><input class="input" type="date" id="rq-need" value="${addDays(today, 3)}"></div>${fileZone("rq")}`;
+  const why = kind === "cert" ? "" : `<div class="field" style="grid-column:1/-1"><label for="rq-why">Reason${kind === "chg" ? " (e.g. married, moved)" : ""}</label><input class="input" id="rq-why" required maxlength="200"></div>`;
   return `<section class="card"><div class="card-head"><h2>${esc(label)}</h2>${open ? "" : `<button class="btn btn-primary btn-sm" data-rq-open="${kind}">${esc(label)}</button>`}</div>
     ${open ? `<form id="rq-form" class="panel form-grid" style="align-items:end" data-kind="${kind}" data-keep>${body}${why}<div style="display:flex;gap:8px"><button class="btn btn-primary">Send to HR</button><button type="button" class="btn btn-ghost" data-rq-open="">Cancel</button></div></form>` : '<p class="t-muted" style="margin:0;font-size:14px">It goes to HR for approval. You see the result here.</p>'}
-    ${sent.length ? `<ul class="list" style="font-size:14px;margin-top:10px">${sent.map((r) => `<li style="display:flex;justify-content:space-between;gap:10px"><span>${esc(EP_KIND[r.kind] || "Request")} · ${esc(fmtDate((r.from || r.d || r.at || "").slice(0, 10)))}${r.note ? `<div class="t-bad" style="font-size:13px">${esc(r.note)}</div>` : ""}</span><span class="chip ${r.done ? (r.note ? "c-bad" : "c-ok") : "c-warn"}">${r.done ? (r.note ? "Not filed" : "With HR") : "Waiting for HR"}</span></li>`).join("")}</ul>` : ""}</section>`;
+    ${sent.length ? `<ul class="list" style="font-size:14px;margin-top:10px">${sent.map((r) => `<li style="display:flex;justify-content:space-between;gap:10px"><span>${esc(EP_KIND[r.kind] || "Request")} · ${esc(fmtDate((r.from || r.d || r.last || r.at || "").slice(0, 10)))}${r.note ? `<div class="t-bad" style="font-size:13px">${esc(r.note)}</div>` : ""}</span><span class="chip ${r.done ? (r.note ? "c-bad" : "c-ok") : "c-warn"}">${r.done ? (r.note ? "Not filed" : "With HR") : "Waiting for HR"}</span></li>`).join("")}</ul>` : ""}</section>`;
 }
 document.addEventListener("click", (ev) => { const t = ev.target.closest("[data-rq-open]"); if (!t || !S.selfMode) return; ev.stopImmediatePropagation(); S.epOpen = t.dataset.rqOpen || null; render(); }, true);
 window.addEventListener("submit", async (ev) => {
@@ -165,7 +182,9 @@ window.addEventListener("submit", async (ev) => {
   if (kind === "adjust") { Object.assign(rec, { d: v("rq-d"), in: v("rq-in") || null, out: v("rq-out") || null }); if (!rec.d || (!rec.in && !rec.out)) { toast("Enter the date and at least one time."); return; } }
   if (kind === "ot") { Object.assign(rec, { d: v("rq-d"), hours: Number(v("rq-h")) || 0 }); if (!rec.d || !(rec.hours > 0)) { toast("Enter the date and hours."); return; } }
   if (kind === "cert") { Object.assign(rec, { type: v("rq-ct"), purpose: v("rq-pp"), copies: Number(v("rq-cp")) || 1, need: v("rq-need") || null }); if (!rec.purpose) { toast("Give the purpose."); return; } }
-  if ((kind === "ot" || kind === "leave") && (S.fz.rq || []).length) { const btn = f.querySelector("button.btn-primary"); if (btn) btn.disabled = true;
+  if (kind === "chg") { Object.assign(rec, { field: v("rq-fld"), to: v("rq-to") }); if (!rec.to) { toast("Enter the new value."); return; } }
+  if (kind === "resign") { Object.assign(rec, { filed: v("rq-filed") || todayISO(), last: v("rq-last"), text: $("#rq-text")?.value.trim().slice(0, 4000) || null }); if (!rec.last || rec.last < rec.filed) { toast("The last day must be on or after the letter date."); return; } }
+  if ((S.fz.rq || []).length) { const btn = f.querySelector("button.btn-primary"); if (btn) btn.disabled = true;
     try { rec.files = await fzUpload("rq"); } catch { if (btn) btn.disabled = false; toast("Couldn't upload the attachments. Check your connection and try again."); return; } }
   const id = uid(); try { await S.db.doc(`clockins/${S.self.uid}/reqs/${id}`).set(JSON.parse(JSON.stringify(rec))); S.rqMine = [{ id, ...rec }, ...(S.rqMine || [])]; S.epOpen = null; toast("Sent to HR."); render(); } catch { toast("Couldn't send. Check your connection and try again."); }
 }, true);
