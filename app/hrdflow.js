@@ -111,11 +111,11 @@ function hrdFlowPage() {
       <div class="card stat"><span class="label">Functions</span><span class="value">${all.length}</span><span class="note">in ${HRD_CATS.length} modules</span></div>
       <div class="card stat"><span class="label">Workflow steps</span><span class="value">${stepN}</span><span class="note">each linked to its page</span></div>
       <div class="card stat"><span class="label">Automations</span><span class="value">${autoN}</span><span class="note">done by the app</span></div></section>
-    <section class="card" style="margin-top:16px"><div class="card-head"><h2>Summary</h2><select class="input" style="max-width:280px" aria-label="Module" data-hrd-fcat>${opts([["", "All modules"], ...HRD_CATS.map(([c]) => [c, c])], S.hrdFlowCat)}</select></div>
+    <section class="card" style="margin-top:16px"><div class="card-head"><h2>Summary</h2><select class="input" style="max-width:280px" aria-label="Module" data-hrd-fcat>${opts([["", "All modules"], ...HRD_CATS.map(([c]) => [c, GL(c)])], S.hrdFlowCat)}</select></div>
       <div class="table-wrap"><table><thead><tr><th>Module</th><th>Function</th><th>Steps</th><th>Done by the app</th><th>Still done by hand</th></tr></thead><tbody>
-      ${cats.map(([c, , ns]) => ns.map((n) => `<tr><td>${esc(c)}</td><td><button class="link" data-go="hrd_${n}">${esc(hrdTitle(n))}</button></td><td>${HRD_FLOW[n].s.length}</td><td>${esc(HRD_FLOW[n].a.join("; "))}</td><td>${esc(HRD_FLOW[n].m.join("; "))}</td></tr>`).join("")).join("")}
+      ${cats.map(([c, , ns]) => ns.map((n) => `<tr><td>${esc(GL(c))}</td><td><button class="link" data-go="hrd_${n}">${esc(hrdTitle(n))}</button></td><td>${HRD_FLOW[n].s.length}</td><td>${esc(HRD_FLOW[n].a.join("; "))}</td><td>${esc(HRD_FLOW[n].m.join("; "))}</td></tr>`).join("")).join("")}
       </tbody></table></div></section>
-    ${cats.map(([c, , ns]) => `<h2 class="dsec" style="margin:24px 0 0">${esc(c)}</h2>${ns.map((n) => hrdFlowCard(n, true)).join("")}`).join("")}`;
+    ${cats.map(([c, , ns]) => `<h2 class="dsec" style="margin:24px 0 0">${esc(GL(c))}</h2>${ns.map((n) => hrdFlowCard(n, true)).join("")}`).join("")}`;
 }
 VIEWS.hrd_flow = hrdFlowPage; SECTION_OF.hrd_flow = "hrd_flow"; HRD_PERM.hrd_flow = "Overview"; HRD_LABEL.hrd_flow = "Processes & automation";
 { const ov = NAV.find(([g]) => g === "Overview"); if (ov && !ov[1].some(([v]) => v === "hrd_flow")) { const i = ov[1].findIndex(([v]) => v === "report"); ov[1].splice(i >= 0 ? i + 1 : ov[1].length, 0, ["hrd_flow", "Processes & automation", "flow"]); } }
