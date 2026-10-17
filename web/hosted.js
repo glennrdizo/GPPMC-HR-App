@@ -40,7 +40,7 @@ S.signups = null; S.suAll = false; let suAt = 0;
 async function loadSignups(force) {
   if (!window.__sb || !isPermAdmin() || (!force && Date.now() - suAt < 30000)) return; suAt = Date.now();
   const { data, error } = await window.__sb.rpc("hr_signup_list"); if (error) { if (!S.signups) { S.suOff = true; render(); } return; }
-  const before = JSON.stringify(S.signups); S.signups = data || []; if (JSON.stringify(S.signups) !== before) render();
+  const before = JSON.stringify(S.signups); S.signups = data || []; if (JSON.stringify(S.signups) !== before) { render(); setTimeout(() => suAutoLink().catch(() => {}), 0); }
 }
 setInterval(() => loadSignups().catch(() => {}), 60000);
 const suPending = () => (S.signups || []).filter((r) => r.status === "pending");
@@ -74,10 +74,32 @@ document.addEventListener("click", async (ev) => {
   if (ev.target.closest("[data-su-refresh]")) { await loadSignups(true); toast("Up to date."); return; }
   const t = ev.target.closest("[data-su-ok],[data-su-no]"); if (!t || !isPermAdmin()) return; const id = t.dataset.suOk || t.dataset.suNo; const ok = !!t.dataset.suOk;
   const r = (S.signups || []).find((x) => x.user_id === id); const nm = r?.name || r?.email || "this person";
-  if (!await askConfirm(ok ? `Approve ${nm}? They can then sign in and use their own time clock and payslips.` : r?.status === "approved" ? `Remove ${nm}'s access? They will see the approval screen again.` : `Reject ${nm}'s account? They will be asked to check their details or contact HR.`, ok ? "Approve" : r?.status === "approved" ? "Remove access" : "Reject", !ok)) return;
+  if (!await askConfirm(ok ? `Approve ${nm}? They can then sign in, and if their employee number matches one employee, they get their own time clock and employee pages straight away.` : r?.status === "approved" ? `Remove ${nm}'s access? They will see the approval screen again.` : `Reject ${nm}'s account? They will be asked to check their details or contact HR.`, ok ? "Approve" : r?.status === "approved" ? "Remove access" : "Reject", !ok)) return;
   t.disabled = true; const { error } = await window.__sb.rpc("hr_decide_access", { target: id, approve: ok, p_note: null });
   if (error) { t.disabled = false; toast("Couldn't save. Try again."); return; }
   logActivity(`${ok ? "Approved" : r?.status === "approved" ? "Removed access for" : "Rejected"} the account of ${nm}`); toast(ok ? `${nm} is approved.` : "Saved."); await loadSignups(true); render(); });
+// Every approved employee gets their own pages without a second step (Glenn 2026-10-17): an approved account whose employee number
+// belongs to exactly one active employee is linked to that employee, and its time clock is set up for them. HR's approval, which
+// checks the request against the employee records, is the identity check; numbers that match no one, or someone already linked, wait for HR.
+let suLinkBusy = false;
+async function suAutoLink() {
+  if (suLinkBusy || !S.realEdit || !S.canEdit || !S.db || !S.signups || !S.clockDevs || !S.emps.size) return; suLinkBusy = true;
+  try {
+    const byNo = new Map(); for (const e of active()) { const k = normH(e.no); if (k) byNo.set(k, byNo.has(k) ? null : e); }
+    const links = { ...(S.clockLinks || {}) }; const taken = new Set(Object.values(links)); const added = [];
+    for (const r of S.signups) {
+      if (r.status !== "approved" || !r.emp_no || !r.user_id || links[r.user_id]) continue; const e = byNo.get(normH(r.emp_no)); if (!e || e.sample || taken.has(e.id)) continue;
+      const d = S.clockDevs.get(r.user_id); if (d && (d.kiosk || d.bio || d.adjust)) continue;
+      if (!d) { const info = { at: new Date().toISOString(), name: r.name || fullName(e), empNo: e.no }; await S.db.doc(`clockins/${r.user_id}`).set(info); S.clockDevs.set(r.user_id, { id: r.user_id, ...info }); }
+      links[r.user_id] = e.id; taken.add(e.id); added.push([r.user_id, e]); }
+    if (!added.length) return;
+    await S.db.doc("org/clocklinks").set({ links }); S.clockLinks = links; S.ver++;
+    for (const [dev, e] of added) { logActivity(`Linked the approved account of ${fullName(e)} to their employee record`); S.epDue?.add(dev); }
+    setTimeout(() => syncSummaries(), 300);
+  } catch (err) { console.warn("Approved accounts not linked", err); } finally { suLinkBusy = false; }
+}
+setInterval(() => suAutoLink().catch(() => {}), 60000);
+document.addEventListener("click", (ev) => { if (ev.target.closest("[data-su-ok]")) setTimeout(() => loadSignups(true).then(suAutoLink).catch(() => {}), 2500); });
 { const st = document.createElement("style"); st.textContent = ".su-alert{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:14px 0;border-left:4px solid #C9A45C}.su-alert .btn{margin-left:auto}"; document.head.appendChild(st); }
 // HR assistant wording on the website: Claude runs through the company's key (hr-ai function), not the viewer's own account.
 { const off = () => (S.realEdit ? "The HR assistant isn't switched on yet. HR needs to add the company's Claude API key (ANTHROPIC_API_KEY) in Supabase, Edge Functions, Secrets." : "The HR assistant isn't switched on yet. Use Ask HR instead.");
