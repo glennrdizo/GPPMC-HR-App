@@ -63,3 +63,12 @@ document.addEventListener("drop", (ev) => {
   const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event("change", { bubbles: true })); S.dirty = true;
 }, true);
 { const st = document.createElement("style"); st.textContent = ".ph-drop{transition:box-shadow .15s,background .15s}.ph-drop.drag{box-shadow:0 0 0 2px var(--gold) inset;background:var(--blue-soft)}"; document.head.appendChild(st); }
+
+/* Immediate Supervisor (Glenn 2026-10-17): these positions can also be picked. Titles are compared loosely, so
+   "Assistant HR Manager", "Asst. HR Manager" and "TAD - Junior Assistant Manager" all count. */
+const SUP_TITLES = ["operations manager", "cluster head", "accounting manager", "asst accounting manager", "hr manager", "asst hr manager", "tad junior manager", "tad junior asst manager"];
+const supNorm = (t) => String(t || "").toLowerCase().replace(/\bassistant\b/g, "asst").replace(/[^a-z0-9]+/g, " ").trim();
+function supTitleOk(t) {
+  const n = supNorm(t); if (!n) return false;
+  return SUP_TITLES.some((p) => n === p || n.startsWith(p + " ")) || n === "executive" || /\b(chief|president|executive director|managing director)\b/.test(n);
+}

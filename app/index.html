@@ -14114,7 +14114,7 @@ VIEWS.employeeForm = () => {
   const F = (k, label, type = "text", req = false, ph = "") => `<div class="field"><label for="ef-${k}">${esc(label)}${req ? ' <span class="req">*</span>' : ""}</label><input class="input" id="ef-${k}" name="${k}" type="${type}" value="${esc(v[k] ?? "")}" ${req ? "required" : ""} placeholder="${esc(ph)}"></div>`;
   const Sel = (k, label, list, blank, req = false) => `<div class="field"><label for="ef-${k}">${esc(label)}${req ? ' <span class="req">*</span>' : ""}</label><select class="input" id="ef-${k}" name="${k}" ${req ? "required" : ""}>${opts(list, v[k] ?? "", blank)}</select></div>`;
   const RO = (label, val) => `<div class="field"><label>${esc(label)}</label><input class="input" value="${esc(val || "")}" disabled placeholder="Filled in for you"></div>`;
-  const sups = active().filter((x) => x.id !== v.id && (["Project Manager", "General Manager", "HR Manager", "Finance Manager", "Site Engineer", "Foreman", "Property Manager"].includes(pos(x.posId)?.title) || active().some((r) => r.supervisorId === x.id))).sort((a, b) => a.last.localeCompare(b.last));
+  const sups = active().filter((x) => x.id !== v.id && (["Project Manager", "General Manager", "HR Manager", "Finance Manager", "Site Engineer", "Foreman", "Property Manager"].includes(pos(x.posId)?.title) || supTitleOk(pos(x.posId)?.title) || active().some((r) => r.supervisorId === x.id))).sort((a, b) => a.last.localeCompare(b.last));
   const projs = [...S.projects.values()].sort((a, b) => String(a.code).localeCompare(String(b.code)));
   const extra = (x) => { const [, k, label, , t] = x; const id = `ef-m2-${k}`; const val = m[k] ?? ""; const lab = `<label for="${id}">${esc(label)}</label>`;
     if (k === M2K.rank) return `<div class="field">${lab}<input class="input" id="${id}" name="m2__${k}" value="${esc(v.level || val)}" list="m2-levels" placeholder="Rank and File 1"></div>`;
@@ -15924,6 +15924,15 @@ document.addEventListener("drop", (ev) => {
   const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event("change", { bubbles: true })); S.dirty = true;
 }, true);
 { const st = document.createElement("style"); st.textContent = ".ph-drop{transition:box-shadow .15s,background .15s}.ph-drop.drag{box-shadow:0 0 0 2px var(--gold) inset;background:var(--blue-soft)}"; document.head.appendChild(st); }
+
+/* Immediate Supervisor (Glenn 2026-10-17): these positions can also be picked. Titles are compared loosely, so
+   "Assistant HR Manager", "Asst. HR Manager" and "TAD - Junior Assistant Manager" all count. */
+const SUP_TITLES = ["operations manager", "cluster head", "accounting manager", "asst accounting manager", "hr manager", "asst hr manager", "tad junior manager", "tad junior asst manager"];
+const supNorm = (t) => String(t || "").toLowerCase().replace(/\bassistant\b/g, "asst").replace(/[^a-z0-9]+/g, " ").trim();
+function supTitleOk(t) {
+  const n = supNorm(t); if (!n) return false;
+  return SUP_TITLES.some((p) => n === p || n.startsWith(p + " ")) || n === "executive" || /\b(chief|president|executive director|managing director)\b/.test(n);
+}
 
 /* ---------- Speed (audit 2026-10-17) ----------
    Punches by person, and the leave and holiday context, are worked out once per change instead of once per employee:
