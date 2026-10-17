@@ -13146,12 +13146,19 @@ let rlOwnerSet = false;
 { const b = applyPerm; applyPerm = (...x) => { const r = b(...x); const a = S.access; if (!rlOwnerSet && S.isOwner && S.myId && a && S.realEdit && S.db && a.users?.[S.myId]?.role !== "owner") { rlOwnerSet = true;
     const next = { ...a, users: { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: "owner" } } }; S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))).then(() => { S.access = next; }).catch(() => {}); } return r; }; }
 // Ticking a box saves and redraws the page; keep the page and the tick-box table where they were (Glenn 2026-10-17: it jumped to the top).
+// Every scrolling box around the table is remembered (the window, or the page body when the app runs inside claude.ai) and put back
+// right after the redraw, again on the next frame, and once more after a late redraw from the saved record coming back.
 { const b = render; render = (...x) => { if (S.view?.name !== "perms") return b(...x);
-    const w = document.querySelector("#rl-grid .rl-wrap"), main = document.querySelector("#main"); const st = { y: window.scrollY, t: w?.scrollTop || 0, l: w?.scrollLeft || 0, m: main?.scrollTop || 0 };
+    const g = document.querySelector("#rl-grid"); const keep = [];
+    for (let el = g?.parentElement; el; el = el.parentElement) if (el.scrollTop || el.scrollLeft) keep.push([el, el.scrollTop, el.scrollLeft]);
+    const se = document.scrollingElement; if (se && !keep.some(([e]) => e === se) && (se.scrollTop || se.scrollLeft)) keep.push([se, se.scrollTop, se.scrollLeft]);
+    const w = g?.querySelector(".rl-wrap"); const wt = w?.scrollTop || 0, wl = w?.scrollLeft || 0;
     const f = document.activeElement; const fa = f && ["data-rv", "data-rg", "data-re", "data-pv", "data-pg", "data-pe"].find((a) => f.hasAttribute?.(a)); const fv = fa ? f.getAttribute(fa) : null;
     const r = b(...x);
-    const w2 = document.querySelector("#rl-grid .rl-wrap"); if (w2) { w2.scrollTop = st.t; w2.scrollLeft = st.l; } if (main && st.m) main.scrollTop = st.m; if (window.scrollY !== st.y) window.scrollTo({ top: st.y });
-    if (fa) { const g = [...document.querySelectorAll(`[${fa}]`)].find((x) => x.getAttribute(fa) === fv); g?.focus({ preventScroll: true }); }
+    if (keep.length || wt || wl) { const put = () => { for (const [el, t, l] of keep) { if (el.scrollTop !== t) el.scrollTop = t; if (el.scrollLeft !== l) el.scrollLeft = l; }
+        const w2 = document.querySelector("#rl-grid .rl-wrap"); if (w2) { if (w2.scrollTop !== wt) w2.scrollTop = wt; if (w2.scrollLeft !== wl) w2.scrollLeft = wl; } };
+      put(); requestAnimationFrame(put); setTimeout(put, 120); }
+    if (fa) { const n = [...document.querySelectorAll(`[${fa}]`)].find((x) => x.getAttribute(fa) === fv); n?.focus({ preventScroll: true }); }
     return r; }; }
 
 /* ---------- Confidential payroll (Glenn 2026-10-13): only Owners and Executives see or enter the pay of employees marked Confidential. ---------- */
