@@ -15905,6 +15905,26 @@ window.addEventListener("submit", async (ev) => {
    so pay, 13th month and leave conversion treat it like Monthly; only the label differs. */
 function ptLabel(t) { return t === "DAILY" ? "Daily" : t === "SEMI" ? "Semi-monthly" : "Monthly"; }
 
+/* 201 file photo (Glenn 2026-10-17): drag a picture onto the photo card instead of browsing for it. The dropped file goes
+   into the Photo field, so the preview and the save work exactly as if it had been picked. */
+const PH_OK = ["image/jpeg", "image/png", "image/webp"];
+function phDecorate() {
+  const inp = document.getElementById("ef-photo"); const card = inp?.closest("section"); if (!card || card.dataset.drop) return;
+  card.dataset.drop = "photo"; card.classList.add("ph-drop");
+  inp.closest(".field")?.insertAdjacentHTML("beforeend", '<span class="t-muted" style="font-size:13px">or drag a photo onto this box</span>');
+}
+{ const b = render; render = (...a) => { const r = b(...a); try { phDecorate(); } catch {} return r; }; }
+const phZone = (ev) => ev.target.closest?.('[data-drop="photo"]');
+for (const type of ["dragenter", "dragover"]) document.addEventListener(type, (ev) => { const z = phZone(ev); if (!z || !hasFiles(ev)) return; ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; z.classList.add("drag"); });
+document.addEventListener("dragleave", (ev) => { const z = phZone(ev); if (z && !z.contains(ev.relatedTarget)) z.classList.remove("drag"); });
+document.addEventListener("drop", (ev) => {
+  const z = phZone(ev); if (!z) return; ev.preventDefault(); ev.stopImmediatePropagation(); z.classList.remove("drag");
+  const f = [...(ev.dataTransfer?.files || [])].find((x) => PH_OK.includes(x.type)); const inp = document.getElementById("ef-photo");
+  if (!f) { toast("Drop a JPG, PNG or WebP picture."); return; } if (!inp) return;
+  const dt = new DataTransfer(); dt.items.add(f); inp.files = dt.files; inp.dispatchEvent(new Event("change", { bubbles: true })); S.dirty = true;
+}, true);
+{ const st = document.createElement("style"); st.textContent = ".ph-drop{transition:box-shadow .15s,background .15s}.ph-drop.drag{box-shadow:0 0 0 2px var(--gold) inset;background:var(--blue-soft)}"; document.head.appendChild(st); }
+
 /* ---------- Speed (audit 2026-10-17) ----------
    Punches by person, and the leave and holiday context, are worked out once per change instead of once per employee:
    the phone summaries (every minute) and Overtime reports called them for every person, which took about 5 and 11 seconds. */
