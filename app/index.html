@@ -8611,7 +8611,8 @@ document.addEventListener("click", async (ev) => {
       if (st === "APPROVED" && r.effective <= todayISO()) await applyIncrement(nr);
       logActivity(`${RQ_ST[st][0]} a salary increment for ${fullName(e)}`); toast(st === "APPROVED" ? (r.effective <= todayISO() ? "Approved. The new pay applies now." : `Approved. The new pay applies on ${fmtDate(r.effective)}.`) : "Increment rejected."); render(); return; }
     if (d.cqSet) { const [id, st] = d.cqSet.split(":"); const r = S.chgReqs.get(id); const e = S.emps.get(r.empId);
-      if (st === "APPROVED") { const ne = { ...e, [r.field]: r.to }; await saveEmp(ne); S.emps.set(e.id, ne); }
+      if (st === "APPROVED") { if (!e || !CHG_FIELDS.some((c) => c[0] === r.field)) { toast("This change can't be applied from here. Edit the 201 file instead."); return; }
+        const ne = { ...e, [r.field]: String(r.to ?? "").slice(0, 200) }; await saveEmp(ne); S.emps.set(e.id, ne); }
       await saveRec("empchg", id, { ...r, status: st, decided: { d: todayISO(), by: S.myId || null } }); logActivity(`${RQ_ST[st][0]} a change of ${chgLabel(r.field).toLowerCase()} for ${fullName(e)}`); toast(st === "APPROVED" ? "Approved. The record is updated." : `Request ${RQ_ST[st][0].toLowerCase()}.`); render(); return; }
     if (d.certSet) { const [id, st] = d.certSet.split(":"); const r = S.certReqs.get(id); await saveRec("certreq", id, { ...r, status: st, released: st === "RELEASED" ? todayISO() : r.released || null }); logActivity(`${RQ_ST[st][0]}: ${certName(r.type).toLowerCase()} for ${fullName(S.emps.get(r.empId))}`); toast(`${RQ_ST[st][0]}.`); render(); return; }
   } catch { toast("Couldn't save. Try again."); }
