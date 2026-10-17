@@ -360,11 +360,15 @@ async function finalizePayroll(id) {
   if (!$("#final-ok")?.checked) { toast("Tick the box to confirm the time records are complete."); return; }
   const p = PAY.period(id); const { lines, totals } = PAY.run([...S.emps.values()], p, periodDoc(id).rows || {}, SET(), allLeaves(), payExt(id));
   const at = new Date().toISOString();
-  await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
-  if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
-  else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  // The period is marked FINAL last: if the connection drops partway it stays open, and finalizing again redoes every
+  // step (each one only sets this period's values, so repeating it is safe).
+  try {
+    await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
+    await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
+    if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
+    else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  } catch (err) { toast("Finalizing stopped partway. Nothing is final yet: press Finalize again to finish."); render(); return; }
   S.runs.set(id, { start: p.start, end: p.end, at, lines, totals }); S.periods.set(id, { ...periodDoc(id), start: p.start, end: p.end, status: "FINAL", finalAt: at, totals }); S.ver++;
-  await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
   logActivity(`Finalized payroll for ${p.label}: net ${peso.format(totals.net)}`); toast("Payroll finalized."); render();
 }
 async function reopenPayroll(id) {
@@ -375,7 +379,8 @@ async function reopenPayroll(id) {
 
 /* ---------- payslip ---------- */
 VIEWS.payslip = () => {
-  const { pid, emp } = S.view; const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid);
+  const { pid, emp } = S.view; if (!pid || !emp) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
+  const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid).catch(() => {});
   const run = payrun(pid); const l = run.lines[emp];
   if (!e || !l) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
   return `<div class="no-print"><button class="link" style="color:#fff" data-go="payroll">${icon("back", 16)} Payroll</button></div>` +

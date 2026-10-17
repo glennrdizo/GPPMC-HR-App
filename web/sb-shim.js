@@ -4,7 +4,10 @@
   const SB_URL = "https://dkrxetzvzxkmhdnvrnqd.supabase.co";
   const SB_KEY = "sb_publishable_BacTOm5RH5cw7ruQO9KHUw_ocKoTBkX";
   const BUCKET = "hr-files";
-  const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } });
+  // A request on a weak mobile signal gives up instead of hanging (punch buttons used to stay disabled): 25 s for data,
+  // 3 minutes for file uploads and downloads.
+  const tfetch = (u, o = {}) => o.signal || !AbortSignal.timeout ? fetch(u, o) : fetch(u, { ...o, signal: AbortSignal.timeout(/\/storage\/v1\//.test(String(u?.url || u)) ? 180000 : 25000) });
+  const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: tfetch } });
   window.__sb = sb;
   window.__hosted = true;
 
@@ -23,13 +26,25 @@
 
   /* ---------- live updates: one channel, listeners re-read what changed ---------- */
   const listeners = new Set();
-  let chan = null;
+  let chan = null, down = false;
+  // Changes made while the connection was down (laptop asleep, Wi-Fi drop) are never replayed, so every open listener
+  // re-reads once the channel is back, the browser is online again, or the tab comes back after being away.
+  const kickAll = () => { for (const l of listeners) l.kick(); };
   function ensureChannel() {
     if (chan) return;
     chan = sb.channel("hr-docs").on("postgres_changes", { event: "*", schema: "public", table: "hr_docs" }, (ev) => {
       const p = ev.new?.path || ev.old?.path; if (!p) return;
       for (const l of listeners) if (l.match(p)) l.kick();
-    }).subscribe();
+    }).subscribe((st) => {
+      if (st === "SUBSCRIBED") { if (down) kickAll(); down = false; }
+      else if (st === "CHANNEL_ERROR" || st === "TIMED_OUT" || st === "CLOSED") down = true;
+    });
+    let hiddenAt = 0;
+    window.addEventListener("online", kickAll);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") hiddenAt = Date.now();
+      else if (down || (hiddenAt && Date.now() - hiddenAt > 120000)) kickAll();
+    });
   }
   function listen(match, load, cb, onErr) {
     let alive = true, t = null, busy = false, again = false;

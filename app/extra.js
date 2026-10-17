@@ -102,7 +102,13 @@ async function savePunch(dev, punch, devInfo) {
 }
 
 /* ---------- reading clock-ins (HR) ---------- */
-async function loadClock(from, to, force) {
+// A second caller for the same range waits for the read already running instead of getting half-loaded punches.
+const clockInflight = new Map();
+function loadClock(from, to, force) {
+  const key = `${from}:${to}`; if (clockInflight.has(key)) return clockInflight.get(key);
+  const p = loadClock1(from, to, force).finally(() => clockInflight.delete(key)); clockInflight.set(key, p); return p;
+}
+async function loadClock1(from, to, force) {
   const key = `${from}:${to}`; if (!S.db || S.clockLoading.has(key) || (!force && S.clockLoaded.has(key))) return;
   S.clockLoading.add(key);
   try {

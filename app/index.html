@@ -1660,11 +1660,11 @@ const PAY = (() => {
   function autoRow(e, p, S, leaves) {
     const from = e.hire > p.start ? e.hire : p.start;
     const to = e.separated?.date && e.separated.date < p.end ? e.separated.date : p.end;
-    const reg = new Set(S.holidays.filter((h) => h.type === "REG").map((h) => h.d));
+    const regN = {}; for (const h of S.holidays) if (h.type === "REG") regN[h.d] = (regN[h.d] || 0) + 1; const reg = new Set(Object.keys(regN));
     const allHol = new Set(S.holidays.map((h) => h.d));
     const types = Object.fromEntries(S.leaveTypes.map((t) => [t.code, t]));
-    let wd = 0, rh = 0, lv = 0, lwop = 0;
-    if (from <= to) eachDay(from, to, (d, s) => { if (isRest(d, S)) return; if (reg.has(s)) rh++; else if (!allHol.has(s)) wd++; });
+    let wd = 0, rh = 0, rh2 = 0, lv = 0, lwop = 0; // rh2: the second regular holiday on a double holiday (paid 200% unworked)
+    if (from <= to) eachDay(from, to, (d, s) => { if (isRest(d, S)) return; if (reg.has(s)) { rh++; rh2 += regN[s] - 1; } else if (!allHol.has(s)) wd++; });
     for (const l of leaves) {
       if (l.empId !== e.id || l.status !== "APPROVED" || l.to < from || l.from > to) continue;
       let n = 0;
@@ -1673,7 +1673,7 @@ const PAY = (() => {
       if (types[l.type]?.paid === false) lwop += n; else lv += n;
     }
     const partial = from > p.start || to < p.end;
-    return { wd, rh, lv, lwop, partial };
+    return { wd, rh, rh2, lv, lwop, partial };
   }
 
   const ZERO = { abs: 0, late: 0, ut: 0, ot: 0, rd: 0, rhw: 0, sh: 0, rdot: 0, rhot: 0, rhrd: 0, dhw: 0, rhrdot: 0, dhot: 0, shrd: 0, shrdot: 0, rhx: 0, nd: 0, bp: 0, comm: 0, adj: 0, adjN: 0, ded: 0, taxAdj: 0 };
@@ -1705,6 +1705,7 @@ const PAY = (() => {
       days = Math.max(0, auto.wd - auto.lv - auto.lwop - r.abs);
       basic = daily * days; hol = daily * Math.max(0, auto.rh - (Number(r.rhx) || 0)); leave = daily * auto.lv;
     }
+    if (auto.rh2 && !((Number(r.rhx) || 0) >= auto.rh)) hol += daily * auto.rh2; // a double holiday pays one more day (200% unworked)
     const tardy = (hourly * (r.late + r.ut)) / 60;
     const ot = hourly * r.ot * 1.25, rd = hourly * r.rd * 1.3, rhw = hourly * r.rhw, sh = hourly * r.sh * (isM ? 0.3 : 1.3), nd = hourly * r.nd * 0.1;
     // Regular holiday worked: 200%. The holiday's own 100% is already in the pay (monthly rate, or the daily holiday pay), so the hours add 100%.
@@ -2127,11 +2128,15 @@ async function finalizePayroll(id) {
   if (!$("#final-ok")?.checked) { toast("Tick the box to confirm the time records are complete."); return; }
   const p = PAY.period(id); const { lines, totals } = PAY.run([...S.emps.values()], p, periodDoc(id).rows || {}, SET(), allLeaves(), payExt(id));
   const at = new Date().toISOString();
-  await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
-  if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
-  else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  // The period is marked FINAL last: if the connection drops partway it stays open, and finalizing again redoes every
+  // step (each one only sets this period's values, so repeating it is safe).
+  try {
+    await S.db.doc("payruns/" + id).set({ start: p.start, end: p.end, at, lines, totals });
+    await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
+    if (S.periods.has(id)) await S.db.doc("periods/" + id).update({ status: "FINAL", finalAt: at, totals });
+    else await S.db.doc("periods/" + id).set({ start: p.start, end: p.end, status: "FINAL", finalAt: at, totals, rows: {} });
+  } catch (err) { toast("Finalizing stopped partway. Nothing is final yet: press Finalize again to finish."); render(); return; }
   S.runs.set(id, { start: p.start, end: p.end, at, lines, totals }); S.periods.set(id, { ...periodDoc(id), start: p.start, end: p.end, status: "FINAL", finalAt: at, totals }); S.ver++;
-  await recordLoanPayments(id, lines); await recordFlexPaid(id, lines);
   logActivity(`Finalized payroll for ${p.label}: net ${peso.format(totals.net)}`); toast("Payroll finalized."); render();
 }
 async function reopenPayroll(id) {
@@ -2142,7 +2147,8 @@ async function reopenPayroll(id) {
 
 /* ---------- payslip ---------- */
 VIEWS.payslip = () => {
-  const { pid, emp } = S.view; const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid);
+  const { pid, emp } = S.view; if (!pid || !emp) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
+  const e = S.emps.get(emp); const p = PAY.period(pid); ensureRun(pid).catch(() => {});
   const run = payrun(pid); const l = run.lines[emp];
   if (!e || !l) return head("Payroll", "Payslip not found") + `<section class="card"><button class="link" data-go="payroll">Back to payroll</button></section>`;
   return `<div class="no-print"><button class="link" style="color:#fff" data-go="payroll">${icon("back", 16)} Payroll</button></div>` +
@@ -4232,7 +4238,13 @@ async function savePunch(dev, punch, devInfo) {
 }
 
 /* ---------- reading clock-ins (HR) ---------- */
-async function loadClock(from, to, force) {
+// A second caller for the same range waits for the read already running instead of getting half-loaded punches.
+const clockInflight = new Map();
+function loadClock(from, to, force) {
+  const key = `${from}:${to}`; if (clockInflight.has(key)) return clockInflight.get(key);
+  const p = loadClock1(from, to, force).finally(() => clockInflight.delete(key)); clockInflight.set(key, p); return p;
+}
+async function loadClock1(from, to, force) {
   const key = `${from}:${to}`; if (!S.db || S.clockLoading.has(key) || (!force && S.clockLoaded.has(key))) return;
   S.clockLoading.add(key);
   try {
@@ -8611,7 +8623,8 @@ document.addEventListener("click", async (ev) => {
       if (st === "APPROVED" && r.effective <= todayISO()) await applyIncrement(nr);
       logActivity(`${RQ_ST[st][0]} a salary increment for ${fullName(e)}`); toast(st === "APPROVED" ? (r.effective <= todayISO() ? "Approved. The new pay applies now." : `Approved. The new pay applies on ${fmtDate(r.effective)}.`) : "Increment rejected."); render(); return; }
     if (d.cqSet) { const [id, st] = d.cqSet.split(":"); const r = S.chgReqs.get(id); const e = S.emps.get(r.empId);
-      if (st === "APPROVED") { const ne = { ...e, [r.field]: r.to }; await saveEmp(ne); S.emps.set(e.id, ne); }
+      if (st === "APPROVED") { if (!e || !CHG_FIELDS.some((c) => c[0] === r.field)) { toast("This change can't be applied from here. Edit the 201 file instead."); return; }
+        const ne = { ...e, [r.field]: String(r.to ?? "").slice(0, 200) }; await saveEmp(ne); S.emps.set(e.id, ne); }
       await saveRec("empchg", id, { ...r, status: st, decided: { d: todayISO(), by: S.myId || null } }); logActivity(`${RQ_ST[st][0]} a change of ${chgLabel(r.field).toLowerCase()} for ${fullName(e)}`); toast(st === "APPROVED" ? "Approved. The record is updated." : `Request ${RQ_ST[st][0].toLowerCase()}.`); render(); return; }
     if (d.certSet) { const [id, st] = d.certSet.split(":"); const r = S.certReqs.get(id); await saveRec("certreq", id, { ...r, status: st, released: st === "RELEASED" ? todayISO() : r.released || null }); logActivity(`${RQ_ST[st][0]}: ${certName(r.type).toLowerCase()} for ${fullName(S.emps.get(r.empId))}`); toast(`${RQ_ST[st][0]}.`); render(); return; }
   } catch { toast("Couldn't save. Try again."); }
@@ -15458,6 +15471,8 @@ const fxDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/fixes/${f
 // Every open HR app runs this; a short claim on the phone's record makes sure only one of them acts on it.
 const FX_TAB = uid();
 async function fxClaim(path) {
+  // On the website the database takes the claim in one step; if that isn't available yet, fall back to claim-and-recheck.
+  if (window.__sb) { const { data, error } = await window.__sb.rpc("hr_take", { p: path, tab: FX_TAB }); if (!error) return data === true; }
   const ref = S.db.doc(path); const cur = await ref.get(); const x = cur.exists ? cur.data() : null; if (!x || x.done) return false;
   if (x.claim && x.claim.by !== FX_TAB && Date.now() - Date.parse(x.claim.at) < 60000) return false;
   await ref.update({ claim: { by: FX_TAB, at: new Date().toISOString() } }); await new Promise((r) => setTimeout(r, 1500));
@@ -16091,6 +16106,42 @@ function dzHints() {
 { let q = false; new MutationObserver(() => { if (q) return; q = true; requestAnimationFrame(() => { q = false; dzHints(); }); }).observe(document.body, { childList: true, subtree: true }); }
 { const st = document.createElement("style"); st.textContent = `.dz-on{outline:2px dashed var(--gold);outline-offset:3px;border-radius:10px;background:var(--blue-soft)}
   .dz-hint{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted,#667);margin:2px 0 0 6px}.dz-hint .dz-name{font-weight:600;color:var(--ink)}.field>.dz-hint{margin-left:0}`; document.head.appendChild(st); }
+
+/* ---------- System audit 2026-10-17: payroll data checks ----------
+   Payroll with no basic pay on file pays nothing and treats the person as a minimum wage earner, without any error.
+   The Payroll page says who is missing pay or a region, and finalizing stops while anyone in the run has no basic pay. */
+function payGaps(pid) {
+  const p = PAY.period(pid); const act = [...S.emps.values()].filter((e) => !e.separated && !e.sample && (!e.hire || e.hire <= p.end));
+  const noPay = act.filter((e) => !e.conf && !(Number(e.basicPay) > 0));
+  const prjs = new Set(act.map((e) => e.projectId).filter(Boolean)); const noRegion = [...prjs].map((id) => S.projects.get(id)).filter((x) => x && !x.region);
+  return { noPay, noRegion, noOrgRegion: !S.org?.region };
+}
+{ const b = VIEWS.payroll; VIEWS.payroll = (...a) => { const html = b(...a); const id = S.periodId || curPeriod(); if (isFinal(id) || !S.canEdit) return html;
+    const g = payGaps(id); if (!g.noPay.length && !g.noRegion.length) return html;
+    const box = `<div class="notice" role="status"><span>${g.noPay.length ? `<span class="chip c-bad">${g.noPay.length} without basic pay</span> ${g.noPay.length === 1 ? "This person gets" : "These people get"} zero pay, contributions and tax until their basic pay is entered in the 201 file. Payroll can't be finalized until then. ` : ""}${g.noRegion.length ? `<span class="chip c-warn">${g.noRegion.length} ${g.noRegion.length === 1 ? "project has" : "projects have"} no region</span> Their staff are checked against the ${esc(S.org?.region || "NCR")} minimum wage. Set the region on each project so provincial minimum wage earners are taxed correctly.` : ""}</span>${g.noPay.length ? `<button class="btn btn-ghost btn-sm" data-pay-gaps="1">See who</button>` : ""}</div>${S.payGapsOpen && g.noPay.length ? `<section class="card"><div class="card-head"><h2>No basic pay on file</h2></div><ul class="list" style="font-size:14px;columns:2">${g.noPay.slice(0, 400).map((e) => `<li><button class="link" data-emp="${e.id}">${esc(fullName(e))}</button> <span class="t-muted">${esc(e.no || "")}</span></li>`).join("")}</ul></section>` : ""}`;
+    const i = html.indexOf("<section"); return i > 0 ? html.slice(0, i) + box + html.slice(i) : box + html; }; }
+document.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-pay-gaps]")) return; S.payGapsOpen = !S.payGapsOpen; render(); });
+{ const b = finalizePayroll; finalizePayroll = async (id, ...a) => { if ($("#final-ok")?.checked && !isFinal(id)) { const g = payGaps(id);
+      if (g.noPay.length) { toast(`${g.noPay.length} ${g.noPay.length === 1 ? "person has" : "people have"} no basic pay. Enter it in the 201 file before finalizing.`); return; } }
+    return b(id, ...a); }; }
+
+/* HRIS audit 2026-10-17 (phones and tablets).
+   Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's
+   snapshot and a glance at a left-open screen don't show pay or personal details. Screenshots themselves can't be blocked
+   from a web page.
+   Tablet layout: dialogs scroll and fit the screen (the selfie "Take photo" button stays reachable with the phone sideways),
+   the side menu uses the visible screen height on iPad Safari, and touch screens of any width get finger-sized links and
+   buttons (before, only screens under 720 px did). */
+{ const st = document.createElement("style"); st.textContent = `html.hr-hide #main,html.hr-hide .rail,html.hr-hide .ac-back{filter:blur(18px)}
+.ac-back{overflow-y:auto;align-items:flex-start;padding:max(16px,env(safe-area-inset-top)) 16px max(16px,env(safe-area-inset-bottom))}
+.ac-box{max-height:calc(100dvh - 32px);overflow:auto;margin:auto}
+.sc-view{max-height:55dvh}
+@supports (height:100dvh){.rail{height:100dvh;max-height:100dvh}}
+@media (pointer:coarse){td .link{padding:10px 4px;min-height:44px;display:inline-flex;align-items:center}.btn-sm{min-height:44px}.check input,input[type=checkbox]{width:22px;height:22px}}`;
+  document.head.appendChild(st);
+  const hide = (on) => document.documentElement.classList.toggle("hr-hide", on);
+  document.addEventListener("visibilitychange", () => hide(document.visibilityState === "hidden"));
+  window.addEventListener("pagehide", () => hide(true)); window.addEventListener("pageshow", () => hide(false)); }
 
 /* ---------- Speed (audit 2026-10-17) ----------
    Punches by person, and the leave and holiday context, are worked out once per change instead of once per employee:
