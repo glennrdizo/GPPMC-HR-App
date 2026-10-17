@@ -105,7 +105,7 @@ VIEWS.perms = () => {
       ${usersTable()}
     </section>
     <section class="card"><div class="card-head"><h2>Roles</h2></div><div class="table-wrap"><table><thead><tr><th>Role</th><th>Modules</th><th>Can change records</th><th>For</th></tr></thead><tbody>
-      ${Object.entries(ROLES).map(([rk, r]) => { const all = NAV.filter(([g]) => g !== "Overview" && g !== "Users & Permissions").map(([g]) => g); const ms = rk === "custom" ? [] : rk === "admin" || rk === "owner" ? all : menuModsOf(viewsOf({}, rk)); return `<tr><td><b>${esc(r.name)}</b></td><td>${rk === "custom" ? "You choose" : ms.length >= all.length ? "All modules" : ms.length ? `${ms.length} of ${all.length} modules: ${esc(ms.map(GL).join(", "))}` : "Dashboard only"}</td><td>${r.edit ? "Yes" : "No"}</td><td class="t-muted" style="font-size:13px">${esc(r.note)}</td></tr>`; }).join("")}</tbody></table></div></section>`;
+      ${Object.entries(ROLES).map(([rk, r]) => { const all = NAV.filter(([g]) => g !== "Overview" && g !== "Users & Permissions").map(([g]) => g); const ms = rk === "custom" ? [] : rk === "admin" || rk === "owner" ? all : menuModsOf(viewsOf({}, rk)); return `<tr><td><b>${esc(r.name)}</b></td><td>${typeof rlModsCell === "function" ? rlModsCell(rk) : rk === "custom" ? "You choose" : ms.length >= all.length ? "All modules" : ms.length ? `${ms.length} of ${all.length} modules: ${esc(ms.map(GL).join(", "))}` : "Dashboard only"}</td><td>${r.edit ? "Yes" : "No"}</td><td class="t-muted" style="font-size:13px">${esc(typeof rlNoteOf === "function" ? rlNoteOf(rk, r) : r.note)}</td></tr>`; }).join("")}</tbody></table></div></section>`;
 };
 document.addEventListener("input", async (ev) => {
   const t = ev.target; if (t.id !== "perm-q") return; S.permQ = t.value;

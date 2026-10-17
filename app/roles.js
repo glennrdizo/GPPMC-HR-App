@@ -36,7 +36,54 @@ function rlSync() {
     if (r.key === "admin" && Array.isArray(ROLES.admin?.views)) { const v = viewsOf({}, "admin"); return { ...r, views: v, mods: modsOf(v), edit: !!ROLES.admin.edit }; }
     return r; }; }
 { const b = applyPerm; applyPerm = (...x) => { rlSync(); return b(...x); }; }
-{ const b = viewsOf; viewsOf = (u, key) => { const r = ROLES[key]; if (key !== "custom" && Array.isArray(r?.views)) return new Set([...r.views, ...ALWAYS]); return b(u, key); }; }
+{ const b = viewsOf; viewsOf = (u, key) => { const r = ROLES[key]; if (key !== "custom" && Array.isArray(r?.views)) return new Set([...r.views, ...ALWAYS]);
+    const v = b(u, key); return key === "custom" && Array.isArray(u?.views) && S.rlKeys ? new Set([...rlInfer(v, null, S.rlKeys, S.rlKnown), ...ALWAYS]) : v; }; }
+/* New pages and saved ticks (Glenn 2026-10-17). Ticks saved before a page was added to the menu didn't include it, so the page stayed
+   hidden from everyone on that role. org/access.navKnown lists the pages that existed when the ticks were last saved; a page added since
+   goes to a role (or a Custom person) that has the page above it, or, for a new page at the top of a module, to the roles whose standard
+   set has it (and to made roles and Custom people that have all of that module). A page someone unticked stays unticked. */
+const rlKnownOf = (a) => new Set(Array.isArray(a?.navKnown) ? a.navKnown : [...Object.values(a?.roles || {}), ...Object.values(a?.users || {})].flatMap((r) => (Array.isArray(r?.views) ? r.views : [])));
+function rlInfer(views, std, keys, known) {
+  const out = new Set(views); if (!known?.size) return out;
+  for (const d of [0, 1, 2]) for (const k of keys) { if (k.d !== d || known.has(k.v) || out.has(k.v)) continue;
+    const sib = () => { const s = keys.filter((x) => x.g === k.g && x.d === 0 && known.has(x.v) && !ALWAYS.has(x.v)); return s.length > 0 && s.every((x) => out.has(x.v)); };
+    if (k.parent ? out.has(k.parent) : std ? std.has(k.v) : sib()) out.add(k.v); }
+  return out;
+}
+// A built-in role's standard pages (what Reset gives); null for roles made in Users & Roles.
+const rlStd = (k, keys) => (RL_MENU[k] ? rlMenuViews(RL_MENU[k]) : ROLES_BASE[k] && !RL_FIXED.has(k) && k !== "none" ? new Set(keys.map((x) => x.v)) : null);
+{ const b = rlSync; rlSync = () => { const a = S.access || {}; const keys = navKeys(); S.rlKeys = keys; S.rlKnown = rlKnownOf(a);
+    const std = Object.fromEntries(Object.keys(a.roles || {}).map((k) => [k, rlStd(k, keys)])); b();
+    for (const [k, r] of Object.entries(a.roles || {})) if (!RL_FIXED.has(k) && Array.isArray(r?.views) && ROLES[k]) { const v = rlInfer(r.views, std[k], keys, S.rlKnown); ROLES[k].views = [...v]; ROLES[k].mods = modsOf(v); } }; }
+// Saving writes the pages each role and Custom person now has, and the current list of pages. HR Admins who aren't Owners can't
+// change the Owner, Executive and HR Admin roles, so those keep following the older list until an Owner saves.
+{ const b = saveAccess; saveAccess = (patch, msg) => { const a = { ...(S.access || {}), ...patch }; const keys = S.rlKeys || navKeys(); const known = rlKnownOf(S.access); const own = iAmOwner(); // known: before this change, which may already carry a new page
+    const roles = Object.fromEntries(Object.entries(a.roles || {}).map(([k, r]) => [k, !RL_FIXED.has(k) && Array.isArray(r?.views) && (own || !["owner", "exec", "admin"].includes(k)) ? { ...r, views: [...rlInfer(r.views, rlStd(k, keys), keys, known)].filter((v) => !ALWAYS.has(v)) } : r]));
+    const users = Object.fromEntries(Object.entries(a.users || {}).map(([id, u]) => [id, u?.role === "custom" && Array.isArray(u.views) ? { ...u, views: [...rlInfer(u.views, null, keys, known)].filter((v) => !ALWAYS.has(v)) } : u]));
+    return b({ ...patch, ...(a.roles ? { roles } : {}), ...(a.users ? { users } : {}), navKnown: own ? keys.map((k) => k.v) : [...known] }, msg); }; }
+// Roles summary: the modules a role has in full, the ones it has in part, and what it covers.
+const RL_ALLG = () => NAV.filter(([g]) => g !== "Overview" && g !== "Users & Permissions").map(([g]) => g);
+function rlParts(rk) {
+  if (rk === "owner" || (rk === "admin" && !Array.isArray(ROLES.admin?.views))) return { all: RL_ALLG(), part: [] };
+  const vs = viewsOf({}, rk); const keys = S.rlKeys || navKeys(); const full = [], part = [];
+  for (const g of RL_ALLG()) { const ks = keys.filter((k) => k.g === g && !ALWAYS.has(k.v)); const n = ks.filter((k) => vs.has(k.v)).length; if (!ks.length || !n) continue;
+    if (n === ks.length) full.push(g); else part.push([g, ks.filter((k) => k.d === 0 && vs.has(k.v)).map((k) => k.l)]); }
+  return { all: full, part };
+}
+function rlModsCell(rk) {
+  if (rk === "custom") return "You choose"; const { all, part } = rlParts(rk); const n = all.length + part.length, tot = RL_ALLG().length;
+  if (!n) return "Dashboard only"; if (all.length === tot) return "All modules";
+  return `${n} of ${tot} modules: ${esc([...all.map(GL), ...part.map(([g]) => `part of ${GL(g)}`)].join(", "))}`;
+}
+function rlNoteOf(rk, r) {
+  if (!Array.isArray(S.access?.roles?.[rk]?.views) || rk === "owner") return r.note || "";
+  const { all, part } = rlParts(rk); if (!all.length && !part.length) return "Dashboard only";
+  const cut = (l) => (!l.length ? "some pages" : l.length > 4 ? `${l.slice(0, 4).join(", ")} and ${l.length - 4} more` : l.join(", "));
+  const tot = RL_ALLG(); const out = tot.filter((g) => !all.includes(g) && !part.some(([x]) => x === g));
+  const head = all.length === tot.length ? "All modules" : all.length > tot.length / 2 ? `All modules${out.length ? ` except ${out.map(GL).join(", ")}` : ""}` : all.length ? `All of ${all.map(GL).join(", ")}` : "";
+  const parts = all.length > tot.length / 2 ? part.map(([g, l]) => `${GL(g)} only ${cut(l)}`) : part.map(([g, l]) => `${GL(g)}: ${cut(l)}`);
+  return [head, ...parts].filter(Boolean).join(". ") + ". Set in Users & Roles.";
+}
 S.permTab = "list"; S.rlNew = false;
 
 function rlGrid() {
@@ -137,3 +184,11 @@ window.addEventListener("submit", (ev) => { if (iAmOwner()) return; const f = ev
 let rlOwnerSet = false;
 { const b = applyPerm; applyPerm = (...x) => { const r = b(...x); const a = S.access; if (!rlOwnerSet && S.isOwner && S.myId && a && S.realEdit && S.db && a.users?.[S.myId]?.role !== "owner") { rlOwnerSet = true;
     const next = { ...a, users: { ...(a.users || {}), [S.myId]: { ...(a.users?.[S.myId] || {}), role: "owner" } } }; S.db.doc("org/access").set(JSON.parse(JSON.stringify(next))).then(() => { S.access = next; }).catch(() => {}); } return r; }; }
+// Ticking a box saves and redraws the page; keep the page and the tick-box table where they were (Glenn 2026-10-17: it jumped to the top).
+{ const b = render; render = (...x) => { if (S.view?.name !== "perms") return b(...x);
+    const w = document.querySelector("#rl-grid .rl-wrap"), main = document.querySelector("#main"); const st = { y: window.scrollY, t: w?.scrollTop || 0, l: w?.scrollLeft || 0, m: main?.scrollTop || 0 };
+    const f = document.activeElement; const fa = f && ["data-rv", "data-rg", "data-re", "data-pv", "data-pg", "data-pe"].find((a) => f.hasAttribute?.(a)); const fv = fa ? f.getAttribute(fa) : null;
+    const r = b(...x);
+    const w2 = document.querySelector("#rl-grid .rl-wrap"); if (w2) { w2.scrollTop = st.t; w2.scrollLeft = st.l; } if (main && st.m) main.scrollTop = st.m; if (window.scrollY !== st.y) window.scrollTo({ top: st.y });
+    if (fa) { const g = [...document.querySelectorAll(`[${fa}]`)].find((x) => x.getAttribute(fa) === fv); g?.focus({ preventScroll: true }); }
+    return r; }; }
