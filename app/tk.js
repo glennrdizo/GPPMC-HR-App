@@ -247,7 +247,7 @@ VIEWS.ot = () => {
       <div style="display:flex;gap:12px;margin-bottom:12px"><input class="input" type="search" id="ot-q" value="${esc(f.q)}" placeholder="Search name or employee no." style="max-width:340px" aria-label="Search overtime requests"></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th class="num">Hours</th><th>Day</th><th>Reason</th><th>Status</th>${S.canEdit ? "<th></th>" : ""}</tr></thead><tbody>
         ${rows.map((r) => { const e = S.emps.get(r.empId);
-          return `<tr><td>${personCell(e, esc(e.no), 190)}</td><td style="white-space:nowrap">${esc(fmtDate(r.d))}</td><td class="num"><b>${r.hours}</b></td><td class="t-muted">${esc(otKind(r.d)[1])}</td><td style="max-width:280px">${esc(r.reason || "")}</td>
+          return `<tr><td>${personCell(e, esc(e.no), 190)}</td><td style="white-space:nowrap">${esc(fmtDate(r.d))}</td><td class="num"><b>${r.hours}</b></td><td class="t-muted">${esc(otKind(r.d)[1])}</td><td style="max-width:280px">${esc(r.reason || "")}${fzLinks(r.files)}</td>
           <td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span>${r.decided ? `<div class="t-muted" style="font-size:12px">${esc(fmtDate(r.decided))}</div>` : ""}</td>
           ${S.canEdit ? `<td class="num" style="white-space:nowrap">${r.status === "PENDING" ? `<button class="btn btn-primary btn-sm" data-ot-set="${r.id}:APPROVED">Approve</button> <button class="btn btn-ghost btn-sm" data-ot-set="${r.id}:REJECTED">Reject</button>` : `<button class="link" data-ot-set="${r.id}:PENDING">Reopen</button>`} <button class="link danger" data-del-ot="${r.id}">Delete</button></td>` : ""}</tr>`; }).join("") || `<tr><td colspan="7" class="empty">No overtime requests here.</td></tr>`}
       </tbody></table></div>
@@ -266,6 +266,7 @@ VIEWS.otForm = () => {
       <div class="field"><label for="ot-d">Date <span class="req">*</span></label><input class="input" id="ot-d" type="date" required value="${d}"></div>
       <div class="field"><label for="ot-h">Hours <span class="req">*</span></label><input class="input" id="ot-h" type="number" min="0.5" max="16" step="0.5" required placeholder="2"></div>
       <div class="field" style="grid-column:1/-1"><label for="ot-r">Reason <span class="req">*</span></label><input class="input" id="ot-r" required placeholder="Concrete pouring at Tower 2 ran past 5 PM"></div>
+      ${fileZone("ot")}
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="ot-ok"> Approve now</label>
       <p id="ot-hint" class="t-muted" style="grid-column:1/-1;margin:0;font-size:13px"></p>
       <div style="grid-column:1/-1;display:flex;gap:10px"><button class="btn btn-primary">Save overtime</button><button type="button" class="btn btn-ghost" data-go="ot">Cancel</button></div>
@@ -282,7 +283,8 @@ async function submitOt() {
   const empId = $("#ot-emp").value, d = $("#ot-d").value, hours = Number($("#ot-h").value) || 0, reason = $("#ot-r").value.trim();
   if (!empId || !d || !hours || !reason) { toast("Fill in the employee, date, hours and reason."); return; }
   const ok = $("#ot-ok").checked; const e = S.emps.get(empId);
-  await put("otreqs", { id: uid(), empId, d, hours: PAY.r2(hours), reason, status: ok ? "APPROVED" : "PENDING", filed: todayISO(), decided: ok ? todayISO() : null });
+  let files = []; try { files = await fzUpload("ot"); } catch { toast("Couldn't upload the attachments. Check your connection and try again."); return; }
+  await put("otreqs", { id: uid(), empId, d, hours: PAY.r2(hours), reason, status: ok ? "APPROVED" : "PENDING", filed: todayISO(), decided: ok ? todayISO() : null, ...(files.length ? { files } : {}) });
   logActivity(`Filed ${hours} hrs of overtime for ${fullName(e)} on ${fmtDate(d)}${ok ? " (approved)" : ""}`); toast(ok ? "Overtime saved and approved." : "Overtime saved. It's waiting for approval."); go("ot");
 }
 async function applyOt(pid) {

@@ -1968,7 +1968,7 @@ function leaveRequests(all) {
       ${rows.map((l) => { const e = S.emps.get(l.empId); const t = leaveType(l.type);
         return `<tr><td><div class="person" style="min-width:200px">${avatar(e, 34)}<span class="who"><button class="link" style="color:var(--ink);text-align:left" data-emp="${e.id}">${esc(fullName(e))}</button><span class="sub">${esc(pos(e.posId)?.title || "")}</span></span></div></td>
           <td>${esc(t?.name || l.type)}${l.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td><td style="white-space:nowrap">${fmtDate(l.from)}${l.to !== l.from ? " to " + fmtDate(l.to) : ""}${l.half ? " (half day)" : ""}</td>
-          <td class="num">${l.days}</td><td class="t-muted" style="max-width:240px">${esc(l.reason || "")}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td>
+          <td class="num">${l.days}</td><td class="t-muted" style="max-width:240px">${esc(l.reason || "")}${fzLinks(l.files)}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td>
           ${S.canEdit ? `<td style="white-space:nowrap">${l.status === "PENDING" ? `<button class="btn btn-primary btn-sm" data-lv-set="${l.month}:${l.id}:APPROVED">Approve</button> <button class="btn btn-ghost btn-sm" data-lv-set="${l.month}:${l.id}:REJECTED">Reject</button>` : l.status === "APPROVED" && !isFinal(PAY.periodOf(l.from)) ? `<button class="link danger" data-lv-set="${l.month}:${l.id}:CANCELLED">Cancel</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="7" class="empty">No leave requests match.</td></tr>`}
     </tbody></table></div>
     <nav aria-label="Pages" style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;font-size:14px"><span class="t-muted">${list.length} requests · page ${f.page} of ${pages}</span>
@@ -2013,6 +2013,7 @@ VIEWS.leaveForm = () => {
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="lf-half"> Half day (one-day leave only)</label>
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="lf-docs"> The supporting documents for this leave are on file</label>
       <div class="field"><label for="lf-reason">Reason</label><textarea class="input" id="lf-reason" rows="2"></textarea></div>
+      ${fileZone("lv")}
       <div class="panel" id="lf-hint" aria-live="polite">${leaveHint()}</div>
       <div style="display:flex;gap:12px;justify-content:flex-end;flex-wrap:wrap;align-items:center"><p class="err" id="lf-err" style="margin:0 auto 0 0" hidden></p>
         <button type="button" class="btn btn-ghost" ${pre ? `data-emp="${pre.id}"` : 'data-go="leave"'}>Cancel</button><button class="btn btn-primary" id="lf-save">Save leave</button></div>
@@ -2048,8 +2049,9 @@ async function submitLeave() {
   if (b.left != null && days > b.left - b.pend) return fail(`Only ${Math.max(0, b.left - b.pend)} ${t.name.toLowerCase()} days are left for ${yearOf(d.from)}${b.pend ? ` after ${b.pend} days waiting for approval` : ""}. File the rest as leave without pay.`);
   if (isFinal(PAY.periodOf(d.from)) && d.status === "APPROVED") return fail("Payroll for that period is already final. Reopen it first, or file this as pending.");
   const btn = $("#lf-save"); btn.disabled = true; btn.textContent = "Saving…";
+  let files = []; try { files = await fzUpload("lv"); } catch { btn.disabled = false; btn.textContent = "Save leave"; return fail("Couldn't upload the attachments. Check your connection and try again."); }
   const id = uid(); const month = d.from.slice(0, 7);
-  const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null };
+  const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null, ...(files.length ? { files } : {}) };
   try {
     if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } });
     else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
@@ -4923,7 +4925,7 @@ VIEWS.ot = () => {
       <div style="display:flex;gap:12px;margin-bottom:12px"><input class="input" type="search" id="ot-q" value="${esc(f.q)}" placeholder="Search name or employee no." style="max-width:340px" aria-label="Search overtime requests"></div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th>Date</th><th class="num">Hours</th><th>Day</th><th>Reason</th><th>Status</th>${S.canEdit ? "<th></th>" : ""}</tr></thead><tbody>
         ${rows.map((r) => { const e = S.emps.get(r.empId);
-          return `<tr><td>${personCell(e, esc(e.no), 190)}</td><td style="white-space:nowrap">${esc(fmtDate(r.d))}</td><td class="num"><b>${r.hours}</b></td><td class="t-muted">${esc(otKind(r.d)[1])}</td><td style="max-width:280px">${esc(r.reason || "")}</td>
+          return `<tr><td>${personCell(e, esc(e.no), 190)}</td><td style="white-space:nowrap">${esc(fmtDate(r.d))}</td><td class="num"><b>${r.hours}</b></td><td class="t-muted">${esc(otKind(r.d)[1])}</td><td style="max-width:280px">${esc(r.reason || "")}${fzLinks(r.files)}</td>
           <td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span>${r.decided ? `<div class="t-muted" style="font-size:12px">${esc(fmtDate(r.decided))}</div>` : ""}</td>
           ${S.canEdit ? `<td class="num" style="white-space:nowrap">${r.status === "PENDING" ? `<button class="btn btn-primary btn-sm" data-ot-set="${r.id}:APPROVED">Approve</button> <button class="btn btn-ghost btn-sm" data-ot-set="${r.id}:REJECTED">Reject</button>` : `<button class="link" data-ot-set="${r.id}:PENDING">Reopen</button>`} <button class="link danger" data-del-ot="${r.id}">Delete</button></td>` : ""}</tr>`; }).join("") || `<tr><td colspan="7" class="empty">No overtime requests here.</td></tr>`}
       </tbody></table></div>
@@ -4942,6 +4944,7 @@ VIEWS.otForm = () => {
       <div class="field"><label for="ot-d">Date <span class="req">*</span></label><input class="input" id="ot-d" type="date" required value="${d}"></div>
       <div class="field"><label for="ot-h">Hours <span class="req">*</span></label><input class="input" id="ot-h" type="number" min="0.5" max="16" step="0.5" required placeholder="2"></div>
       <div class="field" style="grid-column:1/-1"><label for="ot-r">Reason <span class="req">*</span></label><input class="input" id="ot-r" required placeholder="Concrete pouring at Tower 2 ran past 5 PM"></div>
+      ${fileZone("ot")}
       <label style="display:flex;gap:8px;align-items:center;font-size:14px;font-weight:600"><input type="checkbox" id="ot-ok"> Approve now</label>
       <p id="ot-hint" class="t-muted" style="grid-column:1/-1;margin:0;font-size:13px"></p>
       <div style="grid-column:1/-1;display:flex;gap:10px"><button class="btn btn-primary">Save overtime</button><button type="button" class="btn btn-ghost" data-go="ot">Cancel</button></div>
@@ -4958,7 +4961,8 @@ async function submitOt() {
   const empId = $("#ot-emp").value, d = $("#ot-d").value, hours = Number($("#ot-h").value) || 0, reason = $("#ot-r").value.trim();
   if (!empId || !d || !hours || !reason) { toast("Fill in the employee, date, hours and reason."); return; }
   const ok = $("#ot-ok").checked; const e = S.emps.get(empId);
-  await put("otreqs", { id: uid(), empId, d, hours: PAY.r2(hours), reason, status: ok ? "APPROVED" : "PENDING", filed: todayISO(), decided: ok ? todayISO() : null });
+  let files = []; try { files = await fzUpload("ot"); } catch { toast("Couldn't upload the attachments. Check your connection and try again."); return; }
+  await put("otreqs", { id: uid(), empId, d, hours: PAY.r2(hours), reason, status: ok ? "APPROVED" : "PENDING", filed: todayISO(), decided: ok ? todayISO() : null, ...(files.length ? { files } : {}) });
   logActivity(`Filed ${hours} hrs of overtime for ${fullName(e)} on ${fmtDate(d)}${ok ? " (approved)" : ""}`); toast(ok ? "Overtime saved and approved." : "Overtime saved. It's waiting for approval."); go("ot");
 }
 async function applyOt(pid) {
@@ -5517,7 +5521,7 @@ ESS.essleave = (e) => {
     <section class="card"><div class="card-head"><h2>Balances</h2></div><div class="table-wrap"><table><thead><tr><th>Leave</th><th class="num">Credits</th><th class="num">Used</th><th class="num">Left</th></tr></thead><tbody>
       ${bal.map((t) => `<tr><td><b>${esc(t.name)}</b>${t.note ? `<div class="t-muted" style="font-size:13px">${esc(t.note)}</div>` : ""}</td><td class="num">${t.days ?? "As needed"}</td><td class="num">${t.used}</td><td class="num"><b>${t.left ?? "—"}</b></td></tr>`).join("")}</tbody></table></div></section>
     <section class="card"><div class="card-head"><h2>My requests</h2></div>${mine.length ? `<div class="table-wrap"><table><thead><tr><th>Leave</th><th>Dates</th><th class="num">Days</th><th>Status</th></tr></thead><tbody>
-      ${mine.map((l) => `<tr><td>${esc(SET().leaveTypes.find((t) => t.code === l.type)?.name || l.type)}</td><td>${esc(fmtDate(l.from))}${l.to !== l.from ? ` to ${esc(fmtDate(l.to))}` : ""}</td><td class="num">${l.days}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><span class="es-ic">' + icon("cal", 22) + "</span><p>No leave requests yet.</p></div>"}</section>`;
+      ${mine.map((l) => `<tr><td>${esc(SET().leaveTypes.find((t) => t.code === l.type)?.name || l.type)}</td><td>${esc(fmtDate(l.from))}${l.to !== l.from ? ` to ${esc(fmtDate(l.to))}` : ""}${fzLinks(l.files)}</td><td class="num">${l.days}</td><td><span class="chip ${LSTATUS[l.status][1]}">${LSTATUS[l.status][0]}</span></td></tr>`).join("")}</tbody></table></div>` : '<div class="empty-state"><span class="es-ic">' + icon("cal", 22) + "</span><p>No leave requests yet.</p></div>"}</section>`;
 };
 ESS.esspay = (e) => {
   const slips = essSlips(e); const open = slips.find((s) => s.id === S.essSlip) || slips[0];
@@ -7990,7 +7994,7 @@ ESS.essot = (e) => {
       ${act.slice().reverse().map((x) => { const f = filed(x.d); return `<tr><td style="white-space:nowrap">${fmtDate(x.d)}</td><td class="t-muted">${x.r.rest ? "Rest day" : x.r.hol.length ? "Holiday" : esc(`${x.r.shift.start}–${x.r.shift.end}`)}</td><td>${esc(hm(x.r.in))}</td><td>${esc(hm(x.r.out))}</td><td class="num"><b>${x.h} h</b></td>
         <td>${f ? `<span class="chip ${OT_STATUS[f.status][1]}">${OT_STATUS[f.status][0]} ${f.hours} h</span>` : S.realEdit ? `<button class="btn btn-ghost btn-sm" data-ot-file="${x.d}|${x.h}">File ${x.h} h</button>` : '<span class="t-muted">Not filed</span>'}</td></tr>`; }).join("") || '<tr><td colspan="6" class="empty">No time worked past the shift in the last 45 days.</td></tr>'}</tbody></table></div></section>
     <section class="card"><div class="card-head"><h2>My overtime requests</h2></div><div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th>Reason</th><th>Status</th></tr></thead><tbody>
-      ${reqs.slice(0, 40).map((r) => `<tr><td>${fmtDate(r.d)}</td><td class="num">${r.hours}</td><td class="t-muted">${esc(r.reason || "")}</td><td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span></td></tr>`).join("") || '<tr><td colspan="4" class="empty">No overtime requests.</td></tr>'}</tbody></table></div></section>`;
+      ${reqs.slice(0, 40).map((r) => `<tr><td>${fmtDate(r.d)}</td><td class="num">${r.hours}</td><td class="t-muted">${esc(r.reason || "")}${fzLinks(r.files)}</td><td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span></td></tr>`).join("") || '<tr><td colspan="4" class="empty">No overtime requests.</td></tr>'}</tbody></table></div></section>`;
 };
 
 /* ---------- reports ---------- */
@@ -15696,7 +15700,7 @@ async function rqOne(f) {
     const t = leaveType(f.type); if (!t) return bad("Choose the leave type again.");
     if (!day(f.from) || !day(f.to) || f.to < f.from) return bad("Check the dates.");
     if (!reason) return bad("Give the reason.");
-    const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId };
+    const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) };
     item.days = PAY.leaveDays(item, SET(), t) || (item.half ? 0.5 : 1); const month = f.from.slice(0, 7);
     if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
@@ -15712,7 +15716,7 @@ async function rqOne(f) {
       await rqDone(f, { done: true, req: `ar:${id}` }); logActivity(`${fullName(e)} asked for an attendance change from their account (${fmtDate(f.d)})`); return true; }
     if (S.otReqs.has(id)) return rqDone(f, { done: true, req: `ot:${id}` }).then(() => true);
     const h = Math.round((Number(f.hours) || 0) * 2) / 2; if (!(h > 0 && h <= 16)) return bad("Enter the overtime hours again.");
-    await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId });
+    await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
     await rqDone(f, { done: true, req: `ot:${id}` }); logActivity(`${fullName(e)} filed ${h} h of overtime from their account (${fmtDate(f.d)})`); return true; }
   if (f.kind === "cert") {
     if (S.certReqs.has(id)) return rqDone(f, { done: true, req: `cq:${id}` }).then(() => true);
@@ -15766,9 +15770,9 @@ function epForm(kind) {
   const today = todayISO(); const lt = (SET().leaveTypes || []).map((t) => [t.code, t.name]);
   const body = kind === "leave" ? `<div class="field"><label for="rq-type">Leave</label><select class="input" id="rq-type">${opts(lt, lt[0]?.[0])}</select></div>
       <div class="field"><label for="rq-from">From</label><input class="input" type="date" id="rq-from" value="${today}" required></div><div class="field"><label for="rq-to">To</label><input class="input" type="date" id="rq-to" value="${today}" required></div>
-      <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rq-half"> Half day</label>`
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rq-half"> Half day</label>${fileZone("rq")}`
     : kind === "adjust" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-in">Time in</label><input class="input" type="time" id="rq-in"></div><div class="field"><label for="rq-out">Time out</label><input class="input" type="time" id="rq-out"></div>`
-    : kind === "ot" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-h">Hours</label><input class="input" type="number" id="rq-h" min="0.5" max="16" step="0.5" required></div>`
+    : kind === "ot" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-h">Hours</label><input class="input" type="number" id="rq-h" min="0.5" max="16" step="0.5" required></div>${fileZone("rq")}`
     : `<div class="field"><label for="rq-ct">Certificate</label><select class="input" id="rq-ct">${opts(CERTS, "COE")}</select></div><div class="field"><label for="rq-pp">Purpose</label><input class="input" id="rq-pp" required placeholder="e.g. Bank loan"></div>
       <div class="field"><label for="rq-cp">Copies</label><input class="input" type="number" id="rq-cp" min="1" max="10" value="1"></div><div class="field"><label for="rq-need">Needed by</label><input class="input" type="date" id="rq-need" value="${addDays(today, 3)}"></div>`;
   const why = kind === "cert" ? "" : `<div class="field" style="grid-column:1/-1"><label for="rq-why">Reason</label><input class="input" id="rq-why" required maxlength="200"></div>`;
@@ -15785,6 +15789,8 @@ window.addEventListener("submit", async (ev) => {
   if (kind === "adjust") { Object.assign(rec, { d: v("rq-d"), in: v("rq-in") || null, out: v("rq-out") || null }); if (!rec.d || (!rec.in && !rec.out)) { toast("Enter the date and at least one time."); return; } }
   if (kind === "ot") { Object.assign(rec, { d: v("rq-d"), hours: Number(v("rq-h")) || 0 }); if (!rec.d || !(rec.hours > 0)) { toast("Enter the date and hours."); return; } }
   if (kind === "cert") { Object.assign(rec, { type: v("rq-ct"), purpose: v("rq-pp"), copies: Number(v("rq-cp")) || 1, need: v("rq-need") || null }); if (!rec.purpose) { toast("Give the purpose."); return; } }
+  if ((kind === "ot" || kind === "leave") && (S.fz.rq || []).length) { const btn = f.querySelector("button.btn-primary"); if (btn) btn.disabled = true;
+    try { rec.files = await fzUpload("rq"); } catch { if (btn) btn.disabled = false; toast("Couldn't upload the attachments. Check your connection and try again."); return; } }
   const id = uid(); try { await S.db.doc(`clockins/${S.self.uid}/reqs/${id}`).set(JSON.parse(JSON.stringify(rec))); S.rqMine = [{ id, ...rec }, ...(S.rqMine || [])]; S.epOpen = null; toast("Sent to HR."); render(); } catch { toast("Couldn't send. Check your connection and try again."); }
 }, true);
 
@@ -15933,6 +15939,48 @@ function supTitleOk(t) {
   const n = supNorm(t); if (!n) return false;
   return SUP_TITLES.some((p) => n === p || n.startsWith(p + " ")) || n === "executive" || /\b(chief|president|executive director|managing director)\b/.test(n);
 }
+
+/* ---------- Overtime and leave attachments (Glenn 2026-10-17) ----------
+   An overtime or leave request can carry photos or PDFs (a signed OT slip, a medical certificate), picked or dragged onto the box,
+   on the employee's own account and on HR's "File overtime" and "File a leave" forms. Files go to the app's private file store; the request
+   keeps only {id, name, type, size}, and every file is opened through /_blob/<id>. */
+const FZ_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif", "application/pdf"];
+const FZ_MAX = 5, FZ_SIZE = 10 * 1048576;
+S.fz = S.fz || {}; S.fzAt = {};
+function fileZone(key) {
+  if (!S.assets) return "";
+  // a freshly opened form starts empty (files picked on an earlier, unsent form are dropped)
+  const at = S.fzAt[key]; if (!at || at.v !== S.view || at.o !== S.epOpen) { S.fz[key] = []; S.fzAt[key] = { v: S.view, o: S.epOpen }; }
+  const L = S.fz[key];
+  return `<div class="field fz" style="grid-column:1/-1" data-drop="files" data-fz="${key}"><span class="lbl">Attachments <span class="t-muted" style="font-weight:400;text-transform:none">(photos or PDF, up to ${FZ_MAX})</span></span>
+    <label class="fz-box">${icon("clip", 18)}<span>Drag files here, or <u>choose files</u></span><input type="file" multiple accept="image/*,application/pdf" data-fz-in="${key}" style="position:absolute;width:1px;height:1px;opacity:0"></label>
+    ${L.length ? `<ul class="fz-list">${L.map((f, i) => `<li><span>${esc(f.name)} <span class="t-muted">${Math.max(1, Math.round(f.size / 1024))} KB</span></span><button type="button" class="link" data-fz-del="${key}:${i}">Remove</button></li>`).join("")}</ul>` : ""}</div>`;
+}
+function fzRedraw(key) { const z = document.querySelector(`[data-fz="${key}"]`); if (z) z.outerHTML = fileZone(key); }
+function fzAdd(key, files) {
+  const L = (S.fz[key] = S.fz[key] || []); let bad = 0;
+  for (const f of files) { if (!FZ_TYPES.includes(f.type) || f.size > FZ_SIZE || L.length >= FZ_MAX) { bad++; continue; } L.push(f); }
+  if (bad) toast(`Only photos or PDFs up to 10 MB, ${FZ_MAX} files at most.`); fzRedraw(key);
+}
+async function fzUpload(key) {
+  const L = S.fz[key] || []; const out = [];
+  for (const f of L) { const r = await S.assets.upload(f); out.push({ id: r.id, name: String(f.name).slice(0, 120), type: f.type, size: f.size }); }
+  S.fz[key] = []; return out;
+}
+// Only what the app wrote: a plain file id and a name. Anything else from an employee's request is dropped.
+const fzClean = (xs) => (Array.isArray(xs) ? xs : []).filter((x) => x && /^[A-Za-z0-9_.-]{1,120}$/.test(String(x.id || "")) && !/^\.+$/.test(x.id)).slice(0, FZ_MAX)
+  .map((x) => ({ id: String(x.id), name: String(x.name || "File").slice(0, 120), type: FZ_TYPES.includes(x.type) ? x.type : null, size: Number(x.size) || null }));
+const fzLinks = (xs) => { const L = fzClean(xs); return L.length ? `<div class="fz-links">${L.map((f) => `<a href="/_blob/${esc(f.id)}" target="_blank" rel="noopener">${icon("clip", 12)}${esc(f.name)}</a>`).join("")}</div>` : ""; };
+document.addEventListener("change", (ev) => { const t = ev.target; const k = t?.dataset?.fzIn; if (!k) return; fzAdd(k, [...(t.files || [])]); });
+document.addEventListener("click", (ev) => { const t = ev.target.closest?.("[data-fz-del]"); if (!t) return; ev.preventDefault(); ev.stopImmediatePropagation();
+  const [k, i] = t.dataset.fzDel.split(":"); (S.fz[k] || []).splice(Number(i), 1); fzRedraw(k); }, true);
+const fzZone = (ev) => ev.target.closest?.('[data-drop="files"]');
+for (const type of ["dragenter", "dragover"]) document.addEventListener(type, (ev) => { const z = fzZone(ev); if (!z || !hasFiles(ev)) return; ev.preventDefault(); ev.dataTransfer.dropEffect = "copy"; z.classList.add("drag"); });
+document.addEventListener("dragleave", (ev) => { const z = fzZone(ev); if (z && !z.contains(ev.relatedTarget)) z.classList.remove("drag"); });
+document.addEventListener("drop", (ev) => { const z = fzZone(ev); if (!z) return; ev.preventDefault(); ev.stopImmediatePropagation(); z.classList.remove("drag"); fzAdd(z.dataset.fz, [...(ev.dataTransfer?.files || [])]); }, true);
+{ const st = document.createElement("style"); st.textContent = `.fz-box{position:relative;display:flex;gap:10px;align-items:center;justify-content:center;min-height:64px;padding:12px;border:1.5px dashed var(--line);border-radius:12px;cursor:pointer;font-size:14px;color:var(--muted,inherit)}
+  .fz.drag .fz-box,.fz-box:hover{border-color:var(--gold);background:var(--blue-soft)}.fz-list{list-style:none;margin:8px 0 0;padding:0;font-size:14px}.fz-list li{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
+  .fz-links{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:13px}.fz-links a{display:inline-flex;gap:4px;align-items:center}`; document.head.appendChild(st); }
 
 /* ---------- Speed (audit 2026-10-17) ----------
    Punches by person, and the leave and holiday context, are worked out once per change instead of once per employee:

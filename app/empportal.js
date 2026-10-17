@@ -76,7 +76,7 @@ async function rqOne(f) {
     const t = leaveType(f.type); if (!t) return bad("Choose the leave type again.");
     if (!day(f.from) || !day(f.to) || f.to < f.from) return bad("Check the dates.");
     if (!reason) return bad("Give the reason.");
-    const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId };
+    const item = { empId: e.id, type: t.code, from: f.from, to: f.to, half: !!f.half && f.from === f.to, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) };
     item.days = PAY.leaveDays(item, SET(), t) || (item.half ? 0.5 : 1); const month = f.from.slice(0, 7);
     if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } }); else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
@@ -92,7 +92,7 @@ async function rqOne(f) {
       await rqDone(f, { done: true, req: `ar:${id}` }); logActivity(`${fullName(e)} asked for an attendance change from their account (${fmtDate(f.d)})`); return true; }
     if (S.otReqs.has(id)) return rqDone(f, { done: true, req: `ot:${id}` }).then(() => true);
     const h = Math.round((Number(f.hours) || 0) * 2) / 2; if (!(h > 0 && h <= 16)) return bad("Enter the overtime hours again.");
-    await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId });
+    await put("otreqs", { id, empId: e.id, d: f.d, hours: h, reason, status: "PENDING", filed: today, decided: null, src: "phone", rqId, ...(fzClean(f.files).length ? { files: fzClean(f.files) } : {}) });
     await rqDone(f, { done: true, req: `ot:${id}` }); logActivity(`${fullName(e)} filed ${h} h of overtime from their account (${fmtDate(f.d)})`); return true; }
   if (f.kind === "cert") {
     if (S.certReqs.has(id)) return rqDone(f, { done: true, req: `cq:${id}` }).then(() => true);
@@ -146,9 +146,9 @@ function epForm(kind) {
   const today = todayISO(); const lt = (SET().leaveTypes || []).map((t) => [t.code, t.name]);
   const body = kind === "leave" ? `<div class="field"><label for="rq-type">Leave</label><select class="input" id="rq-type">${opts(lt, lt[0]?.[0])}</select></div>
       <div class="field"><label for="rq-from">From</label><input class="input" type="date" id="rq-from" value="${today}" required></div><div class="field"><label for="rq-to">To</label><input class="input" type="date" id="rq-to" value="${today}" required></div>
-      <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rq-half"> Half day</label>`
+      <label class="field" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="rq-half"> Half day</label>${fileZone("rq")}`
     : kind === "adjust" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-in">Time in</label><input class="input" type="time" id="rq-in"></div><div class="field"><label for="rq-out">Time out</label><input class="input" type="time" id="rq-out"></div>`
-    : kind === "ot" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-h">Hours</label><input class="input" type="number" id="rq-h" min="0.5" max="16" step="0.5" required></div>`
+    : kind === "ot" ? `<div class="field"><label for="rq-d">Date</label><input class="input" type="date" id="rq-d" max="${today}" required></div><div class="field"><label for="rq-h">Hours</label><input class="input" type="number" id="rq-h" min="0.5" max="16" step="0.5" required></div>${fileZone("rq")}`
     : `<div class="field"><label for="rq-ct">Certificate</label><select class="input" id="rq-ct">${opts(CERTS, "COE")}</select></div><div class="field"><label for="rq-pp">Purpose</label><input class="input" id="rq-pp" required placeholder="e.g. Bank loan"></div>
       <div class="field"><label for="rq-cp">Copies</label><input class="input" type="number" id="rq-cp" min="1" max="10" value="1"></div><div class="field"><label for="rq-need">Needed by</label><input class="input" type="date" id="rq-need" value="${addDays(today, 3)}"></div>`;
   const why = kind === "cert" ? "" : `<div class="field" style="grid-column:1/-1"><label for="rq-why">Reason</label><input class="input" id="rq-why" required maxlength="200"></div>`;
@@ -165,6 +165,8 @@ window.addEventListener("submit", async (ev) => {
   if (kind === "adjust") { Object.assign(rec, { d: v("rq-d"), in: v("rq-in") || null, out: v("rq-out") || null }); if (!rec.d || (!rec.in && !rec.out)) { toast("Enter the date and at least one time."); return; } }
   if (kind === "ot") { Object.assign(rec, { d: v("rq-d"), hours: Number(v("rq-h")) || 0 }); if (!rec.d || !(rec.hours > 0)) { toast("Enter the date and hours."); return; } }
   if (kind === "cert") { Object.assign(rec, { type: v("rq-ct"), purpose: v("rq-pp"), copies: Number(v("rq-cp")) || 1, need: v("rq-need") || null }); if (!rec.purpose) { toast("Give the purpose."); return; } }
+  if ((kind === "ot" || kind === "leave") && (S.fz.rq || []).length) { const btn = f.querySelector("button.btn-primary"); if (btn) btn.disabled = true;
+    try { rec.files = await fzUpload("rq"); } catch { if (btn) btn.disabled = false; toast("Couldn't upload the attachments. Check your connection and try again."); return; } }
   const id = uid(); try { await S.db.doc(`clockins/${S.self.uid}/reqs/${id}`).set(JSON.parse(JSON.stringify(rec))); S.rqMine = [{ id, ...rec }, ...(S.rqMine || [])]; S.epOpen = null; toast("Sent to HR."); render(); } catch { toast("Couldn't send. Check your connection and try again."); }
 }, true);
 

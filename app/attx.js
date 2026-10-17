@@ -159,7 +159,7 @@ ESS.essot = (e) => {
       ${act.slice().reverse().map((x) => { const f = filed(x.d); return `<tr><td style="white-space:nowrap">${fmtDate(x.d)}</td><td class="t-muted">${x.r.rest ? "Rest day" : x.r.hol.length ? "Holiday" : esc(`${x.r.shift.start}–${x.r.shift.end}`)}</td><td>${esc(hm(x.r.in))}</td><td>${esc(hm(x.r.out))}</td><td class="num"><b>${x.h} h</b></td>
         <td>${f ? `<span class="chip ${OT_STATUS[f.status][1]}">${OT_STATUS[f.status][0]} ${f.hours} h</span>` : S.realEdit ? `<button class="btn btn-ghost btn-sm" data-ot-file="${x.d}|${x.h}">File ${x.h} h</button>` : '<span class="t-muted">Not filed</span>'}</td></tr>`; }).join("") || '<tr><td colspan="6" class="empty">No time worked past the shift in the last 45 days.</td></tr>'}</tbody></table></div></section>
     <section class="card"><div class="card-head"><h2>My overtime requests</h2></div><div class="table-wrap"><table><thead><tr><th>Date</th><th class="num">Hours</th><th>Reason</th><th>Status</th></tr></thead><tbody>
-      ${reqs.slice(0, 40).map((r) => `<tr><td>${fmtDate(r.d)}</td><td class="num">${r.hours}</td><td class="t-muted">${esc(r.reason || "")}</td><td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span></td></tr>`).join("") || '<tr><td colspan="4" class="empty">No overtime requests.</td></tr>'}</tbody></table></div></section>`;
+      ${reqs.slice(0, 40).map((r) => `<tr><td>${fmtDate(r.d)}</td><td class="num">${r.hours}</td><td class="t-muted">${esc(r.reason || "")}${fzLinks(r.files)}</td><td><span class="chip ${OT_STATUS[r.status][1]}">${OT_STATUS[r.status][0]}</span></td></tr>`).join("") || '<tr><td colspan="4" class="empty">No overtime requests.</td></tr>'}</tbody></table></div></section>`;
 };
 
 /* ---------- reports ---------- */
