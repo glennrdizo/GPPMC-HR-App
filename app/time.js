@@ -286,8 +286,7 @@ async function submitLeave() {
   const id = uid(); const month = d.from.slice(0, 7);
   const item = { ...d, days, filed: todayISO(), decided: d.status === "APPROVED" ? todayISO() : null, ...(files.length ? { files } : {}) };
   try {
-    if (S.leaveDocs.has(month)) await S.db.doc("leaves/" + month).update({ items: { [id]: item } });
-    else await S.db.doc("leaves/" + month).set({ month, items: { [id]: item } });
+    await leaveMonthAdd(month, { [id]: item });
     const doc = S.leaveDocs.get(month) || { month, items: {} }; S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: item } }); S.ver++;
     logActivity(`Filed ${days} ${days === 1 ? "day" : "days"} of ${t.name.toLowerCase()} for ${fullName(e)}`);
     toast("Leave saved."); S.view.emp ? go("employee", { id: e.id }) : go("leave");
@@ -297,7 +296,9 @@ async function setLeaveStatus(month, id, status) {
   const doc = S.leaveDocs.get(month); const l = doc?.items?.[id]; if (!l) return;
   if (status === "APPROVED" && isFinal(PAY.periodOf(l.from))) { toast("Payroll for that period is final. Reopen it first."); return; }
   if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, yearOf(l.from)).find((x) => x.code === l.type);
-    if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; } }
+    if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; }
+    // two approved leaves on the same days would be deducted or paid twice
+    if (allLeaves().some((x) => x.id !== id && x.empId === l.empId && x.status === "APPROVED" && x.from <= l.to && x.to >= l.from)) { toast("Another approved leave already covers these dates."); return; } }
   await S.db.doc("leaves/" + month).update({ items: { [id]: { status, decided: todayISO() } } });
   S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status, decided: todayISO() } } }); S.ver++;
   const e = S.emps.get(l.empId); logActivity(`${LSTATUS[status][0]} ${leaveType(l.type)?.name.toLowerCase() || "leave"} for ${e ? fullName(e) : "an employee"}`);
@@ -375,6 +376,15 @@ async function reopenPayroll(id) {
   await S.db.doc("periods/" + id).update({ status: "OPEN" }); await S.db.doc("payruns/" + id).delete(); await undoLoanPayments(id); await undoFlexPaid(id);
   S.runs.delete(id); S.periods.set(id, { ...periodDoc(id), status: "OPEN" }); S.ver++;
   logActivity(`Reopened payroll for ${PAY.period(id).label}`); toast("Payroll reopened."); render();
+}
+
+/* Adds leave items to a month's record. HR's screen holds only the newest 24 months, so a month missing from it may still
+   exist: it is updated when it does and created only when it doesn't (creating it over an existing one wiped that
+   month's other leaves). */
+async function leaveMonthAdd(month, items) {
+  const ref = S.db.doc("leaves/" + month);
+  if (S.leaveDocs.has(month)) return ref.update({ items });
+  try { await ref.update({ items }); } catch (err) { if ((await ref.get().catch(() => null))?.exists) throw err; await ref.set({ month, items }); }
 }
 
 /* ---------- payslip ---------- */

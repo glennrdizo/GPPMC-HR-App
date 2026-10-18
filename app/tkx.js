@@ -33,7 +33,8 @@ alias("utreq", { before: () => { S.arF = { kind: "UT", st: "PENDING" }; }, view:
 function addMinutes(hhmm, m) { const [h, mm] = hhmm.split(":").map(Number); const t = Math.max(0, h * 60 + mm + m); return `${String(Math.floor(t / 60) % 24).padStart(2, "0")}:${String(t % 60).padStart(2, "0")}`; }
 { const b = applyReq; applyReq = async (r) => { if (r.kind === "UT") return; if (r.kind !== "OB") return b(r); const e = S.emps.get(r.empId);
   for (let d = r.from; d <= (r.to || r.from); d = addDays(d, 1)) { if (planCode(e, d) === "R") continue; const sh = shiftById(planCode(e, d)) || shiftOf(e) || { start: "08:00", end: "17:00" };
-    for (const [type, hhmm] of [["IN", r.tin || sh.start], ["OUT", r.tout || sh.end]]) await savePunch("adjust", { t: new Date(atManila(d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: `Official business: ${r.place || ""}` }, { name: "HR adjustments", kiosk: true, adjust: true }); }
+    const tin = r.tin || sh.start, tout = r.tout || sh.end; // a time back earlier than the time out is the next morning
+    for (const [type, hhmm] of [["IN", tin], ["OUT", tout]]) await savePunch("adjust", { t: new Date(atManila(type === "OUT" && tout < tin ? addDays(d, 1) : d, hhmm)).toISOString(), type, empId: r.empId, adj: r.id, note: `Official business: ${r.place || ""}` }, { name: "HR adjustments", kiosk: true, adjust: true }); }
   S.clockLoaded.clear(); }; }
 window.addEventListener("submit", async (ev) => {
   const f = ev.target; if (f.id !== "ar2-form") return; ev.preventDefault(); ev.stopImmediatePropagation(); if (!S.realEdit) return;
