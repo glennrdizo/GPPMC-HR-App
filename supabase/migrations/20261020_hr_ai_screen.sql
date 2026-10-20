@@ -69,13 +69,13 @@ begin
 end $$;
 
 -- Payroll cutoff autopilot: the notice job also watches pay periods, to email approvers once when a cutoff is ready, and the
--- monthly government filing marks (remit), to email HR once when the month's filing files are ready, and endorsements
--- (apprs), to email the next approver in the chain.
+-- monthly government filing marks (remit), to email HR once when the month's filing files are ready, endorsements
+-- (apprs), to email the next approver in the chain, and exit clearance (offboard, without the final pay figures).
 create or replace function public.hr_docs_event() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare o jsonb; n jsonb;
 begin
-  if new.col in ('leaves', 'leavereq', 'otreqs', 'attreq', 'flex', 'reimb', 'empchg', 'certreq', 'resign', 'payruns', 'applicants', 'periods', 'remit', 'apprs')
+  if new.col in ('leaves', 'leavereq', 'otreqs', 'attreq', 'flex', 'reimb', 'empchg', 'certreq', 'resign', 'payruns', 'applicants', 'periods', 'remit', 'apprs', 'offboard')
      and array_length(string_to_array(new.path, '/'), 1) = 2
      and (tg_op = 'INSERT' or old.data is distinct from new.data) then
     o := case when tg_op = 'UPDATE' then old.data end; n := new.data;
@@ -83,6 +83,10 @@ begin
       if (o -> 'auto' -> 'ready') is not distinct from (n -> 'auto' -> 'ready') then return null; end if;
       n := jsonb_build_object('start', n -> 'start', 'end', n -> 'end', 'status', n -> 'status', 'auto', n -> 'auto');
       o := case when o is null then null else jsonb_build_object('status', o -> 'status', 'auto', o -> 'auto') end;
+    end if;
+    if new.col = 'offboard' then -- clearance steps only, never the final pay figures
+      n := n - 'pay'; o := case when o is null then null else o - 'pay' end;
+      if o is not distinct from n then return null; end if;
     end if;
     if new.col = 'payruns' then -- the notice job only needs who is on the pay run, not the amounts
       n := jsonb_set(n - 'lines', '{lines}', coalesce((select jsonb_object_agg(k, true) from jsonb_object_keys(case when jsonb_typeof(new.data->'lines') = 'object' then new.data->'lines' else '{}' end) k), '{}'));

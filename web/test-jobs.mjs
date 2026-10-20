@@ -120,3 +120,17 @@ console.log("hr-jobs rules: all checks passed");
   assert.equal(n.length, 1); assert.equal(n[0].to, "rina@x.test"); assert.ok(n[0].text.includes("0-1254")); assert.ok(n[0].text.includes("Nov 3, 2026"));
   console.log("offer and new hire notices: passed");
 }
+
+// exit clearance: signers get their steps, approvers hear when clearance is done
+{
+  const st = L.readSettings({ on: true, approverTo: ["boss@gd.test"] });
+  const c5 = { ...ctx, settings: st, ops: { clrTo: { Admin: "u-adm", IT: "u-it" } }, userEmail: (u) => ({ "u-adm": "adm@gd.test", "u-it": "it@gd.test" })[u] || null };
+  const items = [{ k: "notice", who: "HR", label: "Notice", done: "2026-10-01" }, { k: "assets", who: "Admin", label: "Return company property", done: null }, { k: "it", who: "IT", label: "Disable access", done: null }, { k: "finalpay", who: "Payroll", label: "Release final pay", done: null }];
+  let n = L.eventNotices({ path: "offboard/e1", col: "offboard", old: null, new: { empId: "e1", last: "2026-10-31", items } }, c5);
+  assert.deepEqual(n.map((x) => x.to).sort(), ["adm@gd.test", "it@gd.test"]); assert.ok(n.find((x) => x.to === "adm@gd.test").text.includes("#clr=e1%3Aassets"));
+  const done = items.map((i) => (i.k === "finalpay" ? i : { ...i, done: "2026-10-20" }));
+  n = L.eventNotices({ path: "offboard/e1", col: "offboard", old: { empId: "e1", items }, new: { empId: "e1", last: "2026-10-31", items: done } }, c5);
+  assert.deepEqual(n.map((x) => x.to), ["boss@gd.test"]); assert.match(n[0].text, /Nov 30, 2026/);
+  assert.equal(L.eventNotices({ path: "offboard/e1", col: "offboard", old: { empId: "e1", items: done }, new: { empId: "e1", items: done, released: "2026-10-21" } }, c5).length, 0);
+  console.log("exit clearance notices: passed");
+}

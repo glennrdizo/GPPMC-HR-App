@@ -51,7 +51,7 @@ export const REQ: Record<string, [string, string]> = {
 };
 const AR_KIND: Record<string, string> = { OB: "Official business request", UT: "Undertime request", SHIFT: "Change of schedule request" };
 const SLA_DEF: Record<string, number> = { leave: 2, lvreq: 3, ot: 2, ar: 2, flex: 5, rb: 5, cq: 3, cert: 3, rs: 2 };
-export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods", "remit", "apprs"];
+export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods", "remit", "apprs", "offboard"];
 const DONE: Record<string, string> = { APPROVED: "was approved", REJECTED: "was not approved", DECLINED: "was not approved", DENIED: "was not approved", READY: "is ready for release", RELEASED: "was released", ACCEPTED: "was accepted" };
 
 const nameOf = (e: Doc | null | undefined) => (e ? [e.first, e.last].filter(Boolean).join(" ") || e.name || "an employee" : "an employee");
@@ -160,6 +160,22 @@ function apprNotices(oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
     text: `A ${label.toLowerCase()} was endorsed by ${by} and now ${next ? `needs endorsement by ${next.name || "you"}` : "needs the final decision"}.\n\nApprove it in one tap (sign in if asked): ${apvLink(S, a.kind, String(a.key))}${footer(S)}` }));
 }
 
+/* ---------- exit clearance (app/offb.js): each signer gets their steps; approvers hear when clearance is done ---------- */
+export const CLR_AFTER = ["finalpay", "coe", "bir2316"]; // steps that come after clearance
+function offbNotices(empId: string, oldO: Doc | null, o: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.approval || o.closed || o.sample) return []; const e = ctx.emps.get(o.empId || empId); if (!e) return [];
+  const who = `${nameOf(e)}${e.no ? ` (${e.no})` : ""}`; const out: Notice[] = []; const clrTo = ctx.ops?.clrTo || {};
+  const had = new Set((oldO?.items || []).map((i: Doc) => i.k)); const fresh = (o.items || []).filter((i: Doc) => !i.done && !had.has(i.k) && !CLR_AFTER.includes(i.k));
+  const byWho = new Map<string, Doc[]>(); for (const i of fresh) { const to = clrTo[i.who] ? ctx.userEmail(clrTo[i.who]) : null; if (to) byWho.set(to, [...(byWho.get(to) || []), i]); }
+  for (const [to, items] of byWho) out.push({ id: `clr-${empId}-${items.map((i) => i.k).join(".")}-${to}`, kind: "approval", to, subject: `Exit clearance for ${who}: ${plural(items.length, "step")} for you`,
+    text: `${who} is leaving${o.last ? ` (last day ${fmt(o.last)})` : ""}. Please clear these steps:\n\n${items.map((i) => `- ${i.label}\n  Mark it cleared in one tap (sign in if asked): ${S.appUrl.replace(/\/?$/, "/")}#clr=${encodeURIComponent(`${empId}:${i.k}`)}`).join("\n")}${footer(S)}` });
+  const clr = (x: Doc | null) => !!x && (x.items || []).filter((i: Doc) => !CLR_AFTER.includes(i.k)).every((i: Doc) => i.done);
+  if (clr(o) && !clr(oldO) && !o.released) for (const to of new Set([...S.approverTo, ...S.digestTo]))
+    out.push({ id: `clrdone-${empId}-${to}`, kind: "approval", to, subject: `Exit clearance done for ${who}: final pay can be released`,
+      text: `Every clearance step for ${who} is done. Open Final pay in the HR app to check and release the final pay${o.last ? ` (due by ${fmt(addDays(o.last, 30))}, 30 days after the last day)` : ""}, then issue the Certificate of Employment and BIR 2316.${footer(S)}` });
+  return out;
+}
+
 /* ---------- one changed record -> notices ---------- */
 export function eventNotices(ev: { path: string; col: string; old: Doc | null; new: Doc | null }, ctx: Ctx): Notice[] {
   const n = ev.new; if (!n) return []; const id = ev.path.split("/").slice(1).join("_");
@@ -172,6 +188,7 @@ export function eventNotices(ev: { path: string; col: string; old: Doc | null; n
   if (ev.col === "periods") return periodNotices(id, ev.old, n, ctx);
   if (ev.col === "remit") return remitNotices(id, ev.old, n, ctx);
   if (ev.col === "apprs") return apprNotices(ev.old, n, ctx);
+  if (ev.col === "offboard") return offbNotices(id, ev.old, n, ctx);
   return [];
 }
 
