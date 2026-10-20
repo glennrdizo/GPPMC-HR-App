@@ -32,7 +32,7 @@ function voiceRun(raw) {
   const e = essEmp(); if (!e) return voiceSay("No employee is selected.");
   const goto = (v, msg) => { S.essView = v; voiceSay(msg); window.scrollTo({ top: 0 }); };
   const y = todayISO().slice(0, 4);
-  if (has("balance", "how many leave", "leave left", "credits", "natitirang")) { const b = balances(e, y); const vl = b.find((x) => x.code === "VL"), sl = b.find((x) => x.code === "SL");
+  if (has("balance", "how many leave", "leave left", "credits", "natitirang")) { const b = balances(e, leaveYear(todayISO())); const vl = b.find((x) => x.code === "VL"), sl = b.find((x) => x.code === "SL");
     return goto("essleave", `You have ${vl?.left ?? 0} vacation leave and ${sl?.left ?? 0} sick leave days left for ${y}.`); }
   if (has("latest pay", "net pay", "last pay", "how much", "magkano", "sweldo ko", "my pay")) { const s = essSlips(e)[0];
     return goto("esspay", s ? `Your net pay for ${s.p.label} is ${peso.format(s.l.net)}${s.final ? "" : ", still a draft"}.` : "You have no payslip yet."); }

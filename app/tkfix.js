@@ -185,7 +185,7 @@ async function dcOne(c) {
     else if (await fxChain("ot", r.id, c, sup)) note = "Endorsed; HR gives the final approval"; else await put("otreqs", { ...r, status: c.st, decided: todayISO(), decidedBy: by }); }
   else if (type === "lv") { const [month, id] = rest; const doc = S.leaveDocs.get(month); const l = doc?.items?.[id];
     if (!l || !mine(l.empId)) note = "Not your team"; else if (l.status !== "PENDING") note = "Already decided"; else if (c.st === "APPROVED" && isFinal(PAY.periodOf(l.from))) note = "Payroll is final; HR will decide";
-    else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), yearOf(l.from)).find((x) => x.code === l.type) : null;
+    else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), leaveYear(l.from)).find((x) => x.code === l.type) : null;
       if (b && b.left != null && l.days > b.left) note = "Not enough leave left; HR will decide";
       else if (await fxChain("lv", `${month}:${id}`, c, sup)) note = "Endorsed; HR gives the final approval";
       else { await S.db.doc("leaves/" + month).update({ items: { [id]: { status: c.st, decided: todayISO(), decidedBy: by } } }); S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status: c.st, decided: todayISO(), decidedBy: by } } }); S.ver++; } } }

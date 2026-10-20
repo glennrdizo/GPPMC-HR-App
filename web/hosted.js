@@ -213,3 +213,5 @@ document.addEventListener("submit", async (ev) => {
       if (r.num && ["sss", "philhealth", "pagibig", "tin"].includes(k) && !n[k]) n[k] = r.num; }
     for (const s of P.shared || []) { const bk = P.back?.[s.id]; if (bk?.file && !have.has(bk.file)) docs.push({ id: bk.file, kind: "Signed document", name: `${s.name} (signed)`, at: todayISO(), exp: null }); }
     n.docs = docs; try { await saveEmp(n); S.emps.set(n.id, n); } catch {} }; }
+// Scheduled runs (app/runner.js) also link approved accounts to their employee record.
+(window.__hrExtraJobs = window.__hrExtraJobs || []).push(["link", "Linking employee accounts", () => loadSignups(true).then(suAutoLink)]);

@@ -355,7 +355,7 @@ const m2F201 = (k) => (e) => { const x = typeof f201Status === "function" ? f201
 const m2Onb = (k) => (e) => S.onb?.get(e.id)?.items?.find((i) => i.k === k && i.done && !i.na)?.done || null;
 const m2Med = (kinds, f = "date") => (e) => { const r = listOf(S.meds || new Map()).filter((x) => x.empId === e.id && kinds.includes(x.kind) && (f !== "result" || x.result !== "PENDING")).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]; return r?.date || null; };
 const m2Case = (e) => listOf(S.cases || new Map()).filter((c) => c.empId === e.id).sort((a, b) => (b.nte || "").localeCompare(a.nte || ""))[0] || null;
-const m2Bal = (code) => (e) => { try { const r = balances(e, yearOf(todayISO())).find((t) => t.code === code); return r && r.left != null ? `${r.left} of ${r.credit} days left (${yearOf(todayISO())})` : null; } catch { return null; } };
+const m2Bal = (code) => (e) => { try { const r = balances(e, leaveYear(todayISO())).find((t) => t.code === code); return r && r.left != null ? `${r.left} of ${r.credit} days left (${yearOf(todayISO())})` : null; } catch { return null; } };
 const m2Years = (from, to) => { if (!m2ISO(from)) return null; const a = new Date(from), b = new Date(to || todayISO()); let mo = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth(); if (b.getDate() < a.getDate()) mo--; return mo < 0 ? null : `${Math.floor(mo / 12)} yr ${mo % 12} mo`; };
 const M2_LINKS = {
   65: ["201 checklist", "f201", m2F201("birth")], 68: ["201 checklist", "f201", (e) => m2F201("med")(e) || m2Med(["PRE_EMP"])(e)], 69: ["Medical history", "medical", m2Med(["DRUG"])], 70: ["201 checklist", "f201", m2F201("nbi")],
