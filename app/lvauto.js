@@ -1,8 +1,9 @@
 /* ---------- Leave year-end on its own (Glenn 2026-10-20: full automation; balances refresh every January 15, no carry-over) ----------
    Leave credits are earned and refreshed by themselves (time.js leaveCredit over the leave year). On the reset day the
    scheduled run (runner.js) records the year-end list for the leave year that just ended (as "Record the conversion" does on
-   Leave year-end) and, where the leave policy converts unused leave to cash, pays it in the first open cutoff: up to 10 VL days
-   a year tax-free (de minimis), the rest counted with the 13th month and other benefits. Leave years before 2026 are left to HR. */
+   Leave year-end). Unused leave lapses (Glenn 2026-10-20); only if HR ticks a conversion in the leave policy is it paid in the
+   first open cutoff: up to 10 VL days a year tax-free (de minimis), the rest counted with the 13th month and other benefits.
+   Leave years before 2026 are left to HR. */
 const LVA_FROM = "2026";
 const lvaPid = () => { let id = curPeriod(); for (let i = 0; i < 4 && isFinal(id); i++) id = PAY.shiftPeriod(id, 1); return id; };
 async function lvAutoJob() {

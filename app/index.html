@@ -2023,6 +2023,31 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -12240,7 +12265,7 @@ window.addEventListener("click", async (ev) => {
 
 /* ---------- v59 Phase 3 automation (Glenn 2026-10-12): leave earned monthly, carry-over and year-end conversion;
    yearly review, document expiry and training renewal reminders; training auto-enrolment; applicant shortlist scoring. ---------- */
-const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: true, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over, balances refresh every January 15
+const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: false, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over and no cash conversion; unused leave lapses when balances refresh every January 15
 const LVP = () => { const o = S.ops?.lvp || {}; return { ...LVP_DEF, ...o, carry: { ...LVP_DEF.carry, ...(o.carry || {}) }, conv: { ...LVP_DEF.conv, ...(o.conv || {}) } }; };
 const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 /* Earned monthly: this year's VL and SL count only the months already completed (credited at each month end). */
@@ -17108,8 +17133,9 @@ async function clrTry() {
 /* ---------- Leave year-end on its own (Glenn 2026-10-20: full automation; balances refresh every January 15, no carry-over) ----------
    Leave credits are earned and refreshed by themselves (time.js leaveCredit over the leave year). On the reset day the
    scheduled run (runner.js) records the year-end list for the leave year that just ended (as "Record the conversion" does on
-   Leave year-end) and, where the leave policy converts unused leave to cash, pays it in the first open cutoff: up to 10 VL days
-   a year tax-free (de minimis), the rest counted with the 13th month and other benefits. Leave years before 2026 are left to HR. */
+   Leave year-end). Unused leave lapses (Glenn 2026-10-20); only if HR ticks a conversion in the leave policy is it paid in the
+   first open cutoff: up to 10 VL days a year tax-free (de minimis), the rest counted with the 13th month and other benefits.
+   Leave years before 2026 are left to HR. */
 const LVA_FROM = "2026";
 const lvaPid = () => { let id = curPeriod(); for (let i = 0; i < 4 && isFinal(id); i++) id = PAY.shiftPeriod(id, 1); return id; };
 async function lvAutoJob() {

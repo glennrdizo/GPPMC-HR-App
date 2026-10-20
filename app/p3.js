@@ -1,6 +1,6 @@
 /* ---------- v59 Phase 3 automation (Glenn 2026-10-12): leave earned monthly, carry-over and year-end conversion;
    yearly review, document expiry and training renewal reminders; training auto-enrolment; applicant shortlist scoring. ---------- */
-const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: true, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over, balances refresh every January 15
+const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: false, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over and no cash conversion; unused leave lapses when balances refresh every January 15
 const LVP = () => { const o = S.ops?.lvp || {}; return { ...LVP_DEF, ...o, carry: { ...LVP_DEF.carry, ...(o.carry || {}) }, conv: { ...LVP_DEF.conv, ...(o.conv || {}) } }; };
 const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 /* Earned monthly: this year's VL and SL count only the months already completed (credited at each month end). */
