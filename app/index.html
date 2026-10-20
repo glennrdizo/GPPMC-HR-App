@@ -1998,6 +1998,31 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -10540,6 +10565,11 @@ function subMeSum() { if (!S.meSumSub && S.self?.uid && S.db) { S.meSumSub = tru
     let out = h.replace(/<p style="margin:0;font-size:14px">[\s\S]*?<\/p>\s*(?=<div style="display:grid)/, "").replace(GRID, fencePanel(fz, mode, M.geo, false) + (wait ? `<p class="t-warn" style="margin:0;font-size:13px">${wait} punch${wait > 1 ? "es" : ""} today waiting for HR approval.</p>` : "") + GRID);
     if (fenceBlocks(fz, mode)) out = out.replace(/data-self-punch="(IN|OUT)"/g, "$& disabled");
     return out; }; }
+/* Saves one punch of the employee's own phone (fieldclk.js keeps it on the phone when there's no signal). */
+async function selfSave(u, id, punch) {
+  const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${u}/days/${date}`); const cur = await ref.get();
+  if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: u, punches: { [id]: punch } });
+}
 selfPunch = async function (type) {
   const M = S.self; if (!M.photo) return; const s = S.meSum; const mode = s?.fenceMode || "RECORD"; const fz = phoneFence(M.geo, s);
   if (fenceBlocks(fz, mode)) { toast(fz.state === "nogps" ? "Turn on location first. Time in and out only work inside the site area." : "You're outside the site area, so this punch can't be saved."); return; }
@@ -10549,10 +10579,10 @@ selfPunch = async function (type) {
     const c = await shrinkCanvas(M.photo, 160); const g = M.geo || {};
     const punch = { t: new Date().toISOString(), type, photo: c.toDataURL("image/jpeg", 0.6), lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null,
       fstate: fz.state, dist: fz.dist ?? null, fsite: fz.site || null, why, needsOk: why ? true : null };
-    const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${M.uid}/days/${date}`); const id = uid(); const cur = await ref.get();
-    if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: M.uid, punches: { [id]: punch } });
+    const q = await selfSave(M.uid, uid(), punch);
     if (M.photoUrl) URL.revokeObjectURL(M.photoUrl); Object.assign(M, { photo: null, photoUrl: null, busy: false });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
+    toast(q === "queued" ? `No signal. Your ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this phone and sent by itself when there's signal; HR checks it.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
   } catch { M.busy = false; toast("Couldn't save. Check your connection and try again."); render(); }
 };
 
@@ -10570,11 +10600,12 @@ kioskPunch = async function (type) {
   K.busy = true; render();
   try {
     let photo = null;
-    if (S.assets) { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; }
-    else { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
+    if (S.assets && navigator.onLine !== false) { try { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; } catch { photo = null; } }
+    if (!photo) { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
     const punch = { t: new Date().toISOString(), type, empId: e.id, site: K.site, photo, lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null, fstate: fz.state, dist: fz.dist ?? null, why, needsOk: why ? true : null };
-    await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
+    const q = await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
+    toast(q === "queued" ? `No signal. ${fullName(e)}'s ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this device and sent by itself when there's signal.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
   } catch { K.busy = false; toast("Couldn't save the punch. Check the connection and try again."); render(); }
 };
 
@@ -17103,6 +17134,62 @@ function lvOf(l) { let t = 0; for (const id of l?.flex || []) { const m = /^lv:(
 { const b = VIEWS.lvye; VIEWS.lvye = (...a) => { const h = b(...a); const rec = S.lvye.get(S.lvyeY); if (!rec?.auto) return h;
   const note = `<div class="notice"><span><span class="chip c-blue">Recorded by itself</span> The scheduled run recorded this list on ${fmtDate(rec.at.slice(0, 10))}, the day after the leave year ended.${rec.payPid ? ` The converted leave is paid in the ${esc(PAY.period(rec.payPid).label)} payroll.` : ""}</span></div>`;
   const i = h.indexOf('<section class="card"'); return i >= 0 ? h.slice(0, i) + note + h.slice(i) : h + note; }; }
+
+/* ---------- Punches with no signal (Glenn 2026-10-20: full automation; audit 2026-10-17 H4) ----------
+   A time in or out made on the employee's phone, or on a site kiosk, when there's no signal is kept on that device and sent
+   by itself when the signal is back (every minute, and as soon as the device is online). It keeps the time it was made and
+   is marked offline. On the website the server keeps that time only for punches from the last 48 hours in an open cutoff
+   (migration 20261020c); every offline punch waits for HR on Geofence review before it counts, like a punch without a
+   location, because its time came from the device. */
+const FC_KEY = "hr-punch-outbox";
+const fcRead = () => { try { const v = JSON.parse(localStorage.getItem(FC_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
+const fcWrite = (l) => { try { localStorage.setItem(FC_KEY, JSON.stringify(l.slice(-40))); return true; } catch { return false; } };
+const fcNet = (er) => navigator.onLine === false || /fetch|network|timed? ?out|abort|offline|load failed|connection/i.test(String(er?.message || er || ""));
+function fcQueue(item) {
+  const l = fcRead(); const why = `No signal: kept on the ${item.kind === "self" ? "phone" : "kiosk"} at ${timeFmt.format(new Date(item.punch.t))} and sent when the signal came back`;
+  item.punch = { ...item.punch, offline: true, why: item.punch.why ? `${item.punch.why} (${why.toLowerCase()})` : why, ...(item.kind === "kiosk" ? { needsOk: true } : {}) };
+  if (!fcWrite([...l, { ...item, tries: 0 }])) throw new Error("no room on this device");
+  S.fcN = l.length + 1; return "queued";
+}
+{ const b = selfSave; selfSave = async (u, id, punch) => { try { return await b(u, id, punch); } catch (er) { if (!fcNet(er)) throw er; return fcQueue({ kind: "self", u, id, punch }); } }; }
+{ const b = savePunch; savePunch = async (dev, punch, devInfo) => {
+  try { return await b(dev, punch, devInfo); } catch (er) { if (!String(dev).startsWith("kiosk-") || !fcNet(er)) throw er; return fcQueue({ kind: "kiosk", dev, devInfo, id: uid(), punch }); } }; }
+let fcBusy = false;
+async function fcFlush() {
+  if (fcBusy || navigator.onLine === false || !S.db) return; let l = fcRead(); if (!l.length) { S.fcN = 0; return; }
+  fcBusy = true; let sent = 0, dropped = 0;
+  try {
+    for (const it of [...l]) {
+      if (it.kind === "self" ? S.self?.uid !== it.u : !(S.realEdit && S.canEdit)) continue; // only the account that made it sends it
+      try {
+        if (it.kind === "self") { const date = manilaDay(it.punch.t); const ref = S.db.doc(`clockins/${it.u}/days/${date}`); const cur = await ref.get();
+          if (cur.exists) await ref.update({ punches: { [it.id]: it.punch } }); else await ref.set({ d: date, dev: it.u, punches: { [it.id]: it.punch } }); }
+        else { const date = manilaDay(it.punch.t); const ref = S.db.doc(`clockins/${it.dev}/days/${date}`); const cur = await ref.get();
+          if (!S.clockDevs.has(it.dev)) { await S.db.doc(`clockins/${it.dev}`).set(it.devInfo || { kiosk: true }); S.clockDevs.set(it.dev, { id: it.dev, ...(it.devInfo || {}) }); }
+          if (cur.exists && cur.data().punches?.[it.id]) { /* already saved */ } else if (cur.exists) await ref.update({ punches: { [it.id]: it.punch } }); else await ref.set({ d: date, dev: it.dev, punches: { [it.id]: it.punch } });
+          S.clockLoaded.clear(); }
+        l = l.filter((x) => x !== it); sent++;
+      } catch (er) {
+        if (fcNet(er)) break;
+        if (/can.t be changed|already/i.test(String(er?.message || er))) { l = l.filter((x) => x !== it); sent++; continue; } // it got there before
+        it.tries = (it.tries || 0) + 1; if (it.tries >= 5) { l = l.filter((x) => x !== it); dropped++; }
+      }
+    }
+  } finally { fcWrite(l); S.fcN = l.length; fcBusy = false; }
+  if (sent) { toast(`${sent} ${sent === 1 ? "punch" : "punches"} made with no signal ${sent === 1 ? "was" : "were"} sent. HR checks ${sent === 1 ? "it" : "them"}.`); S.ver++; render(); }
+  if (dropped) toast(`${dropped} ${dropped === 1 ? "punch" : "punches"} made with no signal couldn't be saved. Tell HR the time.`);
+}
+window.addEventListener("online", () => setTimeout(fcFlush, 1500));
+setInterval(fcFlush, 60000); setTimeout(fcFlush, 8000);
+S.fcN = fcRead().length;
+
+/* What's still waiting on this device */
+const fcNote = () => { const n = S.fcN || 0; return n ? `<p class="t-warn" style="margin:0;font-size:13px">${n} ${n === 1 ? "punch is" : "punches are"} kept on this device until there's signal. Keep this page open; ${n === 1 ? "it's" : "they're"} sent by itself.</p>` : ""; };
+{ const b = selfView; selfView = () => { const h = b(); return S.fcN && h.includes(GRID) ? h.replace(GRID, fcNote() + GRID) : h; }; }
+{ const b = VIEWS.kiosk; VIEWS.kiosk = (...a) => { const h = b(...a); return S.fcN && h.includes(GRID) ? h.replace(GRID, fcNote() + GRID) : h; }; }
+
+/* HR: an offline punch waits for HR like one without a location, whatever the geofence rule. */
+{ const b = punchesIn; punchesIn = (from, to) => { const l = b(from, to).map((p) => (p.offline && !p.rev ? { ...p, needsOk: true } : p)); return S.geoAll ? l : l.filter((p) => !(p.offline && p.rev !== "OK")); }; }
 
 /* HRIS audit 2026-10-17 (phones and tablets).
    Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's
