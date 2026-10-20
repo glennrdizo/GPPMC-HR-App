@@ -11,13 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Until the automation account's secrets are added, skip quietly instead of failing (and emailing) every hour.
+      - name: Check the automation account
+        id: bot
+        env:
+          HR_BOT_EMAIL: ${{ secrets.HR_BOT_EMAIL }}
+          HR_BOT_PASSWORD: ${{ secrets.HR_BOT_PASSWORD }}
+        run: |
+          if [ -n "$HR_BOT_EMAIL" ] && [ -n "$HR_BOT_PASSWORD" ]; then echo "ok=1" >> "$GITHUB_OUTPUT"
+          else echo "::notice::Skipped: add repository secrets HR_BOT_EMAIL and HR_BOT_PASSWORD to turn on the HR runner."; fi
       - uses: actions/checkout@v4
+        if: steps.bot.outputs.ok == '1'
       - uses: actions/setup-node@v4
+        if: steps.bot.outputs.ok == '1'
         with: { node-version: 20 }
       - name: Install
+        if: steps.bot.outputs.ok == '1'
         working-directory: tools/hr-runner
         run: npm install --no-audit --no-fund && npx playwright install --with-deps chromium
       - name: Run HR jobs
+        if: steps.bot.outputs.ok == '1'
         working-directory: tools/hr-runner
         env:
           HR_BOT_EMAIL: ${{ secrets.HR_BOT_EMAIL }}
