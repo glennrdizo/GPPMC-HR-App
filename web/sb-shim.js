@@ -69,8 +69,14 @@
     if (error) throw error; if (data && pay) data.data = { ...data.data, ...pay }; return docSnap(path, data);
   }
   async function payDocs() {
-    const out = new Map(); const { data } = await sb.rpc("hr_query", { c: "pay", w: [], ob: null, dir: "asc", lim: 5000 }).range(0, 4999).then((r) => r, () => ({ data: null }));
-    for (const r of data || []) if (r.path.startsWith("pay/employees--")) out.set(r.path.slice(15), r.data); return out;
+    // In pages of 1000, like runQuery: the API caps each call at 1000 rows and there are 1,200+ employees.
+    const out = new Map();
+    for (let from = 0; from < 5000; from += 1000) {
+      const { data } = await sb.rpc("hr_query", { c: "pay", w: [], ob: null, dir: "asc", lim: 5000 }).range(from, from + 999).then((r) => r, () => ({ data: null }));
+      for (const r of data || []) if (r.path.startsWith("pay/employees--")) out.set(r.path.slice(15), r.data);
+      if (!data || data.length < 1000) break;
+    }
+    return out;
   }
   async function runQuery(c, o) {
     // The API returns at most 1000 rows per call, so larger reads (the 201 masterlist has 1,200+ people) come in pages.
