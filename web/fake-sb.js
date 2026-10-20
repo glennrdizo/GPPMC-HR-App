@@ -59,7 +59,7 @@
     if (name === "hr_job_runs_list" || name === "hr_outbox_list") { const A = window.__AJ; if (!A) return { error: { code: "PGRST202", message: "function not found" } }; window.__writes.push(["rpc", name]); return { data: name === "hr_outbox_list" ? A.out : A.runs }; }
     if (name.startsWith("hr_bio_site_")) { const B = window.__BIO; if (!B) return { error: { code: "PGRST202", message: "function not found" } }; window.__writes.push(["rpc", name, JSON.stringify(a || {})]);
       if (name === "hr_bio_site_list") return { data: B };
-      if (name === "hr_bio_site_add") { B.push({ id: "s" + B.length, name: a.p_name, created_at: new Date().toISOString(), total_saved: 0, last_unmatched: [] }); return { data: "bio_" + "f".repeat(64) }; }
+      if (name === "hr_bio_site_add") { B.push({ id: "s" + B.length, name: a.p_name, projects: a.p_projects, created_at: new Date().toISOString(), total_saved: 0, last_unmatched: [] }); return { data: "bio_" + "f".repeat(64) }; }
       if (name === "hr_bio_site_revoke") { const x = B.find((s) => s.id === a.p_id); if (x) x.revoked_at = new Date().toISOString(); return { data: null }; } }
     return { error: { message: "unknown rpc " + name } };
   };
