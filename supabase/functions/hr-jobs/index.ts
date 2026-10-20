@@ -6,6 +6,7 @@
 // Secrets: RESEND_API_KEY or BREVO_API_KEY, MAIL_FROM ("GD Prime HR <hr@your-domain>"); optional SEMAPHORE_API_KEY, SEMAPHORE_SENDER.
 // Nothing is sent until an HR Admin ticks "Send automatic notices" (org/notify.on).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { aiScreen, genQuestions } from "./screen.ts";
 import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, manila, eventNotices, digestNotices, toHtml, phMobile, outId, isEmail } from "./logic.ts";
 
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
@@ -31,6 +32,17 @@ async function docsOf(col: string): Promise<Doc[]> {
 async function getDoc(path: string): Promise<Doc | null> { const r = (await rest(`hr_docs?select=data&path=eq.${encodeURIComponent(path)}`)) as { data: Doc }[]; return r?.[0]?.data || null; }
 const rpc = (fn: string, args: Doc, auth = `Bearer ${SVC}`, key = SVC) => fetch(`${BASE}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: key, authorization: auth, "content-type": "application/json" }, body: JSON.stringify(args) })
   .then(async (r) => (r.ok ? r.json() : null)).catch(() => null);
+
+/* ---------- AI screening (screen.ts) ---------- */
+function screenDeps() {
+  const key = env("ANTHROPIC_API_KEY");
+  return { key, docsOf, getDoc,
+    patch: (p: string, patch: Doc) => rest("rpc/hr_update", { method: "POST", body: JSON.stringify({ p, patch }) }),
+    fetchFile: async (id: string) => { const r = await fetch(`${BASE}/storage/v1/object/hr-files/${id.split("/").map(encodeURIComponent).join("/")}`, { headers: { apikey: SVC, authorization: `Bearer ${SVC}` }, signal: AbortSignal.timeout(20_000) });
+      return r.ok ? { type: r.headers.get("content-type") || "", buf: await r.arrayBuffer() } : null; },
+    claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
+      const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; } };
+}
 
 /* ---------- senders ---------- */
 // A provider that hangs must not stall the whole run: each call gives up after 10 s and the message is tried again later.
@@ -105,8 +117,12 @@ async function run(force = false) {
   }
   // Keep 90 days of messages and run notes.
   if (needDigest) { const old = new Date(now.getTime() - 90 * 864e5).toISOString(); await rest(`hr_outbox?at=lt.${old}`, { method: "DELETE" }, { prefer: "return=minimal" }).catch(() => null); await rest(`hr_job_runs?day=lt.${old.slice(0, 10)}`, { method: "DELETE" }, { prefer: "return=minimal" }).catch(() => null); }
+  // AI screening of new applications and qualification questions for open jobs (screen.ts), when the Claude key is set.
+  let screen: Doc | null = null;
+  if (env("ANTHROPIC_API_KEY")) { try { const deps = screenDeps(); const q = await genQuestions(deps); screen = { ...(await aiScreen(deps, 60_000)), questions: q }; } catch (e) { console.error("screen", e); screen = { error: String((e as Error)?.message || e).slice(0, 160) }; } }
   const entry = { date: today, runs: (log.runs || 0) + 1, lastAt: at, events: (log.events || 0) + events.length, queued: (log.queued || 0) + queued, sent: (log.sent || 0) + sent, failed: (log.failed || 0) + failed,
-    digestAt: log.digestAt || (digestCount != null ? at : null), digestItems: digestCount ?? log.digestItems ?? null, on: settings.on, sender: sender() };
+    digestAt: log.digestAt || (digestCount != null ? at : null), digestItems: digestCount ?? log.digestItems ?? null, on: settings.on, sender: sender(),
+    screened: (log.screened || 0) + (screen?.done || 0), ...(screen ? { screen } : {}) };
   await rest("hr_job_runs?on_conflict=day", { method: "POST", body: JSON.stringify([{ day: today, data: entry, updated_at: at }]) }, { prefer: "resolution=merge-duplicates,return=minimal" });
   return entry;
 }

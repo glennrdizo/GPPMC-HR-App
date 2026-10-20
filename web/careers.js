@@ -179,6 +179,8 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
         ${F("expRate", `Expected pay (PHP ${j.payType === "DAILY" ? "a day" : "a month"})`, "number", 0, 'min="0" step="1" inputmode="numeric"')}</div>
       ${F("address", "Home address", "text", 0, 'autocomplete="street-address"')}
       <div><label class="f" for="p-notes">Work experience, skills and licenses <small>(optional)</small></label><textarea class="i" id="p-notes" name="notes" rows="4" placeholder="For example: 3 years as a security guard at a mall; valid security guard license until 2027">${esc(v.notes || "")}</textarea></div>
+      ${qsOf(j).length ? `<fieldset class="stack" style="border:0;padding:0;margin:0"><legend class="f" style="font-weight:700;font-size:15px;margin-bottom:4px">A few questions about this job</legend><p class="sub" style="margin:0 0 6px">Your answers and resume are checked first by our screening system, then by HR. HR makes every decision.</p>
+        ${qsOf(j).map((q, i) => `<div><label class="f" for="p-q${i}">${esc(q)}</label><textarea class="i" id="p-q${i}" data-q="${i}" rows="2" maxlength="1500" required>${esc(v.answers?.[q] || "")}</textarea></div>`).join("")}</fieldset>` : ""}
       <div><span class="f" style="display:block;font-weight:700;font-size:13px;margin-bottom:6px">Resume or CV ${edit && v.resume ? "<small>(already attached; choose a file to replace it)</small>" : ""}</span>
         <label class="drop ${S.file || v.resume ? "has" : ""}" id="p-drop" tabindex="0"><b>${S.file ? esc(S.file.name) : v.resume ? esc(v.resume.name || "Resume attached") : "Attach your resume"}</b><span class="sub">PDF, Word or a clear photo, up to 10 MB</span><input type="file" id="p-file" accept="application/pdf,image/*,.doc,.docx" hidden></label></div>
       <label class="consent" id="p-consent-box"><input type="checkbox" id="p-consent" ${edit ? "checked" : ""}><span>I have read the <button type="button" class="btn link" data-notice>Privacy Notice</button> and agree to GD Prime processing my personal information for this and future job openings, under the Data Privacy Act of 2012 (RA 10173).</span></label>
@@ -186,6 +188,9 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
       <div class="row" style="justify-content:flex-end"><button type="button" class="btn" data-job="${esc(j.id)}">Cancel</button><button class="btn primary" type="submit">${edit ? "Save changes" : "Send my application"}</button></div></form></main>`;
   }
   const S = { file: null };
+  // Qualification questions: the job's own, or the standard ones (same as the HR app's DEF_QUESTIONS in app/recx.js).
+  const DEF_QS = ["How many years of experience do you have in this kind of work?", "Do you have the license, NC or certificate this job needs?", "When can you start?", "Are you willing to be assigned to any project site?"];
+  const qsOf = (j) => (Array.isArray(j.questions) && j.questions.length ? j.questions : DEF_QS).slice(0, 12).map(String);
   function stageChip(a) { const s = a.stage; return s === "HIRED" ? `<span class="chip ok">Hired</span>` : s === "REJECTED" ? `<span class="chip gray">Not selected</span>` : s === "WITHDRAWN" ? `<span class="chip gray">Withdrawn</span>` : `<span class="chip">${esc(STAGES.find((x) => x[0] === s)?.[1] || s)}</span>`; }
   function reqState(a, k) {
     const r = a.portal?.reqs?.[k];
@@ -315,7 +320,8 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
         if (!val("#p-first") || !val("#p-last") || !val("#p-mobile")) return fail("Fill in your first name, last name and mobile number.");
         if (!/^[+\d][\d\s-]{6,}$/.test(val("#p-mobile"))) return fail("Check your mobile number.");
         const had = appFor(j.id); if (!S.file && !had?.resume) return fail("Attach your resume or CV.");
-        const p = { first: val("#p-first"), middle: val("#p-middle"), last: val("#p-last"), mobile: val("#p-mobile"), birth: val("#p-birth"), gender: val("#p-gender"), expRate: val("#p-expRate"), address: val("#p-address"), notes: val("#p-notes"), consent: true, dpaV: DPA_V, src: pending.get()?.src || "" };
+        const answers = {}; for (const [i, q] of qsOf(j).entries()) { const a = ($(`#p-q${i}`)?.value || "").trim(); if (!a) { $(`#p-q${i}`)?.focus(); return fail("Please answer every question about the job."); } answers[q] = a; }
+        const p = { first: val("#p-first"), middle: val("#p-middle"), last: val("#p-last"), mobile: val("#p-mobile"), birth: val("#p-birth"), gender: val("#p-gender"), expRate: val("#p-expRate"), address: val("#p-address"), notes: val("#p-notes"), consent: true, dpaV: DPA_V, src: pending.get()?.src || "", answers };
         if (S.file) p.resume = await upload(S.file);
         const { error } = await sb.rpc("hr_apply", { p_job: j.id, p }); if (error) throw error;
         S.file = null; pending.set(null); await loadApps(); busy = false; view = { v: "mine" }; setUrl("?view=mine", true); flash = [had ? "Your application was updated." : `Thank you! Your application for ${j.title} was sent. We'll update you here.`, "ok"]; render(); scrollTo(0, 0); return;
