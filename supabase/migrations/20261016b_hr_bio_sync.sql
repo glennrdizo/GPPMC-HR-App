@@ -45,7 +45,7 @@ end $$;
 create or replace function public.hr_bio_push(p_key text, p_device jsonb default '{}'::jsonb, p_punches jsonb default '[]'::jsonb) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare site public.hr_bio_sites; x jsonb; uid text; ts timestamptz; emp text; st text; d text; k text; pid text;
-  days jsonb := '{}'::jsonb; saved int := 0; unmatched text[] := '{}'; bad int := 0; closed int := 0;
+  days jsonb := '{}'::jsonb; by_bio jsonb; by_no jsonb; by_num jsonb; saved int := 0; unmatched text[] := '{}'; bad int := 0; closed int := 0;
 begin
   select * into site from public.hr_bio_sites where key_hash = encode(extensions.digest(coalesce(p_key, ''), 'sha256'), 'hex') and revoked_at is null;
   if site.id is null then raise exception 'bad_key' using errcode = '28000'; end if;
@@ -54,20 +54,21 @@ begin
   update public.hr_bio_sites set win_start = case when win_start is null or win_start <= now() - interval '1 hour' then now() else win_start end,
     win_count = case when win_start is null or win_start <= now() - interval '1 hour' then 1 else win_count + 1 end where id = site.id;
 
-  create temporary table if not exists hr_bio_emp (id text, bio text, no text, num numeric) on commit drop;
-  truncate hr_bio_emp;
-  insert into hr_bio_emp select split_part(path, '/', 2), nullif(trim(data ->> 'bioId'), ''), lower(trim(data ->> 'no')),
-      nullif(regexp_replace(coalesce(data ->> 'no', ''), '\D', '', 'g'), '')::numeric
+  -- the key's employees, looked up by biometric id, employee no., and the number in the employee no. (first one wins)
+  with e as (select split_part(path, '/', 2) id, nullif(trim(data ->> 'bioId'), '') bio, lower(trim(data ->> 'no')) no,
+      nullif(regexp_replace(coalesce(data ->> 'no', ''), '\D', '', 'g'), '')::numeric::text num, created_at
     from public.hr_docs where col = 'employees' and (data -> 'separated' is null or jsonb_typeof(data -> 'separated') = 'null')
-      and (coalesce(nullif(data ->> 'projectId', ''), 'HO') = any(site.projects));
+      and (coalesce(nullif(data ->> 'projectId', ''), 'HO') = any(site.projects)))
+  select (select coalesce(jsonb_object_agg(bio, id), '{}') from (select distinct on (bio) bio, id from e where bio is not null order by bio, created_at) a),
+         (select coalesce(jsonb_object_agg(no, id), '{}') from (select distinct on (no) no, id from e where no is not null and no <> '' order by no, created_at) b),
+         (select coalesce(jsonb_object_agg(num, id), '{}') from (select distinct on (num) num, id from e where num is not null order by num, created_at) c)
+    into by_bio, by_no, by_num;
 
   for x in select * from jsonb_array_elements(p_punches) loop
     uid := trim(coalesce(x ->> 'id', ''));
     begin ts := ((x ->> 't') || '+08')::timestamptz; exception when others then ts := null; end;
     if uid = '' or uid !~ '^[A-Za-z0-9_.-]{1,24}$' or ts is null or ts > now() + interval '1 hour' or ts < now() - interval '35 days' then bad := bad + 1; continue; end if;
-    select id into emp from hr_bio_emp where bio = uid limit 1;
-    if emp is null then select id into emp from hr_bio_emp where no = lower(uid) limit 1; end if;
-    if emp is null and uid ~ '^\d+$' then select id into emp from hr_bio_emp where num = uid::numeric limit 1; end if;
+    emp := coalesce(by_bio ->> uid, by_no ->> lower(uid), case when uid ~ '^\d+$' then by_num ->> (uid::numeric::text) end);
     if emp is null then if not uid = any(unmatched) and cardinality(unmatched) < 200 then unmatched := unmatched || uid; end if; continue; end if;
     st := x ->> 's';
     d := to_char(ts at time zone 'Asia/Manila', 'YYYY-MM-DD');
