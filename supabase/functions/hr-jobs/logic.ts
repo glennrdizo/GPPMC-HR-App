@@ -37,6 +37,7 @@ export const addDays = (s: string, n: number) => { const d = new Date(s + "T00:0
 export const addMonths = (s: string, n: number) => { const [y, m, d] = s.split("-").map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate(); t.setUTCDate(Math.min(d, last)); return t.toISOString().slice(0, 10); };
 export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
 const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "");
+const MON_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const fmt = (s: string) => { const d = day(s); if (!d) return ""; const [y, m, dd] = d.split("-").map(Number); return `${MON[m - 1]} ${dd}, ${y}`; };
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -50,7 +51,7 @@ export const REQ: Record<string, [string, string]> = {
 };
 const AR_KIND: Record<string, string> = { OB: "Official business request", UT: "Undertime request", SHIFT: "Change of schedule request" };
 const SLA_DEF: Record<string, number> = { leave: 2, lvreq: 3, ot: 2, ar: 2, flex: 5, rb: 5, cq: 3, cert: 3, rs: 2 };
-export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods"];
+export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods", "remit"];
 const DONE: Record<string, string> = { APPROVED: "was approved", REJECTED: "was not approved", DECLINED: "was not approved", DENIED: "was not approved", READY: "is ready for release", RELEASED: "was released", ACCEPTED: "was accepted" };
 
 const nameOf = (e: Doc | null | undefined) => (e ? [e.first, e.last].filter(Boolean).join(" ") || e.name || "an employee" : "an employee");
@@ -121,6 +122,16 @@ function periodNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[]
     text: `Payroll for ${period} has passed every check: time records read, no requests waiting, no timekeeping issues, and everyone has basic pay${p.auto.count ? ` (${p.auto.count} employees)` : ""}.\n\nOpen Payroll in the HR app to review it and press Approve and finalize. Payslips are released when it is finalized.${footer(S)}` }));
 }
 
+/* ---------- the month's government filing pack is ready (app/remit.js writes remit/<month>.pack) ---------- */
+function remitNotices(month: string, oldR: Doc | null, r: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.digest || !r.pack || oldR?.pack) return [];
+  const due = r.pack.due || {}; const miss = r.pack.missing || {}; const nMiss = Object.values(miss).reduce((a: number, b) => a + (Number(b) || 0), 0);
+  const label = (() => { const [y, m] = month.split("-").map(Number); return `${MON_LONG[m - 1] || month} ${y}`; })();
+  const lines = REMIT.map(([k, l]) => `- ${l}: due ${due[k] ? fmt(due[k]) : "see the app"}${miss[k] ? ` (${miss[k]} ${Number(miss[k]) === 1 ? "person" : "people"} without an ID number)` : ""}`).join("\n");
+  return S.digestTo.map((addr) => ({ id: `remit-${month}-${addr}`, kind: "digest", to: addr, subject: `Government remittances for ${label} are ready to file`,
+    text: `Both payroll cutoffs for ${label} are final, and the filing files are ready on the Gov't Contributions page of the HR app:\n\n${lines}\n\n${nMiss ? "Add the missing ID numbers in the 201 files before uploading. " : ""}Press Mark filed on each one after filing to stop the reminders.${footer(S)}` }));
+}
+
 /* ---------- one changed record -> notices ---------- */
 export function eventNotices(ev: { path: string; col: string; old: Doc | null; new: Doc | null }, ctx: Ctx): Notice[] {
   const n = ev.new; if (!n) return []; const id = ev.path.split("/").slice(1).join("_");
@@ -131,6 +142,7 @@ export function eventNotices(ev: { path: string; col: string; old: Doc | null; n
   if (ev.col === "applicants") return appNotices(id, ev.old, n, ctx);
   if (ev.col === "payruns") return payNotices(id, ev.old, n, ctx);
   if (ev.col === "periods") return periodNotices(id, ev.old, n, ctx);
+  if (ev.col === "remit") return remitNotices(id, ev.old, n, ctx);
   return [];
 }
 

@@ -75,3 +75,15 @@ console.log("hr-jobs rules: all checks passed");
   assert.equal(ev({ status: "OPEN", auto: { ready: false } }, { ...ready, status: "FINAL" }).length, 0);
   console.log("payroll ready notices: passed");
 }
+
+// government filing pack ready -> one email to the digest list when the pack first appears
+{
+  const st = L.readSettings({ on: true, digestTo: ["hr@gd.test", "acct@gd.test"] });
+  const ev = (o, n) => L.eventNotices({ path: "remit/2026-09", col: "remit", old: o, new: n }, { ...ctx, settings: st });
+  const pack = { at: "2026-10-01T00:00:00Z", heads: 318, missing: { sss: 2, ph: 0, hdmf: 0, bir: 1 }, total: { sss: 1149990 }, due: { sss: "2026-10-31", ph: "2026-10-15", hdmf: "2026-10-15", bir: "2026-10-10" } };
+  const ns = ev(null, { month: "2026-09", pack });
+  assert.equal(ns.length, 2); assert.ok(ns[0].subject.includes("September 2026")); assert.ok(ns[0].text.includes("Oct 15, 2026")); assert.ok(ns[0].text.includes("2 people without"));
+  assert.ok(!/₱|1149990|1,149,990/.test(ns[0].text));
+  assert.equal(ev({ month: "2026-09", pack }, { month: "2026-09", pack, sss: { at: "x" } }).length, 0);
+  console.log("remittance ready notices: passed");
+}
