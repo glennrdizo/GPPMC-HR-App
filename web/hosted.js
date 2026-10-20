@@ -96,7 +96,7 @@ async function suAutoLink() {
     const byNo = new Map(); for (const e of active()) { const k = normH(e.no); if (k) byNo.set(k, byNo.has(k) ? null : e); }
     const links = { ...(S.clockLinks || {}) }; const taken = new Set(Object.values(links)); const added = [];
     for (const r of S.signups) {
-      if (r.status !== "approved" || !r.emp_no || !r.user_id || links[r.user_id]) continue; const e = byNo.get(normH(r.emp_no)); if (!e || e.sample || taken.has(e.id) || !suSamePerson(r, e)) continue;
+      if (r.status !== "approved" || !r.emp_no || !r.user_id || links[r.user_id]) continue; const e = r.newHire ? S.emps.get(r.newHire) : byNo.get(normH(r.emp_no)); if (!e || e.sample || taken.has(e.id) || !(r.newHire || suSamePerson(r, e))) continue;
       const d = S.clockDevs.get(r.user_id); if (d && (d.kiosk || d.bio || d.adjust)) continue;
       if (!d) { const info = { at: new Date().toISOString(), name: r.name || fullName(e), empNo: e.no }; await S.db.doc(`clockins/${r.user_id}`).set(info); S.clockDevs.set(r.user_id, { id: r.user_id, ...info }); }
       links[r.user_id] = e.id; taken.add(e.id); added.push([r.user_id, e]); }
@@ -106,6 +106,25 @@ async function suAutoLink() {
     setTimeout(() => syncSummaries(), 300);
   } catch (err) { console.warn("Approved accounts not linked", err); } finally { suLinkBusy = false; }
 }
+// New hires from the careers page (Glenn 2026-10-20: full automation): an account request from the same sign-in the person
+// applied with (or its confirmed email) is approved by itself and linked to the employee record made from that application.
+let suApvBusy = false;
+async function suAutoApprove() {
+  if (suApvBusy || !S.realEdit || !S.canEdit || !S.signups || !S.apps) return; suApvBusy = true;
+  try {
+    const recent = addDays(todayISO(), -120); const linked = new Set(Object.values(S.clockLinks || {})); let n = 0;
+    for (const r of S.signups) {
+      if (r.status !== "pending" || !r.user_id) continue;
+      const a = listOf(S.apps).find((x) => x.stage === "HIRED" && x.empId && x.portalUid && (x.portalUid === r.user_id || (r.email && String(x.email || "").toLowerCase() === String(r.email).toLowerCase())));
+      const e = a && S.emps.get(a.empId); if (!e || e.separated || (e.hire || "") < recent || linked.has(e.id)) continue;
+      if (r.emp_no && normH(r.emp_no) !== normH(e.no)) continue;
+      const { error } = await window.__sb.rpc("hr_decide_access", { target: r.user_id, approve: true, p_note: "Approved automatically: new hire from the careers page" }); if (error) continue;
+      r.status = "approved"; r.emp_no = e.no; r.newHire = e.id; n++; logActivity(`Approved the employee account of ${fullName(e)} automatically (new hire from the careers page)`); }
+    if (n) await suAutoLink();
+  } catch (err) { console.warn("New hire accounts not approved", err); } finally { suApvBusy = false; }
+}
+(window.__hrExtraJobs = window.__hrExtraJobs || []).push(["newhire", "Approving new hires' accounts", () => loadSignups(true).then(suAutoApprove)]);
+setInterval(() => suAutoApprove().catch(() => {}), 60000);
 setInterval(() => suAutoLink().catch(() => {}), 60000);
 document.addEventListener("click", (ev) => { if (ev.target.closest("[data-su-ok]")) setTimeout(() => loadSignups(true).then(suAutoLink).catch(() => {}), 2500); });
 { const st = document.createElement("style"); st.textContent = ".su-alert{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin:14px 0;border-left:4px solid #C9A45C}.su-alert .btn{margin-left:auto}"; document.head.appendChild(st); }

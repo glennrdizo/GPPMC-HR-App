@@ -98,12 +98,23 @@ function appNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
   const sub = (s: string) => s.replace("{job}", job).replace("{company}", S.company); const out: Notice[] = [];
   const end = `\n\nCareers page: ${S.careersUrl}\n\n${S.company} · Human Resources\nThis is an automatic message.`;
   const stage = a.stage || "APPLIED";
-  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + end }); }
+  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; const e = stage === "HIRED" && a.empId ? ctx.emps.get(a.empId) : null;
+    // New hires get their employee number and how to open their employee account (approved by itself when made with this email).
+    const acct = e?.no ? `\n\nYour employee number is ${e.no}${e.hire ? ` and your first day is ${fmt(e.hire)}` : ""}. To see your schedule, time records, payslips and leave on your phone, open ${S.appUrl}, sign in with the same email you used on the careers page (${to}), fill in your details with your employee number and press "Send to HR for approval". It is approved automatically.` : "";
+    out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + acct + end }); }
   const had = new Set((oldA?.ivs || []).map((i: Doc) => i.id));
   for (const iv of a.ivs || []) { if (had.has(iv.id) || iv.result !== "PENDING" || !day(iv.d) || day(iv.d) < ctx.today) continue;
     const k = String(iv.kind || "Interview"); out.push({ id: `iv-${id}-${iv.id}`, kind: "applicant", to, subject: `${k} schedule for ${job}`,
       text: `${hi}Your ${k.toLowerCase()} for ${job} is set on ${fmt(iv.d)}${iv.t ? ` at ${iv.t}` : ""}${iv.by ? ` with ${iv.by}` : ""}. Please be on time and bring a valid ID. If you can't make it, please reply through the careers page or contact HR.${end}` }); }
   return out;
+}
+// The applicant answered the job offer on the careers page: tell HR (the approvers and the digest list).
+function offerNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; const st = a.offer?.status; if (!S.kinds.approval || a.sample || a.offer?.via !== "careers" || !["ACCEPTED", "DECLINED"].includes(st) || oldA?.offer?.status === st) return [];
+  const job = ctx.jobs.get(a.jobId)?.title || "the position"; const who = [a.first, a.last].filter(Boolean).join(" ") || "An applicant";
+  return [...new Set([...S.approverTo, ...S.digestTo])].map((addr) => ({ id: `offer-${id}-${st}-${addr}`, kind: "approval", to: addr,
+    subject: `${who} ${st === "ACCEPTED" ? "accepted" : "declined"} the job offer for ${job}`,
+    text: `${who} ${st === "ACCEPTED" ? "accepted" : "declined"} the job offer for ${job} on the careers page.${st === "ACCEPTED" ? "\n\nOnce every pre-employment requirement is accepted in the app, the 201 file and onboarding are made by itself (unless hiring by itself is switched off)." : ""}${footer(S)}` }));
 }
 
 /* ---------- payslips ---------- */
@@ -156,7 +167,7 @@ export function eventNotices(ev: { path: string; col: string; old: Doc | null; n
     for (const [k, l] of Object.entries(n.items || {})) if (l && typeof l === "object" && !(l as Doc).sample) out.push(...reqNotices("leaves", k, was[k] || null, l as Doc, ctx, `${ev.path.split("/")[1]}:${k}`)); return out; }
   if (n.sample) return [];
   if (REQ[ev.col]) return reqNotices(ev.col, id, ev.old, n, ctx);
-  if (ev.col === "applicants") return appNotices(id, ev.old, n, ctx);
+  if (ev.col === "applicants") return [...appNotices(id, ev.old, n, ctx), ...offerNotices(id, ev.old, n, ctx)];
   if (ev.col === "payruns") return payNotices(id, ev.old, n, ctx);
   if (ev.col === "periods") return periodNotices(id, ev.old, n, ctx);
   if (ev.col === "remit") return remitNotices(id, ev.old, n, ctx);

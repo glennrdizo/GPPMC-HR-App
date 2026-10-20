@@ -108,3 +108,15 @@ console.log("hr-jobs rules: all checks passed");
   assert.equal(L.escalationNotices(A, { ...ctx3, ops: { ...ctx3.ops, escTo: null } }).length, 0);
   console.log("approval links, endorsements and escalation: passed");
 }
+
+// offer answered on the careers page -> HR; hired -> welcome with employee number and account steps
+{
+  const st = L.readSettings({ on: true, approverTo: ["boss@gd.test"], digestTo: ["hr@gd.test"] });
+  const c4 = { ...ctx, settings: st, emps: new Map([...ctx.emps, ["e9", { id: "e9", no: "0-1254", hire: "2026-11-03" }]]) };
+  const base = { first: "Rina", last: "Dela", email: "rina@x.test", jobId: "j1", stage: "OFFER", offer: { status: "SENT" } };
+  let n = L.eventNotices({ path: "applicants/a1", col: "applicants", old: base, new: { ...base, offer: { status: "ACCEPTED", via: "careers" } } }, c4);
+  assert.deepEqual(n.map((x) => x.to).sort(), ["boss@gd.test", "hr@gd.test"]); assert.match(n[0].subject, /accepted the job offer for HR Recruiter/);
+  n = L.eventNotices({ path: "applicants/a1", col: "applicants", old: { ...base, offer: { status: "ACCEPTED", via: "careers" } }, new: { ...base, stage: "HIRED", empId: "e9", offer: { status: "ACCEPTED", via: "careers" } } }, c4);
+  assert.equal(n.length, 1); assert.equal(n[0].to, "rina@x.test"); assert.ok(n[0].text.includes("0-1254")); assert.ok(n[0].text.includes("Nov 3, 2026"));
+  console.log("offer and new hire notices: passed");
+}
