@@ -59,9 +59,18 @@
   }
 
   /* ---------- db ---------- */
+  // An employee's pay is kept apart in pay/employees--<id> (migration 20261020d), readable only by Payroll roles;
+  // for them the two are put back together here, so the app sees one record as before.
+  const PAY_OF = (path) => (/^employees\/[^/]+$/.test(path) ? "pay/employees--" + path.slice(10) : null);
   async function getDoc(path) {
-    const { data, error } = await sb.from("hr_docs").select("data,version").eq("path", path).maybeSingle();
-    if (error) throw error; return docSnap(path, data);
+    const pp = PAY_OF(path);
+    const [{ data, error }, pay] = await Promise.all([sb.from("hr_docs").select("data,version").eq("path", path).maybeSingle(),
+      pp ? sb.from("hr_docs").select("data").eq("path", pp).maybeSingle().then((r) => r.data?.data || null, () => null) : null]);
+    if (error) throw error; if (data && pay) data.data = { ...data.data, ...pay }; return docSnap(path, data);
+  }
+  async function payDocs() {
+    const out = new Map(); const { data } = await sb.rpc("hr_query", { c: "pay", w: [], ob: null, dir: "asc", lim: 5000 }).range(0, 4999).then((r) => r, () => ({ data: null }));
+    for (const r of data || []) if (r.path.startsWith("pay/employees--")) out.set(r.path.slice(15), r.data); return out;
   }
   async function runQuery(c, o) {
     // The API returns at most 1000 rows per call, so larger reads (the 201 masterlist has 1,200+ people) come in pages.
@@ -72,6 +81,7 @@
       if (error) throw error; data = data.concat(page || []); if (!page || page.length < to - from + 1) break;
     }
     const seen = new Set(); data = data.filter((r) => !seen.has(r.path) && seen.add(r.path));
+    if (c === "employees" && data.length) { const pay = await payDocs(); if (pay.size) for (const r of data) { const x = pay.get(r.path.slice(10)); if (x) r.data = { ...r.data, ...x }; } }
     return { docs: data.map((r) => docSnap(r.path, r)), size: data.length, empty: !data.length };
   }
   const query = (c, o) => ({
@@ -79,7 +89,7 @@
     orderBy: (f, dir = "asc") => query(c, { ...o, ob: f, dir }),
     limit: (n) => query(c, { ...o, n }),
     get: () => runQuery(c, o).catch((e) => { throw mapErr(e); }),
-    onSnapshot: (cb, onErr) => listen((p) => parent(p) === c, () => runQuery(c, o), cb, onErr),
+    onSnapshot: (cb, onErr) => listen((p) => parent(p) === c || (c === "employees" && p.startsWith("pay/employees--")), () => runQuery(c, o), cb, onErr),
   });
   const db = {
     doc: (path) => ({
@@ -88,7 +98,7 @@
       set: async (v) => { const { error } = await sb.from("hr_docs").upsert({ path, col: parent(path), data: JSON.parse(JSON.stringify(v ?? {})) }); if (error) throw mapErr(error); },
       update: async (v) => { const { error } = await sb.rpc("hr_update", { p: path, patch: JSON.parse(JSON.stringify(v ?? {})) }); if (error) throw mapErr(error); },
       delete: async () => { const { error } = await sb.from("hr_docs").delete().eq("path", path); if (error) throw mapErr(error); },
-      onSnapshot: (cb, onErr) => listen((p) => p === path, () => getDoc(path), cb, onErr),
+      onSnapshot: (cb, onErr) => listen((p) => p === path || p === PAY_OF(path), () => getDoc(path), cb, onErr),
     }),
     collection: (c) => query(c, {}),
   };
