@@ -87,3 +87,24 @@ console.log("hr-jobs rules: all checks passed");
   assert.equal(ev({ month: "2026-09", pack }, { month: "2026-09", pack, sss: { at: "x" } }).length, 0);
   console.log("remittance ready notices: passed");
 }
+
+// one-tap links, endorsements to the next level, escalation
+{
+  const ctx3 = { ...ctx, ops: { chains: { leave: [{ uid: "u-lead", name: "Site supervisor" }, { name: "Ops manager", uid: "u-ops" }] }, escTo: "u-esc", escDays: 1 },
+    userEmail: (u) => ({ "u-lead": "lead@gd.test", "u-ops": "ops@gd.test", "u-esc": "esc@gd.test" })[u] || null };
+  let n = L.eventNotices({ path: "leaves/2026-10", col: "leaves", old: { items: {} }, new: { items: { L9: { empId: "e1", type: "VL", from: "2026-10-20", to: "2026-10-20", status: "PENDING", filed: "2026-10-16" } } } }, ctx3);
+  assert.ok(n[0].text.includes("#apv=leave%3A2026-10%3AL9")); assert.ok(n.find((x) => x.to === "lead@gd.test").text.includes("endorsement as Site supervisor"));
+  // first endorsement -> the second level only
+  n = L.eventNotices({ path: "apprs/leave--2026-10_L9", col: "apprs", old: null, new: { kind: "leave", key: "2026-10:L9", steps: [{ i: 0, name: "Site supervisor" }] } }, ctx3);
+  assert.deepEqual(n.map((x) => x.to), ["ops@gd.test"]); assert.match(n[0].subject, /needs Ops manager/);
+  // last endorsement -> final approvers
+  n = L.eventNotices({ path: "apprs/leave--2026-10_L9", col: "apprs", old: { kind: "leave", key: "2026-10:L9", steps: [{}] }, new: { kind: "leave", key: "2026-10:L9", steps: [{}, { name: "Ops manager" }] } }, ctx3);
+  assert.deepEqual(n.map((x) => x.to), ["boss@gd.test"]); assert.match(n[0].subject, /ready for final approval/);
+  // decided -> nothing more
+  assert.equal(L.eventNotices({ path: "apprs/x", col: "apprs", old: { kind: "leave", key: "k", steps: [{}] }, new: { kind: "leave", key: "k", steps: [{}, {}], final: { st: "APPROVED" } } }, ctx3).length, 0);
+  // escalation: leave filed Oct 10, target 2 days, escalate after 1 more day -> late on Oct 16
+  const esc = L.escalationNotices({ ...A, leaves: [{ id: "L2", month: "2026-10", empId: "e1", status: "PENDING", filed: "2026-10-10", type: "VL" }] }, ctx3);
+  assert.equal(esc.length, 1); assert.equal(esc[0].to, "esc@gd.test"); assert.equal(esc[0].id, "esc-leaves-2026-10:L2"); assert.ok(esc[0].text.includes("#apv=leave%3A2026-10%3AL2"));
+  assert.equal(L.escalationNotices(A, { ...ctx3, ops: { ...ctx3.ops, escTo: null } }).length, 0);
+  console.log("approval links, endorsements and escalation: passed");
+}

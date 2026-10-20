@@ -7,7 +7,7 @@
 // Nothing is sent until an HR Admin ticks "Send automatic notices" (org/notify.on).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { aiScreen, genQuestions } from "./screen.ts";
-import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, manila, eventNotices, digestNotices, toHtml, phMobile, outId, isEmail } from "./logic.ts";
+import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, manila, eventNotices, digestNotices, escalationNotices, toHtml, phMobile, outId, isEmail } from "./logic.ts";
 
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
@@ -76,7 +76,7 @@ async function allData(ctx: Ctx): Promise<All> {
   const reqCols = Object.keys(REQ).filter((c) => c !== "leaves");
   const [leaveDocs, offboard, contracts, cases, remit, payruns, projects, ...reqs] = await Promise.all([docsOf("leaves"), docsOf("offboard"), docsOf("contracts"), docsOf("cases"), docsOf("remit"),
     rest("hr_docs?select=path&col=eq.payruns", {}, { range: "0-999" }), docsOf("projects"), ...reqCols.map(docsOf)]);
-  const leaves = leaveDocs.flatMap((d) => Object.entries(d.items || {}).map(([id, l]) => ({ id, ...(l as Doc) })));
+  const leaves = leaveDocs.flatMap((d) => Object.entries(d.items || {}).map(([id, l]) => ({ id, month: d.id, ...(l as Doc) })));
   return { emps: [...ctx.emps.values()], leaves, offboard, contracts, cases, remit: new Map(remit.map((r) => [r.id, r])), payruns: new Set(((payruns as Doc[]) || []).map((p) => String(p.path).split("/")[1])),
     projects: new Map(projects.map((p) => [p.id, p])), reqs: Object.fromEntries(reqCols.map((c, i) => [c, reqs[i]])) };
 }
@@ -93,7 +93,7 @@ async function run(force = false) {
   if ((events.length && settings.on) || needDigest) {
     const ctx = await context(today, settings);
     if (settings.on) for (const ev of events) { if (!WATCHED.includes(ev.col)) continue; try { notices.push(...eventNotices(ev as any, ctx)); } catch (e) { console.error("event", ev.path, e); } }
-    if (needDigest) { const d = digestNotices(await allData(ctx), ctx); digestCount = d.count; notices.push(...d.notices); }
+    if (needDigest) { const all = await allData(ctx); const d = digestNotices(all, ctx); digestCount = d.count; notices.push(...d.notices, ...escalationNotices(all, ctx)); }
   }
   // Queue new messages. Each id is sent once, however often its record changes back and forth.
   const smsOn = settings.sms && !!env("SEMAPHORE_API_KEY");

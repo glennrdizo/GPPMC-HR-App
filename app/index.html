@@ -1848,6 +1848,56 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -12031,7 +12081,7 @@ window.addEventListener("click", async (ev) => {
   if (st === "APPROVED") { const ch = OPS().chains[kind] || []; const done = rec.steps?.length || 0;
     if (done < ch.length) { ev.preventDefault(); ev.stopImmediatePropagation(); const L = ch[done]; const mine = !L.uid || L.uid === S.myId;
       if (!mine) { toast(`Waiting for ${L.name} (${personName(L.uid)}) to endorse this first.`); return; }
-      if (!(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return;
+      if (!S.apvOk && !(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return; S.apvOk = false;
       await save({ ...rec, steps: [...(rec.steps || []), { i: done, name: L.name, by: S.myId || null, at: new Date().toISOString() }] }); logActivity(`Endorsed a ${(OPK_BY[kind]?.[1] || "request").toLowerCase()} as ${L.name}`);
       if (done + 1 < ch.length) { toast(`Endorsed. Next: ${ch[done + 1].name}.`); render(); return; }
       if (await askConfirm("Endorsed. Approve it now?", "Approve")) { const nb = [...document.querySelectorAll(`[data-${p}-set]`)].find((x) => x.getAttribute(`data-${p}-set`) === v); (nb || t).click(); } else render(); return; } }
@@ -16758,6 +16808,49 @@ window.addEventListener("submit", async (ev) => {
   for (const k of ["tin", "rdo", "sssEr", "phEr", "hdmfEr"]) org[k] = String(f.get(k) || "").trim().slice(0, 40);
   try { await S.db.doc("org/main").set(org); S.org = org; S.ver++; logActivity("Updated the employer registration numbers"); toast("Saved."); render(); } catch { toast("Couldn't save. Try again."); }
 });
+
+/* ---------- Approvals everywhere (Glenn 2026-10-20: full automation) ----------
+   1. One-tap approve: approval emails carry a link to the app ending in #apv=<kind>:<key>. The app opens that request and asks
+      "Approve?"; yes presses the request's own Approve button, so the approval chain (ops.js) and every module's checks and
+      follow-up steps still run. The link approves nothing by itself, and only HR editors can approve.
+   2. Filing leave as "Approved", or overtime with "Approve now", is not offered when an approval chain is set for that kind
+      (review F5): the request is filed as waiting and goes through the chain. */
+const APV_KEY = "hr-apv";
+{ const m = /[#&]apv=([^&]+)/.exec(location.hash || ""); if (m) { try { sessionStorage.setItem(APV_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); } }
+window.addEventListener("hashchange", () => { const m = /[#&]apv=([^&]+)/.exec(location.hash || ""); if (!m) return; try { sessionStorage.setItem(APV_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); apvTry(); });
+let apvBusy = false;
+async function apvTry() {
+  let v = null; try { v = sessionStorage.getItem(APV_KEY); } catch {} if (!v || apvBusy) return;
+  if (!S.db || !S.loaded?.emps || !S.realEdit && !S.selfMode) return;
+  apvBusy = true; try { sessionStorage.removeItem(APV_KEY); } catch {}
+  try {
+    const i = v.indexOf(":"); const kind = v.slice(0, i), key = v.slice(i + 1); const K = OPK_BY[kind];
+    if (!K || S.selfMode) { toast("This link is for HR approvers."); return; }
+    let r = null; try { r = K[3]().find((x) => String(x.key || x.id) === key); } catch {}
+    go(K[2](r || {})); await new Promise((res) => setTimeout(res, 300));
+    if (!r) { toast("That request was not found. It may have been deleted."); return; }
+    const who = r.empId ? opEmp(r) : null; const label = `${K[1].toLowerCase()}${who ? ` of ${fullName(who)}` : ""}`;
+    if (r.status !== "PENDING") { toast(`This ${label} is already ${String(r.status || "").toLowerCase()}.`); return; }
+    if (!S.canEdit || !K[4]) { toast(`Open the ${label} below to decide on it.`); return; }
+    const ch = OPS().chains[kind] || []; const done = S.apprs.get(apprId(kind, key))?.steps?.length || 0; const step = ch[done];
+    if (!(await askConfirm(step ? `Endorse the ${label} as ${step.name}?` : `Approve the ${label}?${r.from ? ` (${fmtDate(r.from)}${r.to && r.to !== r.from ? ` to ${fmtDate(r.to)}` : ""})` : r.d ? ` (${fmtDate(r.d)})` : ""}`, step ? "Endorse" : "Approve"))) return;
+    const b = document.createElement("button"); b.hidden = true; b.setAttribute(`data-${K[4]}-set`, `${key}:APPROVED`); (document.getElementById("main") || document.body).appendChild(b);
+    S.apvOk = !!step; b.click(); S.apvOk = false; setTimeout(() => b.remove(), 0);
+  } finally { apvBusy = false; }
+}
+{ const b = render; render = (...a) => { const r = b(...a); if (!apvBusy) { let v = null; try { v = sessionStorage.getItem(APV_KEY); } catch {} if (v) setTimeout(apvTry, 0); } return r; }; }
+
+/* F5: no straight-to-approved filing where a chain is set */
+function apvChainForms(root) {
+  let O; try { O = OPS(); } catch { return; } if (!Object.keys(O.chains || {}).length) return;
+  if (O.chains.leave?.length) for (const sel of root.querySelectorAll?.("#lf-status") || []) {
+    const op = sel.querySelector('option[value="APPROVED"]'); if (!op) continue; op.remove(); sel.value = "PENDING";
+    if (!sel.parentElement.querySelector(".apv-note")) sel.insertAdjacentHTML("afterend", `<small class="t-muted apv-note">Goes through the approval chain: ${esc(O.chains.leave.map((c) => c.name).join(", then "))}.</small>`); }
+  if (O.chains.ot?.length) for (const cb of root.querySelectorAll?.("#ot-ok") || []) {
+    if (cb.disabled) continue; cb.checked = false; cb.disabled = true; const lab = cb.closest("label");
+    if (lab && !lab.querySelector(".apv-note")) lab.insertAdjacentHTML("beforeend", ` <small class="t-muted apv-note">(off: overtime goes through the approval chain)</small>`); }
+}
+new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) apvChainForms(n.querySelector ? n : document); }).observe(document.body, { childList: true, subtree: true });
 
 /* HRIS audit 2026-10-17 (phones and tablets).
    Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's

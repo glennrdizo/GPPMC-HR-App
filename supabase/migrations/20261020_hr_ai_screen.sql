@@ -69,12 +69,13 @@ begin
 end $$;
 
 -- Payroll cutoff autopilot: the notice job also watches pay periods, to email approvers once when a cutoff is ready, and the
--- monthly government filing marks (remit), to email HR once when the month's filing files are ready.
+-- monthly government filing marks (remit), to email HR once when the month's filing files are ready, and endorsements
+-- (apprs), to email the next approver in the chain.
 create or replace function public.hr_docs_event() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare o jsonb; n jsonb;
 begin
-  if new.col in ('leaves', 'leavereq', 'otreqs', 'attreq', 'flex', 'reimb', 'empchg', 'certreq', 'resign', 'payruns', 'applicants', 'periods', 'remit')
+  if new.col in ('leaves', 'leavereq', 'otreqs', 'attreq', 'flex', 'reimb', 'empchg', 'certreq', 'resign', 'payruns', 'applicants', 'periods', 'remit', 'apprs')
      and array_length(string_to_array(new.path, '/'), 1) = 2
      and (tg_op = 'INSERT' or old.data is distinct from new.data) then
     o := case when tg_op = 'UPDATE' then old.data end; n := new.data;
