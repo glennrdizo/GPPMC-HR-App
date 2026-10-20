@@ -50,7 +50,7 @@ export const REQ: Record<string, [string, string]> = {
 };
 const AR_KIND: Record<string, string> = { OB: "Official business request", UT: "Undertime request", SHIFT: "Change of schedule request" };
 const SLA_DEF: Record<string, number> = { leave: 2, lvreq: 3, ot: 2, ar: 2, flex: 5, rb: 5, cq: 3, cert: 3, rs: 2 };
-export const WATCHED = [...Object.keys(REQ), "payruns", "applicants"];
+export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods"];
 const DONE: Record<string, string> = { APPROVED: "was approved", REJECTED: "was not approved", DECLINED: "was not approved", DENIED: "was not approved", READY: "is ready for release", RELEASED: "was released", ACCEPTED: "was accepted" };
 
 const nameOf = (e: Doc | null | undefined) => (e ? [e.first, e.last].filter(Boolean).join(" ") || e.name || "an employee" : "an employee");
@@ -113,6 +113,14 @@ function payNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
   return out;
 }
 
+/* ---------- payroll cutoff ready for approval (app/payauto.js writes periods/<id>.auto) ---------- */
+function periodNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.approval || !p.auto?.ready || oldP?.auto?.ready || p.status === "FINAL") return [];
+  const to = [...new Set([...S.approverTo, ...S.digestTo])]; const period = p.start && p.end ? `${fmt(p.start)} to ${fmt(p.end)}` : id;
+  return to.map((addr) => ({ id: `payready-${id}-${addr}`, kind: "approval", to: addr, subject: `Payroll for ${period} is ready for approval`,
+    text: `Payroll for ${period} has passed every check: time records read, no requests waiting, no timekeeping issues, and everyone has basic pay${p.auto.count ? ` (${p.auto.count} employees)` : ""}.\n\nOpen Payroll in the HR app to review it and press Approve and finalize. Payslips are released when it is finalized.${footer(S)}` }));
+}
+
 /* ---------- one changed record -> notices ---------- */
 export function eventNotices(ev: { path: string; col: string; old: Doc | null; new: Doc | null }, ctx: Ctx): Notice[] {
   const n = ev.new; if (!n) return []; const id = ev.path.split("/").slice(1).join("_");
@@ -122,6 +130,7 @@ export function eventNotices(ev: { path: string; col: string; old: Doc | null; n
   if (REQ[ev.col]) return reqNotices(ev.col, id, ev.old, n, ctx);
   if (ev.col === "applicants") return appNotices(id, ev.old, n, ctx);
   if (ev.col === "payruns") return payNotices(id, ev.old, n, ctx);
+  if (ev.col === "periods") return periodNotices(id, ev.old, n, ctx);
   return [];
 }
 

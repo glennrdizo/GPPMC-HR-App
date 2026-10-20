@@ -62,3 +62,16 @@ assert.equal(L.outId("dec-Leaves-L1/x:y"), "dec-leaves-l1_x_y");
 assert.match(L.toHtml("<b>Hi</b> https://a.test/x"), /&lt;b&gt;Hi&lt;\/b&gt; <a href="https:\/\/a.test\/x">/);
 assert.equal(L.phMobile("12345"), null);
 console.log("hr-jobs rules: all checks passed");
+
+// payroll cutoff ready -> one email to approvers and the digest list, only on the change to ready
+{
+  const st = L.readSettings({ on: true, approverTo: ["boss@gd.test"], digestTo: ["hr@gd.test"] });
+  const c2 = { ...ctx, settings: st };
+  const ev = (o, n) => L.eventNotices({ path: "periods/2026-10-1", col: "periods", old: o, new: n }, c2);
+  const ready = { start: "2026-10-01", end: "2026-10-15", status: "OPEN", auto: { ready: true, count: 320 } };
+  const ns = ev({ status: "OPEN", auto: { ready: false } }, ready);
+  assert.equal(ns.length, 2); assert.ok(ns[0].subject.includes("ready for approval")); assert.ok(!/₱|\d{2},\d{3}/.test(ns[0].text));
+  assert.equal(ev(ready, ready).length, 0);
+  assert.equal(ev({ status: "OPEN", auto: { ready: false } }, { ...ready, status: "FINAL" }).length, 0);
+  console.log("payroll ready notices: passed");
+}
