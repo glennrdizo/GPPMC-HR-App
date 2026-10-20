@@ -414,7 +414,7 @@ function slipHTML(e, l, p, final) {
         ${row(e.payType === "DAILY" ? `Basic pay (${PAY.r2(l.days)} days at ${money(l.daily)})` : "Basic pay (half month)", l.basic, true)}${row("Regular holiday pay", l.hol)}${row("Back pay (pay change)", l.bp || 0)}${row("Paid leave", l.leave)}
         ${l.absent ? `<tr><td>Less absences and unpaid leave</td><td class="num">(${money(l.absent)})</td></tr>` : ""}${l.tardy ? `<tr><td>Less late and undertime</td><td class="num">(${money(l.tardy)})</td></tr>` : ""}
         ${row("Overtime", l.ot)}${row("Rest day work", l.rd)}${row("Regular holiday worked", l.rhw)}${row("Special day worked", l.sh)}${row("Holiday and rest day overtime, double holiday", l.xp)}${row("Night differential", l.nd)}${row("Commission", l.comm)}${row("Taxable adjustment", l.adj)}${row("Non-taxable allowance", l.adjN)}
-        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l)))}${row("Reimbursements", rbOf(l))}${row("FlexBen, taxable", l.flexT)}
+        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l) - lvOf(l)))}${row("Reimbursements", rbOf(l))}${row("Unused leave converted to cash", lvOf(l))}${row("FlexBen, taxable", l.flexT)}
         ${(e.allow || []).length && (l.allowN || l.allowT) ? `${row("Allowances, tax-free (de minimis)", l.allowN)}${row("Allowances, taxable", l.allowT)}` : ""}
         <tr><td><b>Gross pay</b></td><td class="num"><b>${money(l.gross)}</b></td></tr></tbody></table></div>
       <div style="flex:1 1 260px"><h3 style="font-size:15px;margin-bottom:6px">Deductions</h3><table><tbody>

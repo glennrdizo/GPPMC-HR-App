@@ -1973,6 +1973,31 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -2621,7 +2646,7 @@ function slipHTML(e, l, p, final) {
         ${row(e.payType === "DAILY" ? `Basic pay (${PAY.r2(l.days)} days at ${money(l.daily)})` : "Basic pay (half month)", l.basic, true)}${row("Regular holiday pay", l.hol)}${row("Back pay (pay change)", l.bp || 0)}${row("Paid leave", l.leave)}
         ${l.absent ? `<tr><td>Less absences and unpaid leave</td><td class="num">(${money(l.absent)})</td></tr>` : ""}${l.tardy ? `<tr><td>Less late and undertime</td><td class="num">(${money(l.tardy)})</td></tr>` : ""}
         ${row("Overtime", l.ot)}${row("Rest day work", l.rd)}${row("Regular holiday worked", l.rhw)}${row("Special day worked", l.sh)}${row("Holiday and rest day overtime, double holiday", l.xp)}${row("Night differential", l.nd)}${row("Commission", l.comm)}${row("Taxable adjustment", l.adj)}${row("Non-taxable allowance", l.adjN)}
-        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l)))}${row("Reimbursements", rbOf(l))}${row("FlexBen, taxable", l.flexT)}
+        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l) - lvOf(l)))}${row("Reimbursements", rbOf(l))}${row("Unused leave converted to cash", lvOf(l))}${row("FlexBen, taxable", l.flexT)}
         ${(e.allow || []).length && (l.allowN || l.allowT) ? `${row("Allowances, tax-free (de minimis)", l.allowN)}${row("Allowances, taxable", l.allowT)}` : ""}
         <tr><td><b>Gross pay</b></td><td class="num"><b>${money(l.gross)}</b></td></tr></tbody></table></div>
       <div style="flex:1 1 260px"><h3 style="font-size:15px;margin-bottom:6px">Deductions</h3><table><tbody>
@@ -17048,6 +17073,36 @@ async function clrTry() {
   } finally { clrBusy = false; }
 }
 { const b = render; render = (...a) => { const r = b(...a); if (!clrBusy) { let v = null; try { v = sessionStorage.getItem(CLR_KEY); } catch {} if (v) setTimeout(clrTry, 0); } return r; }; }
+
+/* ---------- Leave year-end on its own (Glenn 2026-10-20: full automation; balances refresh every January 15, no carry-over) ----------
+   Leave credits are earned and refreshed by themselves (time.js leaveCredit over the leave year). On the reset day the
+   scheduled run (runner.js) records the year-end list for the leave year that just ended (as "Record the conversion" does on
+   Leave year-end) and, where the leave policy converts unused leave to cash, pays it in the first open cutoff: up to 10 VL days
+   a year tax-free (de minimis), the rest counted with the 13th month and other benefits. Leave years before 2026 are left to HR. */
+const LVA_FROM = "2026";
+const lvaPid = () => { let id = curPeriod(); for (let i = 0; i < 4 && isFinal(id); i++) id = PAY.shiftPeriod(id, 1); return id; };
+async function lvAutoJob() {
+  if (!S.realEdit || !S.canEdit || !S.lvye) return; const y = String(Number(leaveYear(todayISO())) - 1);
+  if (y < LVA_FROM || S.lvye.has(y) || todayISO() <= lyEnd(y)) return;
+  const rows = lvYearEnd(y); const total = PAY.r2(rows.reduce((a, r) => a + r.amt, 0)); const payPid = total ? lvaPid() : null;
+  const doc = { year: y, at: new Date().toISOString(), by: null, auto: true, total, payPid, rows: rows.map((r) => ({ empId: r.e.id, vl: r.vl, sl: r.sl, cVL: r.cVL, cSL: r.cSL, conv: r.conv, daily: r.daily, amt: r.amt })) };
+  await S.db.doc(`lvye/${y}`).set(JSON.parse(JSON.stringify(doc))); S.lvye.set(y, doc); S.ver++;
+  logActivity(`Recorded the ${y} leave year-end by itself${total ? `; ${peso.format(total)} of converted leave goes into the ${PAY.period(payPid).label} payroll` : ""}`);
+}
+RUN_JOBS.push(["lvye", "Leave year-end", () => lvAutoJob()]);
+/* Converted leave in payroll: paid through the same list as FlexBen claims, with its own id (lv:<year>:<employee>). */
+{ const b = payExt; payExt = (pid) => { const x = b(pid); const ff = x.flexFor; return { ...x, flexFor: (e, p) => {
+  const out = ff ? ff(e, p) : [];
+  for (const d of S.lvye?.values?.() || []) { if (d.payPid !== pid) continue; const r = (d.rows || []).find((z) => z.empId === e.id); if (!r?.amt) continue;
+    const dm = PAY.r2(Math.min(r.amt, Math.min(10, Math.max(0, (r.vl || 0) - (r.cVL || 0))) * (r.daily || 0)));
+    if (dm) out.push({ id: `lv:${d.year}:${e.id}:d`, amt: dm, tax: "DEMIN" }); if (r.amt - dm > 0) out.push({ id: `lv:${d.year}:${e.id}:b`, amt: PAY.r2(r.amt - dm), tax: "BENEFIT" }); }
+  return out; } }; }; }
+function lvOf(l) { let t = 0; for (const id of l?.flex || []) { const m = /^lv:(\d{4}):([^:]+):([db])$/.exec(String(id)); if (!m) continue; const r = (S.lvye.get(m[1])?.rows || []).find((z) => z.empId === m[2]); if (!r) continue;
+  const dm = PAY.r2(Math.min(r.amt, Math.min(10, Math.max(0, (r.vl || 0) - (r.cVL || 0))) * (r.daily || 0))); t += m[3] === "d" ? dm : PAY.r2(r.amt - dm); } return PAY.r2(t); }
+/* Leave year-end page: say what the scheduled run did. */
+{ const b = VIEWS.lvye; VIEWS.lvye = (...a) => { const h = b(...a); const rec = S.lvye.get(S.lvyeY); if (!rec?.auto) return h;
+  const note = `<div class="notice"><span><span class="chip c-blue">Recorded by itself</span> The scheduled run recorded this list on ${fmtDate(rec.at.slice(0, 10))}, the day after the leave year ended.${rec.payPid ? ` The converted leave is paid in the ${esc(PAY.period(rec.payPid).label)} payroll.` : ""}</span></div>`;
+  const i = h.indexOf('<section class="card"'); return i >= 0 ? h.slice(0, i) + note + h.slice(i) : h + note; }; }
 
 /* HRIS audit 2026-10-17 (phones and tablets).
    Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's
