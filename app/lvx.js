@@ -45,7 +45,7 @@ function lrTab(kind) {
 }
 
 function lvBalances() {
-  const year = todayISO().slice(0, 4); const f = S.balFilter; const types = creditTypes();
+  const year = leaveYear(todayISO()); const f = S.balFilter; const types = creditTypes();
   const list = refilter(active(), f); const rows = list.slice((Math.max(1, f.page) - 1) * PAGE, Math.max(1, f.page) * PAGE);
   const tot = Object.fromEntries(types.map((t) => [t.code, { left: 0, used: 0 }]));
   for (const e of list) for (const b of balances(e, year)) if (tot[b.code]) { tot[b.code].left += b.left || 0; tot[b.code].used += b.used; }

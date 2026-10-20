@@ -19,7 +19,7 @@ function essSlips(e) {
 }
 const ESS = {};
 ESS.esshome = (e) => {
-  const r = essToday(e); const y = todayISO().slice(0, 4); const bal = balances(e, y);
+  const r = essToday(e); const y = todayISO().slice(0, 4); const bal = balances(e, leaveYear(todayISO()));
   const vl = bal.find((b) => b.code === "VL"), sl = bal.find((b) => b.code === "SL");
   const slip = essSlips(e)[0]; const req = listOf(S.courses).filter((c) => needs(c, e)); const okN = req.filter((c) => trainState(c, e) === "OK").length;
   const mine = allLeaves().filter((l) => l.empId === e.id && l.to >= todayISO() && ["PENDING", "APPROVED"].includes(l.status)).sort((a, b) => a.from.localeCompare(b.from));
@@ -57,7 +57,7 @@ ESS.esstime = (e) => {
     </tbody></table></div></section>`;
 };
 ESS.essleave = (e) => {
-  const y = todayISO().slice(0, 4); const bal = balances(e, y).filter((t) => !t.sex || t.sex === e.gender?.[0]?.toUpperCase());
+  const y = todayISO().slice(0, 4); const bal = balances(e, leaveYear(todayISO())).filter((t) => !t.sex || t.sex === e.gender?.[0]?.toUpperCase());
   const mine = allLeaves().filter((l) => l.empId === e.id).sort((a, b) => b.from.localeCompare(a.from));
   return head(`Leave credits for ${y}`, "My leave") + `
     <section class="card"><div class="card-head"><h2>Balances</h2></div><div class="table-wrap"><table><thead><tr><th>Leave</th><th class="num">Credits</th><th class="num">Used</th><th class="num">Left</th></tr></thead><tbody>

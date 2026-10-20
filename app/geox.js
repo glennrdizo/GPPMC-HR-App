@@ -70,6 +70,11 @@ function subMeSum() { if (!S.meSumSub && S.self?.uid && S.db) { S.meSumSub = tru
     let out = h.replace(/<p style="margin:0;font-size:14px">[\s\S]*?<\/p>\s*(?=<div style="display:grid)/, "").replace(GRID, fencePanel(fz, mode, M.geo, false) + (wait ? `<p class="t-warn" style="margin:0;font-size:13px">${wait} punch${wait > 1 ? "es" : ""} today waiting for HR approval.</p>` : "") + GRID);
     if (fenceBlocks(fz, mode)) out = out.replace(/data-self-punch="(IN|OUT)"/g, "$& disabled");
     return out; }; }
+/* Saves one punch of the employee's own phone (fieldclk.js keeps it on the phone when there's no signal). */
+async function selfSave(u, id, punch) {
+  const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${u}/days/${date}`); const cur = await ref.get();
+  if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: u, punches: { [id]: punch } });
+}
 selfPunch = async function (type) {
   const M = S.self; if (!M.photo) return; const s = S.meSum; const mode = s?.fenceMode || "RECORD"; const fz = phoneFence(M.geo, s);
   if (fenceBlocks(fz, mode)) { toast(fz.state === "nogps" ? "Turn on location first. Time in and out only work inside the site area." : "You're outside the site area, so this punch can't be saved."); return; }
@@ -79,10 +84,10 @@ selfPunch = async function (type) {
     const c = await shrinkCanvas(M.photo, 160); const g = M.geo || {};
     const punch = { t: new Date().toISOString(), type, photo: c.toDataURL("image/jpeg", 0.6), lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null,
       fstate: fz.state, dist: fz.dist ?? null, fsite: fz.site || null, why, needsOk: why ? true : null };
-    const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${M.uid}/days/${date}`); const id = uid(); const cur = await ref.get();
-    if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: M.uid, punches: { [id]: punch } });
+    const q = await selfSave(M.uid, uid(), punch);
     if (M.photoUrl) URL.revokeObjectURL(M.photoUrl); Object.assign(M, { photo: null, photoUrl: null, busy: false });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
+    toast(q === "queued" ? `No signal. Your ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this phone and sent by itself when there's signal; HR checks it.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
   } catch { M.busy = false; toast("Couldn't save. Check your connection and try again."); render(); }
 };
 
@@ -100,11 +105,12 @@ kioskPunch = async function (type) {
   K.busy = true; render();
   try {
     let photo = null;
-    if (S.assets) { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; }
-    else { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
+    if (S.assets && navigator.onLine !== false) { try { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; } catch { photo = null; } }
+    if (!photo) { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
     const punch = { t: new Date().toISOString(), type, empId: e.id, site: K.site, photo, lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null, fstate: fz.state, dist: fz.dist ?? null, why, needsOk: why ? true : null };
-    await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
+    const q = await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
+    toast(q === "queued" ? `No signal. ${fullName(e)}'s ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this device and sent by itself when there's signal.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
   } catch { K.busy = false; toast("Couldn't save the punch. Check the connection and try again."); render(); }
 };
 

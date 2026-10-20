@@ -168,7 +168,7 @@ window.addEventListener("click", async (ev) => {
   if (st === "APPROVED") { const ch = OPS().chains[kind] || []; const done = rec.steps?.length || 0;
     if (done < ch.length) { ev.preventDefault(); ev.stopImmediatePropagation(); const L = ch[done]; const mine = !L.uid || L.uid === S.myId;
       if (!mine) { toast(`Waiting for ${L.name} (${personName(L.uid)}) to endorse this first.`); return; }
-      if (!(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return;
+      if (!S.apvOk && !(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return; S.apvOk = false;
       await save({ ...rec, steps: [...(rec.steps || []), { i: done, name: L.name, by: S.myId || null, at: new Date().toISOString() }] }); logActivity(`Endorsed a ${(OPK_BY[kind]?.[1] || "request").toLowerCase()} as ${L.name}`);
       if (done + 1 < ch.length) { toast(`Endorsed. Next: ${ch[done + 1].name}.`); render(); return; }
       if (await askConfirm("Endorsed. Approve it now?", "Approve")) { const nb = [...document.querySelectorAll(`[data-${p}-set]`)].find((x) => x.getAttribute(`data-${p}-set`) === v); (nb || t).click(); } else render(); return; } }

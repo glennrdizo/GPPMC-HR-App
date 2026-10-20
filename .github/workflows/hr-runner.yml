@@ -1,0 +1,25 @@
+# Runs the HR app's background jobs every hour (see tools/hr-runner/run.mjs). Needs repository secrets
+# HR_BOT_EMAIL and HR_BOT_PASSWORD for an approved HR account with the Owner role.
+name: HR scheduled runner
+on:
+  schedule:
+    - cron: "7 * * * *"
+  workflow_dispatch: {}
+concurrency: { group: hr-runner, cancel-in-progress: false }
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install
+        working-directory: tools/hr-runner
+        run: npm install --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: Run HR jobs
+        working-directory: tools/hr-runner
+        env:
+          HR_BOT_EMAIL: ${{ secrets.HR_BOT_EMAIL }}
+          HR_BOT_PASSWORD: ${{ secrets.HR_BOT_PASSWORD }}
+        run: node run.mjs

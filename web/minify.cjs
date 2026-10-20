@@ -4,7 +4,7 @@ const fs = require("fs"); const path = require("path"); const { minify } = requi
 const OUT = path.join(__dirname, "..", "public");
 const OPTS = { ecma: 2022, compress: { passes: 1 }, mangle: true, format: { comments: /Copyright|@license/ } };
 (async () => {
-  for (const f of ["index.html", "careers.html"]) {
+  for (const f of ["index.html", "careers.html", "kiosk.html"]) {
     const p = path.join(OUT, f); const html = fs.readFileSync(p, "utf8"); const parts = []; let last = 0;
     const re = /<script>([\s\S]*?)<\/script>/g; let m;
     while ((m = re.exec(html))) { const r = await minify(m[1], OPTS); parts.push(html.slice(last, m.index), "<script>", r.code.replace(/<\/script/gi, "<\\/script"), "</script>"); last = m.index + m[0].length; }

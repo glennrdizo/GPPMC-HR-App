@@ -37,6 +37,7 @@ export const addDays = (s: string, n: number) => { const d = new Date(s + "T00:0
 export const addMonths = (s: string, n: number) => { const [y, m, d] = s.split("-").map(Number); const t = new Date(Date.UTC(y, m - 1 + n, 1)); const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate(); t.setUTCDate(Math.min(d, last)); return t.toISOString().slice(0, 10); };
 export const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + "T00:00:00Z") - Date.parse(a + "T00:00:00Z")) / 864e5);
 const day = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}/.test(v) ? v.slice(0, 10) : "");
+const MON_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const fmt = (s: string) => { const d = day(s); if (!d) return ""; const [y, m, dd] = d.split("-").map(Number); return `${MON[m - 1]} ${dd}, ${y}`; };
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
@@ -50,7 +51,7 @@ export const REQ: Record<string, [string, string]> = {
 };
 const AR_KIND: Record<string, string> = { OB: "Official business request", UT: "Undertime request", SHIFT: "Change of schedule request" };
 const SLA_DEF: Record<string, number> = { leave: 2, lvreq: 3, ot: 2, ar: 2, flex: 5, rb: 5, cq: 3, cert: 3, rs: 2 };
-export const WATCHED = [...Object.keys(REQ), "payruns", "applicants"];
+export const WATCHED = [...Object.keys(REQ), "payruns", "applicants", "periods", "remit", "apprs", "offboard"];
 const DONE: Record<string, string> = { APPROVED: "was approved", REJECTED: "was not approved", DECLINED: "was not approved", DENIED: "was not approved", READY: "is ready for release", RELEASED: "was released", ACCEPTED: "was accepted" };
 
 const nameOf = (e: Doc | null | undefined) => (e ? [e.first, e.last].filter(Boolean).join(" ") || e.name || "an employee" : "an employee");
@@ -61,14 +62,18 @@ function reqWhat(col: string, r: Doc, ctx: Ctx) {
 }
 const footer = (s: Settings) => `\n\nOpen the HR app: ${s.appUrl}\n\n${s.company} · Human Resources\nThis is an automatic message. Please don't reply to it; contact HR if you have a question.`;
 
-function reqNotices(col: string, id: string, oldR: Doc | null, r: Doc, ctx: Ctx): Notice[] {
+// A link that opens the request in the app and asks "Approve?" (app/appr.js reads #apv=<kind>:<key>). The app still applies the
+// approval chain and every check; the link itself approves nothing.
+export const apvLink = (s: Settings, kind: string, key: string) => `${s.appUrl.replace(/\/?$/, "/")}#apv=${encodeURIComponent(`${kind}:${key}`)}`;
+
+function reqNotices(col: string, id: string, oldR: Doc | null, r: Doc, ctx: Ctx, key = id): Notice[] {
   const S = ctx.settings, out: Notice[] = []; const e = r.empId ? ctx.emps.get(r.empId) : null; const label = reqLabel(col, r); const what = reqWhat(col, r, ctx);
   const was = oldR?.status, now = r.status;
   if (now === "PENDING" && was !== "PENDING" && S.kinds.approval) {
     const kind = REQ[col]?.[0]; const first = (ctx.ops?.chains?.[kind] || [])[0]; const lead = first?.uid ? ctx.userEmail(first.uid) : null;
     const to = [...new Set([...(lead ? [lead] : []), ...S.approverTo])];
     for (const t of to) out.push({ id: `apv-${col}-${id}-${t}`, kind: "approval", to: t, subject: `${label} from ${nameOf(e)} needs a decision`,
-      text: `${nameOf(e)}${e?.no ? ` (${e.no})` : ""} filed a ${label.toLowerCase()}${what ? ` (${what})` : ""}. It's waiting for your decision.${footer(S)}` });
+      text: `${nameOf(e)}${e?.no ? ` (${e.no})` : ""} filed a ${label.toLowerCase()}${what ? ` (${what})` : ""}. It's waiting for your ${first ? `endorsement as ${first.name || "the first approver"}` : "decision"}.\n\nApprove it in one tap (sign in if asked): ${apvLink(S, kind, key)}${footer(S)}` });
   }
   if (was === "PENDING" && now && DONE[now] && S.kinds.decided && e && (isEmail(e.email) || (S.sms && e.mobile))) {
     const line = `Your ${label.toLowerCase()}${what ? ` (${what})` : ""} ${DONE[now]}.`;
@@ -93,12 +98,23 @@ function appNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
   const sub = (s: string) => s.replace("{job}", job).replace("{company}", S.company); const out: Notice[] = [];
   const end = `\n\nCareers page: ${S.careersUrl}\n\n${S.company} · Human Resources\nThis is an automatic message.`;
   const stage = a.stage || "APPLIED";
-  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + end }); }
+  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; const e = stage === "HIRED" && a.empId ? ctx.emps.get(a.empId) : null;
+    // New hires get their employee number and how to open their employee account (approved by itself when made with this email).
+    const acct = e?.no ? `\n\nYour employee number is ${e.no}${e.hire ? ` and your first day is ${fmt(e.hire)}` : ""}. To see your schedule, time records, payslips and leave on your phone, open ${S.appUrl}, sign in with the same email you used on the careers page (${to}), fill in your details with your employee number and press "Send to HR for approval". It is approved automatically.` : "";
+    out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + acct + end }); }
   const had = new Set((oldA?.ivs || []).map((i: Doc) => i.id));
   for (const iv of a.ivs || []) { if (had.has(iv.id) || iv.result !== "PENDING" || !day(iv.d) || day(iv.d) < ctx.today) continue;
     const k = String(iv.kind || "Interview"); out.push({ id: `iv-${id}-${iv.id}`, kind: "applicant", to, subject: `${k} schedule for ${job}`,
       text: `${hi}Your ${k.toLowerCase()} for ${job} is set on ${fmt(iv.d)}${iv.t ? ` at ${iv.t}` : ""}${iv.by ? ` with ${iv.by}` : ""}. Please be on time and bring a valid ID. If you can't make it, please reply through the careers page or contact HR.${end}` }); }
   return out;
+}
+// The applicant answered the job offer on the careers page: tell HR (the approvers and the digest list).
+function offerNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; const st = a.offer?.status; if (!S.kinds.approval || a.sample || a.offer?.via !== "careers" || !["ACCEPTED", "DECLINED"].includes(st) || oldA?.offer?.status === st) return [];
+  const job = ctx.jobs.get(a.jobId)?.title || "the position"; const who = [a.first, a.last].filter(Boolean).join(" ") || "An applicant";
+  return [...new Set([...S.approverTo, ...S.digestTo])].map((addr) => ({ id: `offer-${id}-${st}-${addr}`, kind: "approval", to: addr,
+    subject: `${who} ${st === "ACCEPTED" ? "accepted" : "declined"} the job offer for ${job}`,
+    text: `${who} ${st === "ACCEPTED" ? "accepted" : "declined"} the job offer for ${job} on the careers page.${st === "ACCEPTED" ? "\n\nOnce every pre-employment requirement is accepted in the app, the 201 file and onboarding are made by itself (unless hiring by itself is switched off)." : ""}${footer(S)}` }));
 }
 
 /* ---------- payslips ---------- */
@@ -113,15 +129,66 @@ function payNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
   return out;
 }
 
+/* ---------- payroll cutoff ready for approval (app/payauto.js writes periods/<id>.auto) ---------- */
+function periodNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.approval || !p.auto?.ready || oldP?.auto?.ready || p.status === "FINAL") return [];
+  const to = [...new Set([...S.approverTo, ...S.digestTo])]; const period = p.start && p.end ? `${fmt(p.start)} to ${fmt(p.end)}` : id;
+  return to.map((addr) => ({ id: `payready-${id}-${addr}`, kind: "approval", to: addr, subject: `Payroll for ${period} is ready for approval`,
+    text: `Payroll for ${period} has passed every check: time records read, no requests waiting, no timekeeping issues, and everyone has basic pay${p.auto.count ? ` (${p.auto.count} employees)` : ""}.\n\nOpen Payroll in the HR app to review it and press Approve and finalize. Payslips are released when it is finalized.${footer(S)}` }));
+}
+
+/* ---------- the month's government filing pack is ready (app/remit.js writes remit/<month>.pack) ---------- */
+function remitNotices(month: string, oldR: Doc | null, r: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.digest || !r.pack || oldR?.pack) return [];
+  const due = r.pack.due || {}; const miss = r.pack.missing || {}; const nMiss = Object.values(miss).reduce((a: number, b) => a + (Number(b) || 0), 0);
+  const label = (() => { const [y, m] = month.split("-").map(Number); return `${MON_LONG[m - 1] || month} ${y}`; })();
+  const lines = REMIT.map(([k, l]) => `- ${l}: due ${due[k] ? fmt(due[k]) : "see the app"}${miss[k] ? ` (${miss[k]} ${Number(miss[k]) === 1 ? "person" : "people"} without an ID number)` : ""}`).join("\n");
+  return S.digestTo.map((addr) => ({ id: `remit-${month}-${addr}`, kind: "digest", to: addr, subject: `Government remittances for ${label} are ready to file`,
+    text: `Both payroll cutoffs for ${label} are final, and the filing files are ready on the Gov't Contributions page of the HR app:\n\n${lines}\n\n${nMiss ? "Add the missing ID numbers in the 201 files before uploading. " : ""}Press Mark filed on each one after filing to stop the reminders.${footer(S)}` }));
+}
+
+/* ---------- an endorsement was recorded (app/ops.js apprs/<kind>--<key>): tell the next level, or the final approvers ---------- */
+const KIND_LABEL: Record<string, string> = { ...Object.fromEntries(Object.values(REQ).map(([k, l]) => [k, l])), si: "Salary increment", pf: "Personnel action" };
+function apprNotices(oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.approval || a.final || !a.kind || a.key == null) return [];
+  const n = (a.steps || []).length; if (n <= (oldA?.steps || []).length) return [];
+  const chain = ctx.ops?.chains?.[a.kind] || []; const next = chain[n]; const label = KIND_LABEL[a.kind] || "Request"; const by = a.steps[n - 1]?.name || "the previous level";
+  const to = next ? [next.uid ? ctx.userEmail(next.uid) : null].filter(Boolean) as string[] : S.approverTo;
+  const fallback = next && !to.length ? S.approverTo : [];
+  return [...new Set([...to, ...fallback])].map((addr) => ({ id: `apv-${a.kind}-${String(a.key)}-${n}-${addr}`, kind: "approval", to: addr,
+    subject: `${label} endorsed by ${by}: ${next ? `needs ${next.name || "your endorsement"}` : "ready for final approval"}`,
+    text: `A ${label.toLowerCase()} was endorsed by ${by} and now ${next ? `needs endorsement by ${next.name || "you"}` : "needs the final decision"}.\n\nApprove it in one tap (sign in if asked): ${apvLink(S, a.kind, String(a.key))}${footer(S)}` }));
+}
+
+/* ---------- exit clearance (app/offb.js): each signer gets their steps; approvers hear when clearance is done ---------- */
+export const CLR_AFTER = ["finalpay", "coe", "bir2316"]; // steps that come after clearance
+function offbNotices(empId: string, oldO: Doc | null, o: Doc, ctx: Ctx): Notice[] {
+  const S = ctx.settings; if (!S.kinds.approval || o.closed || o.sample) return []; const e = ctx.emps.get(o.empId || empId); if (!e) return [];
+  const who = `${nameOf(e)}${e.no ? ` (${e.no})` : ""}`; const out: Notice[] = []; const clrTo = ctx.ops?.clrTo || {};
+  const had = new Set((oldO?.items || []).map((i: Doc) => i.k)); const fresh = (o.items || []).filter((i: Doc) => !i.done && !had.has(i.k) && !CLR_AFTER.includes(i.k));
+  const byWho = new Map<string, Doc[]>(); for (const i of fresh) { const to = clrTo[i.who] ? ctx.userEmail(clrTo[i.who]) : null; if (to) byWho.set(to, [...(byWho.get(to) || []), i]); }
+  for (const [to, items] of byWho) out.push({ id: `clr-${empId}-${items.map((i) => i.k).join(".")}-${to}`, kind: "approval", to, subject: `Exit clearance for ${who}: ${plural(items.length, "step")} for you`,
+    text: `${who} is leaving${o.last ? ` (last day ${fmt(o.last)})` : ""}. Please clear these steps:\n\n${items.map((i) => `- ${i.label}\n  Mark it cleared in one tap (sign in if asked): ${S.appUrl.replace(/\/?$/, "/")}#clr=${encodeURIComponent(`${empId}:${i.k}`)}`).join("\n")}${footer(S)}` });
+  const clr = (x: Doc | null) => !!x && (x.items || []).filter((i: Doc) => !CLR_AFTER.includes(i.k)).every((i: Doc) => i.done);
+  if (clr(o) && !clr(oldO) && !o.released) for (const to of new Set([...S.approverTo, ...S.digestTo]))
+    out.push({ id: `clrdone-${empId}-${to}`, kind: "approval", to, subject: `Exit clearance done for ${who}: final pay can be released`,
+      text: `Every clearance step for ${who} is done. Open Final pay in the HR app to check and release the final pay${o.last ? ` (due by ${fmt(addDays(o.last, 30))}, 30 days after the last day)` : ""}, then issue the Certificate of Employment and BIR 2316.${footer(S)}` });
+  return out;
+}
+
 /* ---------- one changed record -> notices ---------- */
 export function eventNotices(ev: { path: string; col: string; old: Doc | null; new: Doc | null }, ctx: Ctx): Notice[] {
   const n = ev.new; if (!n) return []; const id = ev.path.split("/").slice(1).join("_");
   if (ev.col === "leaves") { const out: Notice[] = []; const was = ev.old?.items || {};
-    for (const [k, l] of Object.entries(n.items || {})) if (l && typeof l === "object" && !(l as Doc).sample) out.push(...reqNotices("leaves", k, was[k] || null, l as Doc, ctx)); return out; }
+    for (const [k, l] of Object.entries(n.items || {})) if (l && typeof l === "object" && !(l as Doc).sample) out.push(...reqNotices("leaves", k, was[k] || null, l as Doc, ctx, `${ev.path.split("/")[1]}:${k}`)); return out; }
   if (n.sample) return [];
   if (REQ[ev.col]) return reqNotices(ev.col, id, ev.old, n, ctx);
-  if (ev.col === "applicants") return appNotices(id, ev.old, n, ctx);
+  if (ev.col === "applicants") return [...appNotices(id, ev.old, n, ctx), ...offerNotices(id, ev.old, n, ctx)];
   if (ev.col === "payruns") return payNotices(id, ev.old, n, ctx);
+  if (ev.col === "periods") return periodNotices(id, ev.old, n, ctx);
+  if (ev.col === "remit") return remitNotices(id, ev.old, n, ctx);
+  if (ev.col === "apprs") return apprNotices(ev.old, n, ctx);
+  if (ev.col === "offboard") return offbNotices(id, ev.old, n, ctx);
   return [];
 }
 
@@ -183,6 +250,21 @@ export function digestSections(A: All, ctx: Ctx) {
   add("Disciplinary cases", er);
   return sec;
 }
+/* ---------- requests past target + escalation days: one email per request to the person set in Needs action > Rules ---------- */
+export function escalationNotices(A: All, ctx: Ctx): Notice[] {
+  const S = ctx.settings, O = ctx.ops || {}; if (!S.kinds.approval || !O.escTo) return [];
+  const to = ctx.userEmail(O.escTo); if (!to) return []; const sla = { ...SLA_DEF, ...(O.sla || {}) }; const escDays = Number(O.escDays) || 0;
+  const emp = new Map(A.emps.map((e) => [e.id, e])); const out: Notice[] = [];
+  const one = (col: string, r: Doc, key: string) => { if (r.status !== "PENDING" || r.sample) return; const e = emp.get(r.empId); if (r.empId && (!e || e.separated)) return;
+    const filed = day(r.filed) || day(r.d) || day(r.date); if (!filed) return; const kind = REQ[col][0]; const late = daysBetween(addDays(filed, Number(sla[kind]) || 3), ctx.today);
+    if (late <= escDays) return; const label = reqLabel(col, r);
+    out.push({ id: `esc-${col}-${key}`, kind: "approval", to, subject: `Escalated: ${label} from ${nameOf(e)}, ${plural(late, "day")} past target`,
+      text: `${nameOf(e)}${e?.no ? ` (${e.no})` : ""} filed a ${label.toLowerCase()}${reqWhat(col, r, ctx) ? ` (${reqWhat(col, r, ctx)})` : ""} on ${fmt(filed)}. It is ${plural(late, "day")} past its target and was escalated to you.\n\nApprove it in one tap (sign in if asked): ${apvLink(S, kind, key)}${footer(S)}` }); };
+  for (const l of A.leaves) one("leaves", l, `${l.month}:${l.id}`);
+  for (const [col, list] of Object.entries(A.reqs)) for (const r of list) one(col, r, String(r.id));
+  return out.slice(0, 60);
+}
+
 export function digestNotices(A: All, ctx: Ctx): { notices: Notice[]; count: number } {
   const S = ctx.settings; const sec = digestSections(A, ctx); const count = sec.reduce((a, s) => a + s.lines.length, 0);
   if (!S.kinds.digest || !count || !S.digestTo.length) return { notices: [], count };

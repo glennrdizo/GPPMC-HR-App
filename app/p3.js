@@ -1,44 +1,45 @@
 /* ---------- v59 Phase 3 automation (Glenn 2026-10-12): leave earned monthly, carry-over and year-end conversion;
    yearly review, document expiry and training renewal reminders; training auto-enrolment; applicant shortlist scoring. ---------- */
-const LVP_DEF = { mode: "YEAR", carry: { VL: 0, SL: 0 }, conv: { VL: true, SL: false }, annual: true };
+const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: false, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over and no cash conversion; unused leave lapses when balances refresh every January 15
 const LVP = () => { const o = S.ops?.lvp || {}; return { ...LVP_DEF, ...o, carry: { ...LVP_DEF.carry, ...(o.carry || {}) }, conv: { ...LVP_DEF.conv, ...(o.conv || {}) } }; };
 const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 /* Earned monthly: this year's VL and SL count only the months already completed (credited at each month end). */
 { const base = leaveCredit; leaveCredit = (e, t, year) => {
   if (LVP().mode !== "MONTH" || t.days == null || !["VL", "SL"].includes(t.code)) return base(e, t, year);
-  const y = String(year), today = todayISO(); if (y < today.slice(0, 4)) return base(e, t, year); if (y > today.slice(0, 4)) return 0;
-  const cut = today === lvMonthEnd(today) ? today : addDays(`${today.slice(0, 7)}-01`, -1); if (cut < `${y}-01-01`) return 0;
+  const y = String(year), today = todayISO(), ly = leaveYear(today); if (y < ly) return base(e, t, year); if (y > ly) return 0;
+  const cut = today === lvMonthEnd(today) ? today : addDays(`${today.slice(0, 7)}-01`, -1); if (cut < lyStart(y)) return 0;
   const out = e.separated?.date || S.offb?.get(e.id)?.last || null; const stop = out && out < cut ? out : cut;
   if (e.hire && e.hire > stop) return 0; return base({ ...e, separated: { ...(e.separated || {}), date: stop } }, t, year); }; }
 /* Carry-over: unused VL and SL from last year, up to the cap, are added to this year's credits. */
 { const base = balances; const carried = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
   // Last year's balance includes what it carried in itself (from 2026, when the app started), so carry-over chains year to year.
-  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
+  if (!e.hire || e.hire >= lyStart(year)) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
   return rows.map((t) => { const cap = Number(P.carry[t.code]) || 0; if (!cap || t.left == null) return t; const p = prev.find((x) => x.code === t.code); const c = Math.min(cap, Math.max(0, p?.left || 0)); if (!c) return t;
     return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; balances = carried; }
 const dailyOf = (e) => (e.payType === "DAILY" ? e.basicPay || 0 : ((e.basicPay || 0) * 12) / (SET().factor || 313));
 function lvYearEnd(year) { const P = LVP(); const rows = [];
-  for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > `${year}-12-31`) continue; if (e.separated?.date && e.separated.date < `${year}-01-01`) continue; let b = []; try { b = balances(e, year); } catch { continue; }
+  for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > lyEnd(year)) continue; if (e.separated?.date && e.separated.date < lyStart(year)) continue; let b = []; try { b = balances(e, year); } catch { continue; }
     const vl = b.find((x) => x.code === "VL")?.left || 0, sl = b.find((x) => x.code === "SL")?.left || 0; if (!vl && !sl) continue;
-    const gone = !!e.separated?.date && e.separated.date <= `${year}-12-31`;
+    const gone = !!e.separated?.date && e.separated.date <= lyEnd(year);
     const cVL = gone ? 0 : Math.min(Number(P.carry.VL) || 0, vl), cSL = gone ? 0 : Math.min(Number(P.carry.SL) || 0, sl);
     const conv = (P.conv.VL ? vl - cVL : 0) + (P.conv.SL ? sl - cSL : 0); const daily = dailyOf(e);
     rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: gone ? 0 : PAY.r2(conv * daily), gone }); }
   return rows.sort((a, b) => fullName(a.e).localeCompare(fullName(b.e))); }
-Object.assign(S, { lvye: new Map(), lvyeY: String(Number(todayISO().slice(0, 4)) - (todayISO().slice(5, 7) < "07" ? 1 : 0)), shortN: {} });
+Object.assign(S, { lvye: new Map(), lvyeY: String(Number(leaveYear(todayISO())) - (todayISO() < addDays(lyStart(leaveYear(todayISO())), 180) ? 1 : 0)), shortN: {} });
 VIEWS.lvye = () => {
-  const y = S.lvyeY; const P = LVP(); const rows = lvYearEnd(y); const rec = S.lvye.get(y); const ed = S.canEdit; const cur = y === todayISO().slice(0, 4); const tot = (f) => PAY.r2(rows.reduce((a, r) => a + r[f], 0));
-  const years = [0, 1, 2].map((i) => String(Number(todayISO().slice(0, 4)) - i));
+  const y = S.lvyeY; const P = LVP(); const rows = lvYearEnd(y); const rec = S.lvye.get(y); const ed = S.canEdit; const cur = y === leaveYear(todayISO()); const tot = (f) => PAY.r2(rows.reduce((a, r) => a + r[f], 0));
+  const years = [0, 1, 2].map((i) => String(Number(leaveYear(todayISO())) - i));
   return head("Leave", "Leave year-end", `<button class="btn btn-ghost" data-lvye-csv="${y}">Download (CSV)</button>`) + `
     <section class="card" style="padding-bottom:12px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${stTabs(y, "lvye-y", years.map((x) => [x, x]))}
-      <span class="t-muted" style="font-size:14px">${P.mode === "MONTH" ? "VL and SL are earned monthly" : "VL and SL are credited in full each January"} · carry over up to ${P.carry.VL} VL and ${P.carry.SL} SL days · converted to cash: ${[P.conv.VL && "VL", P.conv.SL && "SL"].filter(Boolean).join(" and ") || "none"}</span></div></section>
+      <span class="t-muted" style="font-size:14px">${P.mode === "MONTH" ? "VL and SL are earned monthly" : `VL and SL are credited in full each leave year (from ${fmtDate(lyStart(y))} to ${fmtDate(lyEnd(y))})`} · carry over up to ${P.carry.VL} VL and ${P.carry.SL} SL days · converted to cash: ${[P.conv.VL && "VL", P.conv.SL && "SL"].filter(Boolean).join(" and ") || "none"}</span></div></section>
     <section class="stats kpis">${dxTile("Unused VL", tot("vl"), "days")}${dxTile("Unused SL", tot("sl"), "days")}${dxTile("Carried over", PAY.r2(tot("cVL") + tot("cSL")), `days into ${Number(y) + 1}`)}${dxTile("Converted to cash", peso.format(tot("amt")), `${tot("conv")} days`, "t-warn")}</section>
-    <section class="card"><div class="card-head"><h2>Unused leave for ${y}</h2>${cur && !rec ? '<span class="t-muted" style="font-size:13px">So far: the year is not over yet</span>' : ""}${rec ? `<span class="chip c-ok">Recorded ${fmtDate(rec.at.slice(0, 10))} · ${peso.format(rec.total || 0)}</span>` : ed && rows.length && (!cur || todayISO().slice(5, 7) === "12") ? `<button class="btn btn-primary btn-sm" data-lvye-rec="${y}">Record the conversion</button>` : ""}</div>
+    <section class="card"><div class="card-head"><h2>Unused leave for ${y}</h2>${cur && !rec ? '<span class="t-muted" style="font-size:13px">So far: the year is not over yet</span>' : ""}${rec ? `<span class="chip c-ok">Recorded ${fmtDate(rec.at.slice(0, 10))} · ${peso.format(rec.total || 0)}</span>` : ed && rows.length && (!cur || todayISO() >= addDays(lyEnd(y), -30)) ? `<button class="btn btn-primary btn-sm" data-lvye-rec="${y}">Record the conversion</button>` : ""}</div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th class="num">Unused VL</th><th class="num">Unused SL</th><th class="num">Carried over</th><th class="num">Lapses</th><th class="num">Converted days</th><th class="num">Daily rate</th><th class="num">Cash</th></tr></thead><tbody>
       ${rows.slice(0, 400).map((r) => `<tr><td>${empCell(r.e, r.gone ? "Separated (paid in final pay)" : undefined)}</td><td class="num">${r.vl}</td><td class="num">${r.sl}</td><td class="num">${PAY.r2(r.cVL + r.cSL)}</td><td class="num">${r.lapse}</td><td class="num">${r.conv}</td><td class="num">${money(r.daily)}</td><td class="num"><b>${money(r.amt)}</b></td></tr>`).join("") || '<tr><td colspan="8" class="empty">No unused VL or SL for this year.</td></tr>'}</tbody></table></div>
       <p class="t-muted" style="font-size:13px;margin:10px 0 0">Recording saves this list with the date and your name, so payroll can pay it and the carry-over is fixed. Up to 10 days of converted VL a year are tax-free de minimis; the rest counts toward the ₱90,000 cap.</p></section>
     ${ed ? `<form id="lvp-form" class="card"><div class="card-head"><h2>Leave policy</h2></div><div class="form-grid">
-      <div class="field"><label for="lvp-mode">How VL and SL are credited</label><select class="input" id="lvp-mode" name="mode"><option value="YEAR" ${P.mode === "YEAR" ? "selected" : ""}>In full each January (prorated for new hires)</option><option value="MONTH" ${P.mode === "MONTH" ? "selected" : ""}>Earned monthly, credited at each month end</option></select></div>
+      <div class="field"><label for="lvp-mode">How VL and SL are credited</label><select class="input" id="lvp-mode" name="mode"><option value="YEAR" ${P.mode === "YEAR" ? "selected" : ""}>In full each leave year (prorated for new hires)</option><option value="MONTH" ${P.mode === "MONTH" ? "selected" : ""}>Earned monthly, credited at each month end</option></select></div>
+      <div class="field"><label for="lvp-reset">Balances refresh every</label><input class="input" id="lvp-reset" name="reset" type="date" value="${todayISO().slice(0, 4)}-${lvReset()}"><span class="t-muted" style="font-size:12px">Only the month and day are used. Every leave balance starts again on this day each year.</span></div>
       <div class="field"><label for="lvp-cvl">VL days carried to next year (max)</label><input class="input" id="lvp-cvl" name="cVL" type="number" min="0" max="60" step="0.5" value="${P.carry.VL}"></div>
       <div class="field"><label for="lvp-csl">SL days carried to next year (max)</label><input class="input" id="lvp-csl" name="cSL" type="number" min="0" max="60" step="0.5" value="${P.carry.SL}"></div>
       <label class="check"><input type="checkbox" name="convVL" ${P.conv.VL ? "checked" : ""}><span>Convert unused VL (not carried) to cash</span></label>
@@ -64,7 +65,7 @@ document.addEventListener("click", async (ev) => {
 });
 document.addEventListener("submit", async (ev) => {
   if (ev.target.id !== "lvp-form") return; ev.preventDefault(); if (!S.realEdit) return; const f = new FormData(ev.target);
-  const lvp = { mode: f.get("mode") === "MONTH" ? "MONTH" : "YEAR", carry: { VL: Math.max(0, Number(f.get("cVL")) || 0), SL: Math.max(0, Number(f.get("cSL")) || 0) }, conv: { VL: !!f.get("convVL"), SL: !!f.get("convSL") }, annual: !!f.get("annual") };
+  const rs = String(f.get("reset") || "").slice(5, 10); const lvp = { mode: f.get("mode") === "MONTH" ? "MONTH" : "YEAR", reset: /^\d{2}-\d{2}$/.test(rs) ? rs : "01-15", carry: { VL: Math.max(0, Number(f.get("cVL")) || 0), SL: Math.max(0, Number(f.get("cSL")) || 0) }, conv: { VL: !!f.get("convVL"), SL: !!f.get("convSL") }, annual: !!f.get("annual") };
   const next = { ...(S.ops || {}), lvp }; try { await S.db.doc("org/ops").set(JSON.parse(JSON.stringify(next))); S.ops = next; S.ver++; logActivity("Updated the leave policy"); toast("Leave policy saved."); render(); } catch { toast("Couldn't save. Try again."); }
 });
 /* Session page: enroll everyone who needs the course, soonest expiry first, up to the seats */

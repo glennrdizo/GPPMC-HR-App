@@ -8,7 +8,7 @@ function buildSummary(e) {
   for (let d = m0; d < today; d = addDays(d, 1)) { const r = dayRec(e, d, pd.get(e.id)?.get(d), ctx); if (r.status === "in" || r.status === "late") att.present++; if (r.status === "late") { att.late++; att.lateMin += r.late; } if (r.status === "absent") att.absent++; if (r.status === "leave") att.leave++; }
   const week = []; for (let i = 0; i < 7; i++) { const d = addDays(today, i); const c = planCode(e, d); const hol = ctx.hol.get(d) || []; const lv = ctx.leaves.find((l) => l.empId === e.id && l.from <= d && l.to >= d); const sp = typeof suspOf === "function" ? suspOf(e, d) : null;
     week.push({ d, label: lv ? leaveType(lv.type)?.name || "Leave" : sp ? `Work suspended: ${sp.reason}` : hol.length ? hol.map((h) => h.name).join(", ") : codeLabel(c), kind: lv ? "leave" : sp ? "susp" : hol.length ? "hol" : c === "R" ? "rest" : "work" }); }
-  const leave = balances(e, y).filter((b) => b.left != null && (b.used || /vacation|sick|service/i.test(b.name))).map((b) => ({ name: b.name, left: b.left, used: b.used }));
+  const leave = balances(e, leaveYear(today)).filter((b) => b.left != null && (b.used || /vacation|sick|service/i.test(b.name))).map((b) => ({ name: b.name, left: b.left, used: b.used }));
   const slips = essSlips(e).slice(0, 3).map((s) => ({ label: s.p.label, gross: PAY.r2(s.l.gross), ded: PAY.r2(s.l.gross - s.l.net), net: PAY.r2(s.l.net), final: !!s.final }));
   const loans = listOf(S.loans).filter((ln) => ln.empId === e.id && ln.status === "ACTIVE").map((ln) => ({ label: loanLabel(ln.id), bal: loanBal(ln), amort: ln.amort || 0, end: ln.end || null })).filter((x) => x.bal > 0);
   const t = typeof t13Of === "function" ? t13Of(e, y) : null;

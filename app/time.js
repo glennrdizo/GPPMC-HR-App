@@ -25,18 +25,23 @@ async function ensureRun(id) {
   try { const d = await S.db.doc("payruns/" + id).get(); if (d.exists) { S.runs.set(id, d.data()); S.ver++; render(); } } finally { S.fetching.delete(id); }
 }
 
+/* Leave year (Glenn 2026-10-20): every leave balance is refreshed on January 15 and nothing carries over, so a leave year runs
+   January 15 to January 14. The reset day is the leave policy's "reset" (MM-DD), January 15 unless HR changes it. */
+const lvReset = () => { const r = S.ops?.lvp?.reset; return /^\d{2}-\d{2}$/.test(r || "") ? r : "01-15"; };
+const leaveYear = (d) => { d = String(d || todayISO()); const y = Number(d.slice(0, 4)); return String(d.slice(5, 10) < lvReset() ? y - 1 : y); };
+const lyStart = (y) => `${y}-${lvReset()}`; const lyEnd = (y) => addDays(`${Number(y) + 1}-${lvReset()}`, -1);
 /* Vacation and sick leave credits are prorated by month in the hire year and the exit year (a cutoff started after the 15th counts as half a month). */
 function leaveCredit(e, t, year) {
   if (t.days == null || !["VL", "SL"].includes(t.code)) return t.days; year = String(year);
-  const s = e.hire && e.hire > `${year}-01-01` ? e.hire : `${year}-01-01`; const out = e.separated?.date || S.offb?.get(e.id)?.last || null;
-  const end = out && out.startsWith(year) ? out : `${year}-12-31`; if (s > end) return 0;
-  if (s === `${year}-01-01` && end === `${year}-12-31`) return t.days;
-  const months = Number(end.slice(5, 7)) - Number(s.slice(5, 7)) + 1 - (Number(s.slice(8)) > 15 ? 0.5 : 0) - (Number(end.slice(8)) < 15 ? 0.5 : 0);
-  return Math.round(((t.days * Math.max(0, months)) / 12) * 2) / 2;
+  const a = lyStart(year), z = lyEnd(year); const s = e.hire && e.hire > a ? e.hire : a; const out = e.separated?.date || S.offb?.get(e.id)?.last || null;
+  const end = out && out >= a && out < z ? out : z; if (s > end) return 0;
+  if (s === a && end === z) return t.days;
+  const months = (daysBetween(s, end) + 1) / 30.4375;
+  return Math.round(((t.days * Math.max(0, Math.min(12, months))) / 12) * 2) / 2;
 }
 function balances(e, year) {
   const used = {}, pend = {};
-  for (const l of allLeaves()) if (l.empId === e.id && yearOf(l.from) === year) { if (l.status === "APPROVED") used[l.type] = (used[l.type] || 0) + l.days; else if (l.status === "PENDING") pend[l.type] = (pend[l.type] || 0) + l.days; }
+  for (const l of allLeaves()) if (l.empId === e.id && leaveYear(l.from) === String(year)) { if (l.status === "APPROVED") used[l.type] = (used[l.type] || 0) + l.days; else if (l.status === "PENDING") pend[l.type] = (pend[l.type] || 0) + l.days; }
   return SET().leaveTypes.map((t) => { const credit = leaveCredit(e, t, year); return { ...t, credit, used: used[t.code] || 0, pend: pend[t.code] || 0, left: credit == null ? null : Math.max(0, credit - (used[t.code] || 0)) }; });
 }
 const onLeave = (date) => allLeaves().filter((l) => l.status === "APPROVED" && l.from <= date && l.to >= date && S.emps.get(l.empId) && !S.emps.get(l.empId).separated);
@@ -209,7 +214,7 @@ function leaveRequests(all) {
   </section>`;
 }
 function leaveBalances() {
-  const year = String(new Date().getFullYear()); const f = S.balFilter;
+  const year = leaveYear(todayISO()); const f = S.balFilter;
   const list = refilter(active(), f); const rows = list.slice((Math.max(1, f.page) - 1) * PAGE, Math.max(1, f.page) * PAGE);
   const html = pager(f, list.length, "bal");
   return `<section class="card"><div class="card-head"><h2>Leave balances for ${year}</h2><button class="btn btn-ghost btn-sm" data-lvx="balances">Download balances (CSV)</button></div>
@@ -264,7 +269,7 @@ function leaveHint() {
   if (!d || !e || !d.from) return '<span class="t-muted">Choose an employee and dates to see the days used and the balance left.</span>';
   if (d.to < d.from) return '<span class="err">The end date is before the start date.</span>';
   const t = leaveType(d.type); const days = PAY.leaveDays(d, SET(), t);
-  const b = balances(e, yearOf(d.from)).find((x) => x.code === d.type);
+  const b = balances(e, leaveYear(d.from)).find((x) => x.code === d.type);
   const rule = LEAVE_RULES[d.type];
   return `<b>${days} ${days === 1 ? "day" : "days"}</b> of ${esc(t.name.toLowerCase())}${t.cal ? " (calendar days)" : " (rest days and holidays not counted)"}. ${b.left == null ? "No yearly limit." : `${b.left} of ${b.days} left for ${yearOf(d.from)} before this request.`}${rule ? `<div style="margin-top:6px;font-size:14px"><b>Requirements:</b> ${esc(rule.text)}</div>` : ""}${d.type === "SL" && days >= 4 ? '<div style="margin-top:6px;font-size:14px" class="t-warn">Sick leave of 4 days or more: notify SSS of the sickness within 5 days of the employee\'s notice so they can claim the SSS sickness benefit.</div>' : ""}`;
 }
@@ -278,7 +283,7 @@ async function submitLeave() {
   const days = PAY.leaveDays(d, SET(), t); if (!days) return fail("Those dates fall on rest days or holidays only.");
   const clash = allLeaves().find((l) => l.empId === e.id && ["PENDING", "APPROVED"].includes(l.status) && l.from <= d.to && l.to >= d.from);
   if (clash) return fail(`${fullName(e)} already has ${leaveType(clash.type)?.name.toLowerCase() || "leave"} on ${fmtDate(clash.from)}.`);
-  const b = balances(e, yearOf(d.from)).find((x) => x.code === d.type);
+  const b = balances(e, leaveYear(d.from)).find((x) => x.code === d.type);
   if (b.left != null && days > b.left - b.pend) return fail(`Only ${Math.max(0, b.left - b.pend)} ${t.name.toLowerCase()} days are left for ${yearOf(d.from)}${b.pend ? ` after ${b.pend} days waiting for approval` : ""}. File the rest as leave without pay.`);
   if (isFinal(PAY.periodOf(d.from)) && d.status === "APPROVED") return fail("Payroll for that period is already final. Reopen it first, or file this as pending.");
   const btn = $("#lf-save"); btn.disabled = true; btn.textContent = "Saving…";
@@ -295,7 +300,7 @@ async function submitLeave() {
 async function setLeaveStatus(month, id, status) {
   const doc = S.leaveDocs.get(month); const l = doc?.items?.[id]; if (!l) return;
   if (status === "APPROVED" && isFinal(PAY.periodOf(l.from))) { toast("Payroll for that period is final. Reopen it first."); return; }
-  if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, yearOf(l.from)).find((x) => x.code === l.type);
+  if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, leaveYear(l.from)).find((x) => x.code === l.type);
     if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; }
     // two approved leaves on the same days would be deducted or paid twice
     if (allLeaves().some((x) => x.id !== id && x.empId === l.empId && x.status === "APPROVED" && x.from <= l.to && x.to >= l.from)) { toast("Another approved leave already covers these dates."); return; } }
@@ -409,7 +414,7 @@ function slipHTML(e, l, p, final) {
         ${row(e.payType === "DAILY" ? `Basic pay (${PAY.r2(l.days)} days at ${money(l.daily)})` : "Basic pay (half month)", l.basic, true)}${row("Regular holiday pay", l.hol)}${row("Back pay (pay change)", l.bp || 0)}${row("Paid leave", l.leave)}
         ${l.absent ? `<tr><td>Less absences and unpaid leave</td><td class="num">(${money(l.absent)})</td></tr>` : ""}${l.tardy ? `<tr><td>Less late and undertime</td><td class="num">(${money(l.tardy)})</td></tr>` : ""}
         ${row("Overtime", l.ot)}${row("Rest day work", l.rd)}${row("Regular holiday worked", l.rhw)}${row("Special day worked", l.sh)}${row("Holiday and rest day overtime, double holiday", l.xp)}${row("Night differential", l.nd)}${row("Commission", l.comm)}${row("Taxable adjustment", l.adj)}${row("Non-taxable allowance", l.adjN)}
-        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l)))}${row("Reimbursements", rbOf(l))}${row("FlexBen, taxable", l.flexT)}
+        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l) - lvOf(l)))}${row("Reimbursements", rbOf(l))}${row("Unused leave converted to cash", lvOf(l))}${row("FlexBen, taxable", l.flexT)}
         ${(e.allow || []).length && (l.allowN || l.allowT) ? `${row("Allowances, tax-free (de minimis)", l.allowN)}${row("Allowances, taxable", l.allowT)}` : ""}
         <tr><td><b>Gross pay</b></td><td class="num"><b>${money(l.gross)}</b></td></tr></tbody></table></div>
       <div style="flex:1 1 260px"><h3 style="font-size:15px;margin-bottom:6px">Deductions</h3><table><tbody>
@@ -472,7 +477,7 @@ function timePanels() {
   </div>`;
 }
 function profilePanels(e) {
-  const year = String(new Date().getFullYear()); const b = balances(e, year);
+  const year = leaveYear(todayISO()); const b = balances(e, year);
   const mine = allLeaves().filter((l) => l.empId === e.id).sort((a, c) => c.from.localeCompare(a.from));
   const slips = [...S.runs.entries()].filter(([id, r]) => r.lines[e.id] && isFinal(id)).sort((a, c) => c[0].localeCompare(a[0])).slice(0, 6);
   return `<section class="card"><div class="card-head"><h2>Leave in ${year}</h2>${S.canEdit && !e.separated ? `<button class="btn btn-ghost btn-sm" data-file-leave="${e.id}">File leave</button>` : ""}</div>
@@ -509,7 +514,7 @@ function contribExport(kind) {
 }
 function leaveExport(kind) {
   if (kind === "list") return offer(`leave-${todayISO()}.csv`, toCSV([["Employee No", "Name", "Leave", "From", "To", "Days", "Status", "Reason", "Filed"], ...allLeaves().sort((a, b) => b.from.localeCompare(a.from)).map((l) => { const e = S.emps.get(l.empId); return [e?.no, e ? fullName(e) : "", leaveType(l.type)?.name || l.type, l.from, l.to, l.days, LSTATUS[l.status][0], l.reason, l.filed]; })]));
-  const y = String(new Date().getFullYear());
+  const y = leaveYear(todayISO());
   return offer(`leave-balances-${y}.csv`, toCSV([["Employee No", "Name", ...SET().leaveTypes.flatMap((t) => [`${t.name} used`, ...(t.days == null ? [] : [`${t.name} left`])])],
     ...active().sort((a, b) => a.last.localeCompare(b.last)).map((e) => [e.no, fullName(e), ...balances(e, y).flatMap((b) => [b.used, ...(b.days == null ? [] : [b.left])])])]));
 }

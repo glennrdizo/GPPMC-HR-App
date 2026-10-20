@@ -4,6 +4,7 @@
   "license": "UNLICENSED",
   "description": "Build tools for the website in ../public (python3 build.py runs the minifier).",
   "devDependencies": {
+    "fflate": "^0.8.2",
     "terser": "5.36.0"
   }
 }

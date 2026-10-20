@@ -1623,6 +1623,431 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -1882,18 +2307,23 @@ async function ensureRun(id) {
   try { const d = await S.db.doc("payruns/" + id).get(); if (d.exists) { S.runs.set(id, d.data()); S.ver++; render(); } } finally { S.fetching.delete(id); }
 }
 
+/* Leave year (Glenn 2026-10-20): every leave balance is refreshed on January 15 and nothing carries over, so a leave year runs
+   January 15 to January 14. The reset day is the leave policy's "reset" (MM-DD), January 15 unless HR changes it. */
+const lvReset = () => { const r = S.ops?.lvp?.reset; return /^\d{2}-\d{2}$/.test(r || "") ? r : "01-15"; };
+const leaveYear = (d) => { d = String(d || todayISO()); const y = Number(d.slice(0, 4)); return String(d.slice(5, 10) < lvReset() ? y - 1 : y); };
+const lyStart = (y) => `${y}-${lvReset()}`; const lyEnd = (y) => addDays(`${Number(y) + 1}-${lvReset()}`, -1);
 /* Vacation and sick leave credits are prorated by month in the hire year and the exit year (a cutoff started after the 15th counts as half a month). */
 function leaveCredit(e, t, year) {
   if (t.days == null || !["VL", "SL"].includes(t.code)) return t.days; year = String(year);
-  const s = e.hire && e.hire > `${year}-01-01` ? e.hire : `${year}-01-01`; const out = e.separated?.date || S.offb?.get(e.id)?.last || null;
-  const end = out && out.startsWith(year) ? out : `${year}-12-31`; if (s > end) return 0;
-  if (s === `${year}-01-01` && end === `${year}-12-31`) return t.days;
-  const months = Number(end.slice(5, 7)) - Number(s.slice(5, 7)) + 1 - (Number(s.slice(8)) > 15 ? 0.5 : 0) - (Number(end.slice(8)) < 15 ? 0.5 : 0);
-  return Math.round(((t.days * Math.max(0, months)) / 12) * 2) / 2;
+  const a = lyStart(year), z = lyEnd(year); const s = e.hire && e.hire > a ? e.hire : a; const out = e.separated?.date || S.offb?.get(e.id)?.last || null;
+  const end = out && out >= a && out < z ? out : z; if (s > end) return 0;
+  if (s === a && end === z) return t.days;
+  const months = (daysBetween(s, end) + 1) / 30.4375;
+  return Math.round(((t.days * Math.max(0, Math.min(12, months))) / 12) * 2) / 2;
 }
 function balances(e, year) {
   const used = {}, pend = {};
-  for (const l of allLeaves()) if (l.empId === e.id && yearOf(l.from) === year) { if (l.status === "APPROVED") used[l.type] = (used[l.type] || 0) + l.days; else if (l.status === "PENDING") pend[l.type] = (pend[l.type] || 0) + l.days; }
+  for (const l of allLeaves()) if (l.empId === e.id && leaveYear(l.from) === String(year)) { if (l.status === "APPROVED") used[l.type] = (used[l.type] || 0) + l.days; else if (l.status === "PENDING") pend[l.type] = (pend[l.type] || 0) + l.days; }
   return SET().leaveTypes.map((t) => { const credit = leaveCredit(e, t, year); return { ...t, credit, used: used[t.code] || 0, pend: pend[t.code] || 0, left: credit == null ? null : Math.max(0, credit - (used[t.code] || 0)) }; });
 }
 const onLeave = (date) => allLeaves().filter((l) => l.status === "APPROVED" && l.from <= date && l.to >= date && S.emps.get(l.empId) && !S.emps.get(l.empId).separated);
@@ -2066,7 +2496,7 @@ function leaveRequests(all) {
   </section>`;
 }
 function leaveBalances() {
-  const year = String(new Date().getFullYear()); const f = S.balFilter;
+  const year = leaveYear(todayISO()); const f = S.balFilter;
   const list = refilter(active(), f); const rows = list.slice((Math.max(1, f.page) - 1) * PAGE, Math.max(1, f.page) * PAGE);
   const html = pager(f, list.length, "bal");
   return `<section class="card"><div class="card-head"><h2>Leave balances for ${year}</h2><button class="btn btn-ghost btn-sm" data-lvx="balances">Download balances (CSV)</button></div>
@@ -2121,7 +2551,7 @@ function leaveHint() {
   if (!d || !e || !d.from) return '<span class="t-muted">Choose an employee and dates to see the days used and the balance left.</span>';
   if (d.to < d.from) return '<span class="err">The end date is before the start date.</span>';
   const t = leaveType(d.type); const days = PAY.leaveDays(d, SET(), t);
-  const b = balances(e, yearOf(d.from)).find((x) => x.code === d.type);
+  const b = balances(e, leaveYear(d.from)).find((x) => x.code === d.type);
   const rule = LEAVE_RULES[d.type];
   return `<b>${days} ${days === 1 ? "day" : "days"}</b> of ${esc(t.name.toLowerCase())}${t.cal ? " (calendar days)" : " (rest days and holidays not counted)"}. ${b.left == null ? "No yearly limit." : `${b.left} of ${b.days} left for ${yearOf(d.from)} before this request.`}${rule ? `<div style="margin-top:6px;font-size:14px"><b>Requirements:</b> ${esc(rule.text)}</div>` : ""}${d.type === "SL" && days >= 4 ? '<div style="margin-top:6px;font-size:14px" class="t-warn">Sick leave of 4 days or more: notify SSS of the sickness within 5 days of the employee\'s notice so they can claim the SSS sickness benefit.</div>' : ""}`;
 }
@@ -2135,7 +2565,7 @@ async function submitLeave() {
   const days = PAY.leaveDays(d, SET(), t); if (!days) return fail("Those dates fall on rest days or holidays only.");
   const clash = allLeaves().find((l) => l.empId === e.id && ["PENDING", "APPROVED"].includes(l.status) && l.from <= d.to && l.to >= d.from);
   if (clash) return fail(`${fullName(e)} already has ${leaveType(clash.type)?.name.toLowerCase() || "leave"} on ${fmtDate(clash.from)}.`);
-  const b = balances(e, yearOf(d.from)).find((x) => x.code === d.type);
+  const b = balances(e, leaveYear(d.from)).find((x) => x.code === d.type);
   if (b.left != null && days > b.left - b.pend) return fail(`Only ${Math.max(0, b.left - b.pend)} ${t.name.toLowerCase()} days are left for ${yearOf(d.from)}${b.pend ? ` after ${b.pend} days waiting for approval` : ""}. File the rest as leave without pay.`);
   if (isFinal(PAY.periodOf(d.from)) && d.status === "APPROVED") return fail("Payroll for that period is already final. Reopen it first, or file this as pending.");
   const btn = $("#lf-save"); btn.disabled = true; btn.textContent = "Saving…";
@@ -2152,7 +2582,7 @@ async function submitLeave() {
 async function setLeaveStatus(month, id, status) {
   const doc = S.leaveDocs.get(month); const l = doc?.items?.[id]; if (!l) return;
   if (status === "APPROVED" && isFinal(PAY.periodOf(l.from))) { toast("Payroll for that period is final. Reopen it first."); return; }
-  if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, yearOf(l.from)).find((x) => x.code === l.type);
+  if (status === "APPROVED" && l.status !== "APPROVED") { const e0 = S.emps.get(l.empId); const b = e0 && balances(e0, leaveYear(l.from)).find((x) => x.code === l.type);
     if (b && b.left != null && l.days > b.left) { toast(`Only ${b.left} ${String(b.name).toLowerCase()} days are left. Return it, or ask for leave without pay for the rest.`); return; }
     // two approved leaves on the same days would be deducted or paid twice
     if (allLeaves().some((x) => x.id !== id && x.empId === l.empId && x.status === "APPROVED" && x.from <= l.to && x.to >= l.from)) { toast("Another approved leave already covers these dates."); return; } }
@@ -2266,7 +2696,7 @@ function slipHTML(e, l, p, final) {
         ${row(e.payType === "DAILY" ? `Basic pay (${PAY.r2(l.days)} days at ${money(l.daily)})` : "Basic pay (half month)", l.basic, true)}${row("Regular holiday pay", l.hol)}${row("Back pay (pay change)", l.bp || 0)}${row("Paid leave", l.leave)}
         ${l.absent ? `<tr><td>Less absences and unpaid leave</td><td class="num">(${money(l.absent)})</td></tr>` : ""}${l.tardy ? `<tr><td>Less late and undertime</td><td class="num">(${money(l.tardy)})</td></tr>` : ""}
         ${row("Overtime", l.ot)}${row("Rest day work", l.rd)}${row("Regular holiday worked", l.rhw)}${row("Special day worked", l.sh)}${row("Holiday and rest day overtime, double holiday", l.xp)}${row("Night differential", l.nd)}${row("Commission", l.comm)}${row("Taxable adjustment", l.adj)}${row("Non-taxable allowance", l.adjN)}
-        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l)))}${row("Reimbursements", rbOf(l))}${row("FlexBen, taxable", l.flexT)}
+        ${row("FlexBen, tax-free", PAY.r2((l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0) - rbOf(l) - lvOf(l)))}${row("Reimbursements", rbOf(l))}${row("Unused leave converted to cash", lvOf(l))}${row("FlexBen, taxable", l.flexT)}
         ${(e.allow || []).length && (l.allowN || l.allowT) ? `${row("Allowances, tax-free (de minimis)", l.allowN)}${row("Allowances, taxable", l.allowT)}` : ""}
         <tr><td><b>Gross pay</b></td><td class="num"><b>${money(l.gross)}</b></td></tr></tbody></table></div>
       <div style="flex:1 1 260px"><h3 style="font-size:15px;margin-bottom:6px">Deductions</h3><table><tbody>
@@ -2329,7 +2759,7 @@ function timePanels() {
   </div>`;
 }
 function profilePanels(e) {
-  const year = String(new Date().getFullYear()); const b = balances(e, year);
+  const year = leaveYear(todayISO()); const b = balances(e, year);
   const mine = allLeaves().filter((l) => l.empId === e.id).sort((a, c) => c.from.localeCompare(a.from));
   const slips = [...S.runs.entries()].filter(([id, r]) => r.lines[e.id] && isFinal(id)).sort((a, c) => c[0].localeCompare(a[0])).slice(0, 6);
   return `<section class="card"><div class="card-head"><h2>Leave in ${year}</h2>${S.canEdit && !e.separated ? `<button class="btn btn-ghost btn-sm" data-file-leave="${e.id}">File leave</button>` : ""}</div>
@@ -2366,7 +2796,7 @@ function contribExport(kind) {
 }
 function leaveExport(kind) {
   if (kind === "list") return offer(`leave-${todayISO()}.csv`, toCSV([["Employee No", "Name", "Leave", "From", "To", "Days", "Status", "Reason", "Filed"], ...allLeaves().sort((a, b) => b.from.localeCompare(a.from)).map((l) => { const e = S.emps.get(l.empId); return [e?.no, e ? fullName(e) : "", leaveType(l.type)?.name || l.type, l.from, l.to, l.days, LSTATUS[l.status][0], l.reason, l.filed]; })]));
-  const y = String(new Date().getFullYear());
+  const y = leaveYear(todayISO());
   return offer(`leave-balances-${y}.csv`, toCSV([["Employee No", "Name", ...SET().leaveTypes.flatMap((t) => [`${t.name} used`, ...(t.days == null ? [] : [`${t.name} left`])])],
     ...active().sort((a, b) => a.last.localeCompare(b.last)).map((e) => [e.no, fullName(e), ...balances(e, y).flatMap((b) => [b.used, ...(b.days == null ? [] : [b.left])])])]));
 }
@@ -2944,7 +3374,7 @@ function finalPay(e, o) {
   const loanItems = listOf(S.loans).filter((ln) => ln.empId === e.id && ["ACTIVE", "HOLD"].includes(ln.status)).map((ln) => ({ id: ln.id, label: loanLabel(ln.id), bal: loanBal(ln), gov: isGovLoan(ln), on: pay.loans?.[ln.id] ?? !isGovLoan(ln) })).filter((x) => x.bal > 0);
   const loanDed = PAY.r2(loanItems.filter((x) => x.on).reduce((a, x) => a + x.bal, 0));
   const yrsExact = (daysBetween(e.hire, last) + 1) / 365.25; const whole = Math.floor(yrsExact); const yrs = whole + (yrsExact - whole >= 0.5 ? 1 : 0);
-  const left = balances(e, year).find((b) => b.code === "VL")?.left ?? 0; const conv = TSET().convertVL;
+  const left = balances(e, leaveYear(last)).find((b) => b.code === "VL")?.left ?? 0; const conv = TSET().convertVL;
   const autoDays = conv === "ALL" ? left : conv === "SIL" && yrsExact >= 1 ? Math.min(5, left) : 0;
   const convDays = pay.conv != null ? pay.conv : autoDays; const leave = PAY.r2(convDays * daily);
   const age = e.birth ? Math.floor(daysBetween(e.birth, last) / 365.25) : null;
@@ -5588,7 +6018,7 @@ function essSlips(e) {
 }
 const ESS = {};
 ESS.esshome = (e) => {
-  const r = essToday(e); const y = todayISO().slice(0, 4); const bal = balances(e, y);
+  const r = essToday(e); const y = todayISO().slice(0, 4); const bal = balances(e, leaveYear(todayISO()));
   const vl = bal.find((b) => b.code === "VL"), sl = bal.find((b) => b.code === "SL");
   const slip = essSlips(e)[0]; const req = listOf(S.courses).filter((c) => needs(c, e)); const okN = req.filter((c) => trainState(c, e) === "OK").length;
   const mine = allLeaves().filter((l) => l.empId === e.id && l.to >= todayISO() && ["PENDING", "APPROVED"].includes(l.status)).sort((a, b) => a.from.localeCompare(b.from));
@@ -5626,7 +6056,7 @@ ESS.esstime = (e) => {
     </tbody></table></div></section>`;
 };
 ESS.essleave = (e) => {
-  const y = todayISO().slice(0, 4); const bal = balances(e, y).filter((t) => !t.sex || t.sex === e.gender?.[0]?.toUpperCase());
+  const y = todayISO().slice(0, 4); const bal = balances(e, leaveYear(todayISO())).filter((t) => !t.sex || t.sex === e.gender?.[0]?.toUpperCase());
   const mine = allLeaves().filter((l) => l.empId === e.id).sort((a, b) => b.from.localeCompare(a.from));
   return head(`Leave credits for ${y}`, "My leave") + `
     <section class="card"><div class="card-head"><h2>Balances</h2></div><div class="table-wrap"><table><thead><tr><th>Leave</th><th class="num">Credits</th><th class="num">Used</th><th class="num">Left</th></tr></thead><tbody>
@@ -6581,7 +7011,7 @@ function voiceRun(raw) {
   const e = essEmp(); if (!e) return voiceSay("No employee is selected.");
   const goto = (v, msg) => { S.essView = v; voiceSay(msg); window.scrollTo({ top: 0 }); };
   const y = todayISO().slice(0, 4);
-  if (has("balance", "how many leave", "leave left", "credits", "natitirang")) { const b = balances(e, y); const vl = b.find((x) => x.code === "VL"), sl = b.find((x) => x.code === "SL");
+  if (has("balance", "how many leave", "leave left", "credits", "natitirang")) { const b = balances(e, leaveYear(todayISO())); const vl = b.find((x) => x.code === "VL"), sl = b.find((x) => x.code === "SL");
     return goto("essleave", `You have ${vl?.left ?? 0} vacation leave and ${sl?.left ?? 0} sick leave days left for ${y}.`); }
   if (has("latest pay", "net pay", "last pay", "how much", "magkano", "sweldo ko", "my pay")) { const s = essSlips(e)[0];
     return goto("esspay", s ? `Your net pay for ${s.p.label} is ${peso.format(s.l.net)}${s.final ? "" : ", still a draft"}.` : "You have no payslip yet."); }
@@ -8299,7 +8729,7 @@ function lrTab(kind) {
 }
 
 function lvBalances() {
-  const year = todayISO().slice(0, 4); const f = S.balFilter; const types = creditTypes();
+  const year = leaveYear(todayISO()); const f = S.balFilter; const types = creditTypes();
   const list = refilter(active(), f); const rows = list.slice((Math.max(1, f.page) - 1) * PAGE, Math.max(1, f.page) * PAGE);
   const tot = Object.fromEntries(types.map((t) => [t.code, { left: 0, used: 0 }]));
   for (const e of list) for (const b of balances(e, year)) if (tot[b.code]) { tot[b.code].left += b.left || 0; tot[b.code].used += b.used; }
@@ -9847,7 +10277,7 @@ function buildSummary(e) {
   for (let d = m0; d < today; d = addDays(d, 1)) { const r = dayRec(e, d, pd.get(e.id)?.get(d), ctx); if (r.status === "in" || r.status === "late") att.present++; if (r.status === "late") { att.late++; att.lateMin += r.late; } if (r.status === "absent") att.absent++; if (r.status === "leave") att.leave++; }
   const week = []; for (let i = 0; i < 7; i++) { const d = addDays(today, i); const c = planCode(e, d); const hol = ctx.hol.get(d) || []; const lv = ctx.leaves.find((l) => l.empId === e.id && l.from <= d && l.to >= d); const sp = typeof suspOf === "function" ? suspOf(e, d) : null;
     week.push({ d, label: lv ? leaveType(lv.type)?.name || "Leave" : sp ? `Work suspended: ${sp.reason}` : hol.length ? hol.map((h) => h.name).join(", ") : codeLabel(c), kind: lv ? "leave" : sp ? "susp" : hol.length ? "hol" : c === "R" ? "rest" : "work" }); }
-  const leave = balances(e, y).filter((b) => b.left != null && (b.used || /vacation|sick|service/i.test(b.name))).map((b) => ({ name: b.name, left: b.left, used: b.used }));
+  const leave = balances(e, leaveYear(today)).filter((b) => b.left != null && (b.used || /vacation|sick|service/i.test(b.name))).map((b) => ({ name: b.name, left: b.left, used: b.used }));
   const slips = essSlips(e).slice(0, 3).map((s) => ({ label: s.p.label, gross: PAY.r2(s.l.gross), ded: PAY.r2(s.l.gross - s.l.net), net: PAY.r2(s.l.net), final: !!s.final }));
   const loans = listOf(S.loans).filter((ln) => ln.empId === e.id && ln.status === "ACTIVE").map((ln) => ({ label: loanLabel(ln.id), bal: loanBal(ln), amort: ln.amort || 0, end: ln.end || null })).filter((x) => x.bal > 0);
   const t = typeof t13Of === "function" ? t13Of(e, y) : null;
@@ -10160,6 +10590,11 @@ function subMeSum() { if (!S.meSumSub && S.self?.uid && S.db) { S.meSumSub = tru
     let out = h.replace(/<p style="margin:0;font-size:14px">[\s\S]*?<\/p>\s*(?=<div style="display:grid)/, "").replace(GRID, fencePanel(fz, mode, M.geo, false) + (wait ? `<p class="t-warn" style="margin:0;font-size:13px">${wait} punch${wait > 1 ? "es" : ""} today waiting for HR approval.</p>` : "") + GRID);
     if (fenceBlocks(fz, mode)) out = out.replace(/data-self-punch="(IN|OUT)"/g, "$& disabled");
     return out; }; }
+/* Saves one punch of the employee's own phone (fieldclk.js keeps it on the phone when there's no signal). */
+async function selfSave(u, id, punch) {
+  const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${u}/days/${date}`); const cur = await ref.get();
+  if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: u, punches: { [id]: punch } });
+}
 selfPunch = async function (type) {
   const M = S.self; if (!M.photo) return; const s = S.meSum; const mode = s?.fenceMode || "RECORD"; const fz = phoneFence(M.geo, s);
   if (fenceBlocks(fz, mode)) { toast(fz.state === "nogps" ? "Turn on location first. Time in and out only work inside the site area." : "You're outside the site area, so this punch can't be saved."); return; }
@@ -10169,10 +10604,10 @@ selfPunch = async function (type) {
     const c = await shrinkCanvas(M.photo, 160); const g = M.geo || {};
     const punch = { t: new Date().toISOString(), type, photo: c.toDataURL("image/jpeg", 0.6), lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null,
       fstate: fz.state, dist: fz.dist ?? null, fsite: fz.site || null, why, needsOk: why ? true : null };
-    const date = manilaDay(punch.t); const ref = S.db.doc(`clockins/${M.uid}/days/${date}`); const id = uid(); const cur = await ref.get();
-    if (cur.exists) await ref.update({ punches: { [id]: punch } }); else await ref.set({ d: date, dev: M.uid, punches: { [id]: punch } });
+    const q = await selfSave(M.uid, uid(), punch);
     if (M.photoUrl) URL.revokeObjectURL(M.photoUrl); Object.assign(M, { photo: null, photoUrl: null, busy: false });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
+    toast(q === "queued" ? `No signal. Your ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this phone and sent by itself when there's signal; HR checks it.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved at ${timeFmt.format(new Date(punch.t))}.${why ? " HR will review it." : ""}`); getGeo().then((x) => { M.geo = x; render(); }); render();
   } catch { M.busy = false; toast("Couldn't save. Check your connection and try again."); render(); }
 };
 
@@ -10190,11 +10625,12 @@ kioskPunch = async function (type) {
   K.busy = true; render();
   try {
     let photo = null;
-    if (S.assets) { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; }
-    else { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
+    if (S.assets && navigator.onLine !== false) { try { const c = await shrinkCanvas(K.photo, 480); const blob = await new Promise((ok) => c.toBlob(ok, "image/jpeg", 0.8)); photo = (await S.assets.upload(blob)).id; } catch { photo = null; } }
+    if (!photo) { const c = await shrinkCanvas(K.photo, 160); photo = c.toDataURL("image/jpeg", 0.6); }
     const punch = { t: new Date().toISOString(), type, empId: e.id, site: K.site, photo, lat: g.lat ?? null, lng: g.lng ?? null, acc: g.acc ?? null, geoError: g.error || null, fstate: fz.state, dist: fz.dist ?? null, why, needsOk: why ? true : null };
-    await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
-    toast(`${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
+    const q = await savePunch("kiosk-" + K.site, punch, { kiosk: true, site: K.site, name: `Kiosk at ${siteName(K.site)}` });
+    toast(q === "queued" ? `No signal. ${fullName(e)}'s ${type === "IN" ? "time in" : "time out"} at ${timeFmt.format(new Date(punch.t))} is kept on this device and sent by itself when there's signal.`
+      : `${type === "IN" ? "Time in" : "Time out"} saved for ${fullName(e)} at ${timeFmt.format(new Date(punch.t))}.${why ? " Waiting for HR approval." : ""}`); resetKiosk(); render();
   } catch { K.busy = false; toast("Couldn't save the punch. Check the connection and try again."); render(); }
 };
 
@@ -11801,7 +12237,7 @@ window.addEventListener("click", async (ev) => {
   if (st === "APPROVED") { const ch = OPS().chains[kind] || []; const done = rec.steps?.length || 0;
     if (done < ch.length) { ev.preventDefault(); ev.stopImmediatePropagation(); const L = ch[done]; const mine = !L.uid || L.uid === S.myId;
       if (!mine) { toast(`Waiting for ${L.name} (${personName(L.uid)}) to endorse this first.`); return; }
-      if (!(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return;
+      if (!S.apvOk && !(await askConfirm(`This needs endorsement by ${L.name} before approval. Endorse it now as ${L.name}?`, "Endorse"))) return; S.apvOk = false;
       await save({ ...rec, steps: [...(rec.steps || []), { i: done, name: L.name, by: S.myId || null, at: new Date().toISOString() }] }); logActivity(`Endorsed a ${(OPK_BY[kind]?.[1] || "request").toLowerCase()} as ${L.name}`);
       if (done + 1 < ch.length) { toast(`Endorsed. Next: ${ch[done + 1].name}.`); render(); return; }
       if (await askConfirm("Endorsed. Approve it now?", "Approve")) { const nb = [...document.querySelectorAll(`[data-${p}-set]`)].find((x) => x.getAttribute(`data-${p}-set`) === v); (nb || t).click(); } else render(); return; } }
@@ -11829,45 +12265,46 @@ window.addEventListener("click", async (ev) => {
 
 /* ---------- v59 Phase 3 automation (Glenn 2026-10-12): leave earned monthly, carry-over and year-end conversion;
    yearly review, document expiry and training renewal reminders; training auto-enrolment; applicant shortlist scoring. ---------- */
-const LVP_DEF = { mode: "YEAR", carry: { VL: 0, SL: 0 }, conv: { VL: true, SL: false }, annual: true };
+const LVP_DEF = { mode: "YEAR", reset: "01-15", carry: { VL: 0, SL: 0 }, conv: { VL: false, SL: false }, annual: true }; // Glenn 2026-10-20: no carry-over and no cash conversion; unused leave lapses when balances refresh every January 15
 const LVP = () => { const o = S.ops?.lvp || {}; return { ...LVP_DEF, ...o, carry: { ...LVP_DEF.carry, ...(o.carry || {}) }, conv: { ...LVP_DEF.conv, ...(o.conv || {}) } }; };
 const lvMonthEnd = (iso) => { const [y, m] = iso.split("-").map(Number); return `${y}-${String(m).padStart(2, "0")}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`; };
 /* Earned monthly: this year's VL and SL count only the months already completed (credited at each month end). */
 { const base = leaveCredit; leaveCredit = (e, t, year) => {
   if (LVP().mode !== "MONTH" || t.days == null || !["VL", "SL"].includes(t.code)) return base(e, t, year);
-  const y = String(year), today = todayISO(); if (y < today.slice(0, 4)) return base(e, t, year); if (y > today.slice(0, 4)) return 0;
-  const cut = today === lvMonthEnd(today) ? today : addDays(`${today.slice(0, 7)}-01`, -1); if (cut < `${y}-01-01`) return 0;
+  const y = String(year), today = todayISO(), ly = leaveYear(today); if (y < ly) return base(e, t, year); if (y > ly) return 0;
+  const cut = today === lvMonthEnd(today) ? today : addDays(`${today.slice(0, 7)}-01`, -1); if (cut < lyStart(y)) return 0;
   const out = e.separated?.date || S.offb?.get(e.id)?.last || null; const stop = out && out < cut ? out : cut;
   if (e.hire && e.hire > stop) return 0; return base({ ...e, separated: { ...(e.separated || {}), date: stop } }, t, year); }; }
 /* Carry-over: unused VL and SL from last year, up to the cap, are added to this year's credits. */
 { const base = balances; const carried = (e, year) => { const P = LVP(); const rows = base(e, year); if (!(P.carry.VL > 0 || P.carry.SL > 0)) return rows;
   // Last year's balance includes what it carried in itself (from 2026, when the app started), so carry-over chains year to year.
-  if (!e.hire || e.hire >= `${year}-01-01`) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
+  if (!e.hire || e.hire >= lyStart(year)) return rows; let prev = []; try { const py = String(Number(year) - 1); prev = Number(py) > 2026 ? carried(e, py) : base(e, py); } catch {}
   return rows.map((t) => { const cap = Number(P.carry[t.code]) || 0; if (!cap || t.left == null) return t; const p = prev.find((x) => x.code === t.code); const c = Math.min(cap, Math.max(0, p?.left || 0)); if (!c) return t;
     return { ...t, carry: c, days: (t.days || 0) + c, credit: (t.credit || 0) + c, left: (t.left || 0) + c }; }); }; balances = carried; }
 const dailyOf = (e) => (e.payType === "DAILY" ? e.basicPay || 0 : ((e.basicPay || 0) * 12) / (SET().factor || 313));
 function lvYearEnd(year) { const P = LVP(); const rows = [];
-  for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > `${year}-12-31`) continue; if (e.separated?.date && e.separated.date < `${year}-01-01`) continue; let b = []; try { b = balances(e, year); } catch { continue; }
+  for (const e of [...(S.allEmps || S.emps).values()]) { if (e.hire && e.hire > lyEnd(year)) continue; if (e.separated?.date && e.separated.date < lyStart(year)) continue; let b = []; try { b = balances(e, year); } catch { continue; }
     const vl = b.find((x) => x.code === "VL")?.left || 0, sl = b.find((x) => x.code === "SL")?.left || 0; if (!vl && !sl) continue;
-    const gone = !!e.separated?.date && e.separated.date <= `${year}-12-31`;
+    const gone = !!e.separated?.date && e.separated.date <= lyEnd(year);
     const cVL = gone ? 0 : Math.min(Number(P.carry.VL) || 0, vl), cSL = gone ? 0 : Math.min(Number(P.carry.SL) || 0, sl);
     const conv = (P.conv.VL ? vl - cVL : 0) + (P.conv.SL ? sl - cSL : 0); const daily = dailyOf(e);
     rows.push({ e, vl, sl, cVL, cSL, lapse: PAY.r2(vl - cVL + sl - cSL - conv), conv: PAY.r2(conv), daily: PAY.r2(daily), amt: gone ? 0 : PAY.r2(conv * daily), gone }); }
   return rows.sort((a, b) => fullName(a.e).localeCompare(fullName(b.e))); }
-Object.assign(S, { lvye: new Map(), lvyeY: String(Number(todayISO().slice(0, 4)) - (todayISO().slice(5, 7) < "07" ? 1 : 0)), shortN: {} });
+Object.assign(S, { lvye: new Map(), lvyeY: String(Number(leaveYear(todayISO())) - (todayISO() < addDays(lyStart(leaveYear(todayISO())), 180) ? 1 : 0)), shortN: {} });
 VIEWS.lvye = () => {
-  const y = S.lvyeY; const P = LVP(); const rows = lvYearEnd(y); const rec = S.lvye.get(y); const ed = S.canEdit; const cur = y === todayISO().slice(0, 4); const tot = (f) => PAY.r2(rows.reduce((a, r) => a + r[f], 0));
-  const years = [0, 1, 2].map((i) => String(Number(todayISO().slice(0, 4)) - i));
+  const y = S.lvyeY; const P = LVP(); const rows = lvYearEnd(y); const rec = S.lvye.get(y); const ed = S.canEdit; const cur = y === leaveYear(todayISO()); const tot = (f) => PAY.r2(rows.reduce((a, r) => a + r[f], 0));
+  const years = [0, 1, 2].map((i) => String(Number(leaveYear(todayISO())) - i));
   return head("Leave", "Leave year-end", `<button class="btn btn-ghost" data-lvye-csv="${y}">Download (CSV)</button>`) + `
     <section class="card" style="padding-bottom:12px"><div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">${stTabs(y, "lvye-y", years.map((x) => [x, x]))}
-      <span class="t-muted" style="font-size:14px">${P.mode === "MONTH" ? "VL and SL are earned monthly" : "VL and SL are credited in full each January"} · carry over up to ${P.carry.VL} VL and ${P.carry.SL} SL days · converted to cash: ${[P.conv.VL && "VL", P.conv.SL && "SL"].filter(Boolean).join(" and ") || "none"}</span></div></section>
+      <span class="t-muted" style="font-size:14px">${P.mode === "MONTH" ? "VL and SL are earned monthly" : `VL and SL are credited in full each leave year (from ${fmtDate(lyStart(y))} to ${fmtDate(lyEnd(y))})`} · carry over up to ${P.carry.VL} VL and ${P.carry.SL} SL days · converted to cash: ${[P.conv.VL && "VL", P.conv.SL && "SL"].filter(Boolean).join(" and ") || "none"}</span></div></section>
     <section class="stats kpis">${dxTile("Unused VL", tot("vl"), "days")}${dxTile("Unused SL", tot("sl"), "days")}${dxTile("Carried over", PAY.r2(tot("cVL") + tot("cSL")), `days into ${Number(y) + 1}`)}${dxTile("Converted to cash", peso.format(tot("amt")), `${tot("conv")} days`, "t-warn")}</section>
-    <section class="card"><div class="card-head"><h2>Unused leave for ${y}</h2>${cur && !rec ? '<span class="t-muted" style="font-size:13px">So far: the year is not over yet</span>' : ""}${rec ? `<span class="chip c-ok">Recorded ${fmtDate(rec.at.slice(0, 10))} · ${peso.format(rec.total || 0)}</span>` : ed && rows.length && (!cur || todayISO().slice(5, 7) === "12") ? `<button class="btn btn-primary btn-sm" data-lvye-rec="${y}">Record the conversion</button>` : ""}</div>
+    <section class="card"><div class="card-head"><h2>Unused leave for ${y}</h2>${cur && !rec ? '<span class="t-muted" style="font-size:13px">So far: the year is not over yet</span>' : ""}${rec ? `<span class="chip c-ok">Recorded ${fmtDate(rec.at.slice(0, 10))} · ${peso.format(rec.total || 0)}</span>` : ed && rows.length && (!cur || todayISO() >= addDays(lyEnd(y), -30)) ? `<button class="btn btn-primary btn-sm" data-lvye-rec="${y}">Record the conversion</button>` : ""}</div>
       <div class="table-wrap"><table><thead><tr><th>Employee</th><th class="num">Unused VL</th><th class="num">Unused SL</th><th class="num">Carried over</th><th class="num">Lapses</th><th class="num">Converted days</th><th class="num">Daily rate</th><th class="num">Cash</th></tr></thead><tbody>
       ${rows.slice(0, 400).map((r) => `<tr><td>${empCell(r.e, r.gone ? "Separated (paid in final pay)" : undefined)}</td><td class="num">${r.vl}</td><td class="num">${r.sl}</td><td class="num">${PAY.r2(r.cVL + r.cSL)}</td><td class="num">${r.lapse}</td><td class="num">${r.conv}</td><td class="num">${money(r.daily)}</td><td class="num"><b>${money(r.amt)}</b></td></tr>`).join("") || '<tr><td colspan="8" class="empty">No unused VL or SL for this year.</td></tr>'}</tbody></table></div>
       <p class="t-muted" style="font-size:13px;margin:10px 0 0">Recording saves this list with the date and your name, so payroll can pay it and the carry-over is fixed. Up to 10 days of converted VL a year are tax-free de minimis; the rest counts toward the ₱90,000 cap.</p></section>
     ${ed ? `<form id="lvp-form" class="card"><div class="card-head"><h2>Leave policy</h2></div><div class="form-grid">
-      <div class="field"><label for="lvp-mode">How VL and SL are credited</label><select class="input" id="lvp-mode" name="mode"><option value="YEAR" ${P.mode === "YEAR" ? "selected" : ""}>In full each January (prorated for new hires)</option><option value="MONTH" ${P.mode === "MONTH" ? "selected" : ""}>Earned monthly, credited at each month end</option></select></div>
+      <div class="field"><label for="lvp-mode">How VL and SL are credited</label><select class="input" id="lvp-mode" name="mode"><option value="YEAR" ${P.mode === "YEAR" ? "selected" : ""}>In full each leave year (prorated for new hires)</option><option value="MONTH" ${P.mode === "MONTH" ? "selected" : ""}>Earned monthly, credited at each month end</option></select></div>
+      <div class="field"><label for="lvp-reset">Balances refresh every</label><input class="input" id="lvp-reset" name="reset" type="date" value="${todayISO().slice(0, 4)}-${lvReset()}"><span class="t-muted" style="font-size:12px">Only the month and day are used. Every leave balance starts again on this day each year.</span></div>
       <div class="field"><label for="lvp-cvl">VL days carried to next year (max)</label><input class="input" id="lvp-cvl" name="cVL" type="number" min="0" max="60" step="0.5" value="${P.carry.VL}"></div>
       <div class="field"><label for="lvp-csl">SL days carried to next year (max)</label><input class="input" id="lvp-csl" name="cSL" type="number" min="0" max="60" step="0.5" value="${P.carry.SL}"></div>
       <label class="check"><input type="checkbox" name="convVL" ${P.conv.VL ? "checked" : ""}><span>Convert unused VL (not carried) to cash</span></label>
@@ -11893,7 +12330,7 @@ document.addEventListener("click", async (ev) => {
 });
 document.addEventListener("submit", async (ev) => {
   if (ev.target.id !== "lvp-form") return; ev.preventDefault(); if (!S.realEdit) return; const f = new FormData(ev.target);
-  const lvp = { mode: f.get("mode") === "MONTH" ? "MONTH" : "YEAR", carry: { VL: Math.max(0, Number(f.get("cVL")) || 0), SL: Math.max(0, Number(f.get("cSL")) || 0) }, conv: { VL: !!f.get("convVL"), SL: !!f.get("convSL") }, annual: !!f.get("annual") };
+  const rs = String(f.get("reset") || "").slice(5, 10); const lvp = { mode: f.get("mode") === "MONTH" ? "MONTH" : "YEAR", reset: /^\d{2}-\d{2}$/.test(rs) ? rs : "01-15", carry: { VL: Math.max(0, Number(f.get("cVL")) || 0), SL: Math.max(0, Number(f.get("cSL")) || 0) }, conv: { VL: !!f.get("convVL"), SL: !!f.get("convSL") }, annual: !!f.get("annual") };
   const next = { ...(S.ops || {}), lvp }; try { await S.db.doc("org/ops").set(JSON.parse(JSON.stringify(next))); S.ops = next; S.ver++; logActivity("Updated the leave policy"); toast("Leave policy saved."); render(); } catch { toast("Couldn't save. Try again."); }
 });
 /* Session page: enroll everyone who needs the course, soonest expiry first, up to the seats */
@@ -14324,7 +14761,7 @@ const m2F201 = (k) => (e) => { const x = typeof f201Status === "function" ? f201
 const m2Onb = (k) => (e) => S.onb?.get(e.id)?.items?.find((i) => i.k === k && i.done && !i.na)?.done || null;
 const m2Med = (kinds, f = "date") => (e) => { const r = listOf(S.meds || new Map()).filter((x) => x.empId === e.id && kinds.includes(x.kind) && (f !== "result" || x.result !== "PENDING")).sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0]; return r?.date || null; };
 const m2Case = (e) => listOf(S.cases || new Map()).filter((c) => c.empId === e.id).sort((a, b) => (b.nte || "").localeCompare(a.nte || ""))[0] || null;
-const m2Bal = (code) => (e) => { try { const r = balances(e, yearOf(todayISO())).find((t) => t.code === code); return r && r.left != null ? `${r.left} of ${r.credit} days left (${yearOf(todayISO())})` : null; } catch { return null; } };
+const m2Bal = (code) => (e) => { try { const r = balances(e, leaveYear(todayISO())).find((t) => t.code === code); return r && r.left != null ? `${r.left} of ${r.credit} days left (${yearOf(todayISO())})` : null; } catch { return null; } };
 const m2Years = (from, to) => { if (!m2ISO(from)) return null; const a = new Date(from), b = new Date(to || todayISO()); let mo = (b.getFullYear() - a.getFullYear()) * 12 + b.getMonth() - a.getMonth(); if (b.getDate() < a.getDate()) mo--; return mo < 0 ? null : `${Math.floor(mo / 12)} yr ${mo % 12} mo`; };
 const M2_LINKS = {
   65: ["201 checklist", "f201", m2F201("birth")], 68: ["201 checklist", "f201", (e) => m2F201("med")(e) || m2Med(["PRE_EMP"])(e)], 69: ["Medical history", "medical", m2Med(["DRUG"])], 70: ["201 checklist", "f201", m2F201("nbi")],
@@ -15632,7 +16069,7 @@ async function dcOne(c) {
     else if (await fxChain("ot", r.id, c, sup)) note = "Endorsed; HR gives the final approval"; else await put("otreqs", { ...r, status: c.st, decided: todayISO(), decidedBy: by }); }
   else if (type === "lv") { const [month, id] = rest; const doc = S.leaveDocs.get(month); const l = doc?.items?.[id];
     if (!l || !mine(l.empId)) note = "Not your team"; else if (l.status !== "PENDING") note = "Already decided"; else if (c.st === "APPROVED" && isFinal(PAY.periodOf(l.from))) note = "Payroll is final; HR will decide";
-    else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), yearOf(l.from)).find((x) => x.code === l.type) : null;
+    else { const b = c.st === "APPROVED" ? balances(S.emps.get(l.empId), leaveYear(l.from)).find((x) => x.code === l.type) : null;
       if (b && b.left != null && l.days > b.left) note = "Not enough leave left; HR will decide";
       else if (await fxChain("lv", `${month}:${id}`, c, sup)) note = "Endorsed; HR gives the final approval";
       else { await S.db.doc("leaves/" + month).update({ items: { [id]: { status: c.st, decided: todayISO(), decidedBy: by } } }); S.leaveDocs.set(month, { ...doc, items: { ...doc.items, [id]: { ...l, status: c.st, decided: todayISO(), decidedBy: by } } }); S.ver++; } } }
@@ -16239,6 +16676,546 @@ document.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-pay
     if (!cut.length) continue; for (const tr of tb.querySelectorAll("tr")) { const cells = [...tr.children]; for (const i of cut) cells[i]?.remove(); } }
   for (const el of t.content.querySelectorAll(".stat")) if (/cost/i.test(el.textContent)) el.remove();
   return t.innerHTML; }; }
+
+/* ---------- Automatic runs (Glenn 2026-10-20: full automation) ----------
+   The app's background jobs (employee requests, timekeeping issues, time sheets, separations, regularization, back pay,
+   employee dashboards) used to run only while someone in HR had the app open. hrRunAll() runs them all once, in order, and
+   records the result in org/automation. The website's scheduled runner (tools/hr-runner) opens the app as the automation
+   account and calls it every hour; HR can also press "Run now" on Overview > Automation status. */
+const RUN_JOBS = [
+  ["sep", "Separations and onboarding", () => applyDueSeparations().then(syncOnboarding)],
+  ["reg", "Regularization after probation", () => autoRegularize()],
+  ["bp", "Back pay for raises", () => lkBackPay()],
+  ["rq", "Requests from employee accounts", () => rqProcess()],
+  ["fx", "Timekeeping issues from phones", () => fxProcess()],
+  ["ts", "Time sheets from time records", () => tkAutoSync({ force: true, reload: true })],
+  ["me", "Employee dashboards", () => syncSummaries()],
+];
+window.__hrExtraJobs = window.__hrExtraJobs || []; // the website adds its own (account linking) as [key, label, fn]
+const RUN_KEEP = 48;
+let runBusy = false;
+const runReady = () => !!(S.db && S.realEdit && !S.selfMode && S.loaded?.emps && S.clockDevs);
+async function hrRunAll(by = "browser") {
+  if (runBusy) return { busy: true }; runBusy = true; const t0 = Date.now(); const jobs = [];
+  try {
+    for (let i = 0; i < 60 && !runReady(); i++) await new Promise((r) => setTimeout(r, 1000));
+    if (!runReady()) return { ready: false };
+    const all = [...RUN_JOBS, ...window.__hrExtraJobs];
+    // Two passes: the first starts the listeners some jobs read from (phone requests, punches), the second acts on what they found.
+    for (let pass = 0; pass < 2; pass++) {
+      for (const [key, label, fn] of all) {
+        const s = Date.now(); let err = "";
+        try { await fn(); } catch (e) { err = String(e?.message || e || "error").slice(0, 200); }
+        const j = jobs.find((x) => x.key === key) || (jobs.push({ key, label, ms: 0, err: "" }), jobs[jobs.length - 1]);
+        j.ms += Date.now() - s; if (err) j.err = err;
+      }
+      if (pass === 0) await new Promise((r) => setTimeout(r, 6000));
+    }
+    if (typeof epSync === "function") for (let k = 0; k < 40; k++) { const before = JSON.stringify(S.epAt); await epSync(); if (JSON.stringify(S.epAt) === before) break; }
+    const run = { at: new Date(t0).toISOString(), by, secs: Math.round((Date.now() - t0) / 100) / 10, jobs: jobs.map(({ key, label, ms, err }) => ({ key, label, ms, ...(err ? { err } : {}) })) };
+    await runSave(run); return run;
+  } finally { runBusy = false; }
+}
+window.__hrRunAll = hrRunAll;
+async function runSave(run) {
+  const ref = S.db.doc("org/automation"); let prev = {};
+  try { const d = await ref.get(); prev = d.exists ? d.data() : {}; } catch {}
+  const runs = [run, ...(Array.isArray(prev.runs) ? prev.runs : [])].slice(0, RUN_KEEP);
+  const doc = { ...prev, runs, last: run.at, lastBy: run.by, ...(run.by === "server" ? { lastServer: run.at } : {}) };
+  try { await ref.set(JSON.parse(JSON.stringify(doc))); S.autoDoc = doc; S.ver++; } catch (e) { console.warn("Automation run not recorded", e); }
+}
+{ const b = bootIO; bootIO = (db) => { b(db); db.doc("org/automation").onSnapshot((d) => { S.autoDoc = d.exists ? d.data() : null; refresh(); }, () => {}); }; }
+
+/* Overview > Automation status: when each job last ran, how long it took, anything it couldn't finish. */
+Object.assign(ICON, { robot: '<rect x="5" y="8" width="14" height="11" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01M9 16h6"/>' });
+{ const g = NAV.find(([, items]) => items.some(([v]) => v === "needs")) || NAV[0]; const i = g[1].findIndex(([v]) => v === "needs");
+  g[1].splice(i < 0 ? g[1].length : i + 1, 0, ["autostat", "Automation status", "robot"]);
+  Object.assign(SECTION_OF, { autostat: "autostat" }); if (typeof HRD_PERM !== "undefined") HRD_PERM.autostat = HRD_PERM.needs || g[0]; }
+const runAgo = (iso) => { if (!iso) return "never"; const m = Math.round((Date.now() - Date.parse(iso)) / 60000); return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`; };
+VIEWS.autostat = () => {
+  const A = S.autoDoc || {}; const runs = Array.isArray(A.runs) ? A.runs : []; const last = runs[0];
+  const srvAge = A.lastServer ? (Date.now() - Date.parse(A.lastServer)) / 3600e3 : Infinity;
+  const state = !window.__hosted ? ["c-gray", "This copy of the app runs the jobs only while it is open. The website runs them every hour on its own."]
+    : srvAge <= 2.5 ? ["c-ok", `The scheduled runner is working. Last run ${runAgo(A.lastServer)}.`]
+    : A.lastServer ? ["c-bad", `The scheduled runner hasn't run since ${runAgo(A.lastServer)}. Check the automation account and the runner settings.`]
+    : ["c-gold", "The scheduled runner hasn't run yet. Until it does, the jobs run only while someone in HR has the app open."];
+  const fails = runs.slice(0, 6).flatMap((r) => r.jobs.filter((j) => j.err).map((j) => ({ ...j, at: r.at })));
+  return head("Overview", "Automation status", S.canEdit ? `<button class="btn btn-primary" data-run-now ${runBusy ? "disabled" : ""}>${icon("robot", 16)}${runBusy ? "Running…" : "Run now"}</button>` : "") + `
+  <section class="card"><div class="card-head"><h2>Scheduled runs</h2></div><p><span class="chip ${state[0]}">${state[0] === "c-ok" ? "Working" : state[0] === "c-bad" ? "Stopped" : state[0] === "c-gold" ? "Not started" : "Open app only"}</span> ${esc(state[1])}</p>
+    <p class="t-muted" style="font-size:13px">Every run files employees' phone requests and timekeeping fixes, fills open time sheets from the time records, applies separations, regularizations and back pay that are due, and refreshes everyone's phone dashboard.</p></section>
+  ${fails.length ? `<section class="card"><div class="card-head"><h2>Couldn't finish</h2></div><div class="table-wrap"><table><thead><tr><th>When</th><th>Job</th><th>What happened</th></tr></thead><tbody>
+    ${fails.map((f) => `<tr><td style="white-space:nowrap">${esc(runAgo(f.at))}</td><td>${esc(f.label)}</td><td>${esc(f.err)}</td></tr>`).join("")}</tbody></table></div></section>` : ""}
+  <section class="card"><div class="card-head"><h2>Last run</h2><span class="t-muted" style="font-size:13px">${last ? `${esc(runAgo(last.at))} · ${last.by === "server" ? "scheduled runner" : "from an HR browser"} · ${last.secs} s` : ""}</span></div>
+    ${last ? `<div class="table-wrap"><table><thead><tr><th>Job</th><th class="num">Time</th><th>Result</th></tr></thead><tbody>
+      ${last.jobs.map((j) => `<tr><td>${esc(j.label)}</td><td class="num">${(j.ms / 1000).toFixed(1)} s</td><td>${j.err ? `<span class="chip c-bad">Problem</span> ${esc(j.err)}` : '<span class="chip c-ok">Done</span>'}</td></tr>`).join("")}</tbody></table></div>`
+      : '<div class="empty-state"><p>No run recorded yet.</p></div>'}</section>
+  ${runs.length > 1 ? `<section class="card"><div class="card-head"><h2>Recent runs</h2></div><div class="table-wrap"><table><thead><tr><th>When</th><th>By</th><th class="num">Time</th><th>Problems</th></tr></thead><tbody>
+    ${runs.slice(0, 24).map((r) => `<tr><td>${esc(new Date(r.at).toLocaleString("en-PH", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "short" }))}</td><td>${r.by === "server" ? "Scheduled runner" : "HR browser"}</td><td class="num">${r.secs} s</td><td>${r.jobs.filter((j) => j.err).length || "—"}</td></tr>`).join("")}</tbody></table></div></section>` : ""}`;
+};
+document.addEventListener("click", async (ev) => {
+  if (!ev.target.closest?.("[data-run-now]") || runBusy) return; render();
+  const r = await hrRunAll("browser"); toast(r?.ready === false ? "The app is still loading. Try again in a moment." : r?.jobs?.some((j) => j.err) ? "Run finished with problems. See the list below." : "All jobs ran."); render();
+});
+
+/* ---------- AI screening results (Glenn 2026-10-20) ----------
+   On the website, the server job reads each new application's resume and answers to the job's qualification questions and saves
+   a recommendation on the applicant (a.ai: score, rec, summary, strengths, gaps, answers, check, ask). It never moves or rejects
+   anyone: HR decides. This module shows it on the applicant's page, the job page and the pipeline cards. */
+const AI_REC = { INTERVIEW: ["Interview", "c-ok"], KEEP: ["Keep on file", "c-gold"], NOT_FIT: ["Not a fit for this job", "c-bad"] };
+const aiChip = (ai) => { const r = AI_REC[ai?.rec]; return r ? `<span class="chip ${r[1]}">${r[0]}</span>` : ""; };
+const aiWaiting = (a) => ["APPLIED", "SCREENING", "SCREEN"].includes(a.stage) && !a.ai && (a.aiTries || 0) < 3 && !!(a.resume?.id || Object.keys(a.answers || {}).length);
+const aiList = (xs) => (xs?.length ? `<ul style="margin:4px 0 0;padding-left:20px">${xs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : '<p class="t-muted" style="margin:4px 0 0">None noted.</p>');
+function aiCard(a) {
+  const ai = a.ai; const ed = S.canEdit;
+  if (!ai) {
+    if (!window.__hosted) return "";
+    const why = a.aiErr && (a.aiTries || 0) >= 3 ? `Couldn't screen this application: ${esc(a.aiErr)}` : aiWaiting(a) ? "Waiting for screening. The system reads new applications every 10 minutes once the AI key is set up." : "";
+    return why ? `<section class="card"><div class="card-head"><h2>${icon("star", 18)} AI screening</h2></div><p class="t-muted" style="margin:0">${why}</p>${ed && a.aiErr ? '<p style="margin:10px 0 0"><button class="btn btn-ghost btn-sm" data-ai-again>Try again</button></p>' : ""}</section>` : "";
+  }
+  const ans = (ai.answers || []).filter((x) => x.q);
+  return `<section class="card ai-card"><div class="card-head"><h2>${icon("star", 18)} AI screening</h2><span class="t-muted" style="font-size:13px">${fmtDate((ai.at || "").slice(0, 10))}${ai.resumeRead ? "" : " · resume not read"}</span></div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center"><div class="ai-score" aria-label="Score ${ai.score} out of 100"><b style="font-size:34px;line-height:1">${ai.score}</b><span class="t-muted" style="font-size:13px"> / 100</span></div>
+      <div style="flex:1;min-width:220px">${aiChip(ai)}${ai.years != null ? ` <span class="chip c-gray">${esc(String(ai.years))} yrs relevant</span>` : ""}<p style="margin:8px 0 0">${esc(ai.summary || "")}</p></div></div>
+    <div class="form-grid" style="margin-top:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">
+      <div><b>Strengths</b>${aiList(ai.strengths)}</div><div><b>Missing or unclear</b>${aiList(ai.gaps)}</div>
+      <div><b>HR should check</b>${aiList(ai.check)}</div><div><b>Ask at the interview</b>${aiList(ai.ask)}</div></div>
+    ${ans.length ? `<details style="margin-top:10px"><summary>How the answers were rated</summary><div class="table-wrap"><table><thead><tr><th>Question</th><th>Answer</th><th class="num">Rating</th><th>Note</th></tr></thead><tbody>
+      ${ans.map((x) => `<tr><td>${esc(x.q)}</td><td>${esc(a.answers?.[x.q] || "")}</td><td class="num">${x.rating ? `${x.rating} / 5` : "—"}</td><td>${esc(x.note || "")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
+    ${ai.note ? `<p class="t-muted" style="font-size:13px;margin:8px 0 0">${esc(ai.note)}</p>` : ""}
+    <p class="t-muted" style="font-size:13px;margin:10px 0 0">A recommendation from the resume and answers only, for HR to weigh. It leaves out age, sex, civil status, religion and other personal details. HR makes every decision.${ed && window.__hosted ? ' <button class="link" data-ai-again>Screen again</button>' : ""}</p></section>`;
+}
+{ const b = VIEWS.applicant; VIEWS.applicant = (...x) => { let html = b(...x); const a = S.apps.get(S.view.id); if (!a) return html; const card = aiCard(a); if (!card) return html;
+  const i = html.indexOf('<section class="card"><div class="steps"'); return i >= 0 ? html.slice(0, i) + card + html.slice(i) : html + card; }; }
+{ const b = appCard; appCard = (a) => { const h = b(a); if (!a.ai) return h; const t = `<span class="chip ${AI_REC[a.ai.rec]?.[1] || "c-gray"}" title="AI screening score">AI ${a.ai.score}</span>`; return h.includes('<span class="chips">') ? h.replace('<span class="chips">', `<span class="chips">${t}`) : h; }; }
+{ const b = VIEWS.job; VIEWS.job = (...x) => { const h = b(...x); const j = S.jobs.get(S.view.id); if (!j) return h;
+  const mine = listOf(S.apps).filter((a) => a.jobId === j.id && !["HIRED", "REJECTED", "WITHDRAWN"].includes(a.stage));
+  const done = mine.filter((a) => a.ai).sort((p, q) => q.ai.score - p.ai.score); const wait = mine.filter(aiWaiting).length;
+  if (!done.length && !wait) return h;
+  return h + `<section class="card"><div class="card-head"><h2>${icon("star", 18)} AI screening</h2><span class="t-muted" style="font-size:13px">${done.length} screened${wait ? ` · ${wait} waiting` : ""}</span></div>
+    ${done.length ? `<div class="table-wrap"><table><thead><tr><th>Applicant</th><th class="num">Score</th><th>Recommendation</th><th>Summary</th></tr></thead><tbody>
+      ${done.map((a) => `<tr class="go" data-app="${a.id}" tabindex="0"><td><b>${esc(appName(a))}</b><div class="t-muted" style="font-size:12px">${esc(STAGES.find(([k]) => k === a.stage)?.[1] || a.stage)}</div></td><td class="num"><b>${a.ai.score}</b></td><td>${aiChip(a.ai)}</td><td style="font-size:13px">${esc((a.ai.summary || "").slice(0, 220))}</td></tr>`).join("")}</tbody></table></div>` : ""}
+    <p class="t-muted" style="font-size:13px;margin:8px 0 0">Applicants answer this job's qualification questions when they apply on the careers page. ${j.qAuto ? "The questions below were written by the system from the job description; change them as you like." : ""}</p></section>`; }; }
+document.addEventListener("click", async (ev) => {
+  if (!ev.target.closest?.("[data-ai-again]") || !S.canEdit) return; const a = S.apps.get(S.view.id); if (!a) return;
+  const { ai, aiErr, aiTries, ...rest } = a;
+  try { await put("applicants", { ...rest }); logActivity(`Asked for ${appName(a)}'s application to be screened again`); toast("It will be screened again within 10 minutes."); render(); } catch { toast("Couldn't save. Try again."); }
+});
+
+/* ---------- Payroll cutoff autopilot (Glenn 2026-10-20: full automation) ----------
+   After each cutoff ends, the scheduled run (runner.js) checks whether the cutoff is ready to pay: time records read, time
+   sheets filled, no requests still waiting inside the cutoff, no timekeeping issues, everyone with basic pay. It saves the
+   check on the period (periods/<id>.auto) so the approvers get one email when it turns ready, and the Payroll page shows the
+   list with an "Approve and finalize" button. If HR switches on "Finalize by itself", the scheduled run finalizes a ready
+   cutoff on its own on the set day; finalizing releases payslips, as before. Settings: org/ops.payAuto. */
+const PA_DEF = { on: true, readyDays: 1, autoFinal: false, finalDays: 3 };
+const PA = () => ({ ...PA_DEF, ...(S.ops?.payAuto || {}) });
+const paPrev = () => PAY.periodOf(addDays(PAY.period(curPeriod()).start, -1));
+function payReady(pid) {
+  const p = PAY.period(pid); const inP = (d) => d && d >= p.start && d <= p.end; const items = [];
+  const add = (key, ok, label, n, go, bad, info) => items.push({ key, ok, label, n, go, bad: bad || label, info: !!info });
+  add("ended", todayISO() > p.end, "The cutoff has ended", 0);
+  add("punches", S.clockLoaded?.has?.(`${p.start}:${p.end}`) || [...(S.clockLoaded || [])].some((k) => { const [a, b] = k.split(":"); return a <= p.start && b >= p.end; }), "Time records for the whole cutoff are read", 0);
+  const g = typeof payGaps === "function" ? payGaps(pid) : { noPay: [] }; add("pay", !g.noPay.length, "Everyone has basic pay in the 201 file", g.noPay.length, "payroll", `${g.noPay.length} without basic pay in the 201 file`);
+  const lv = allLeaves().filter((l) => l.status === "PENDING" && l.from <= p.end && l.to >= p.start && S.emps.get(l.empId)).length; add("leave", !lv, "No leave waiting for approval in the cutoff", lv, "leave", `${lv} leave ${lv === 1 ? "request" : "requests"} waiting for approval`);
+  const ot = listOf(S.otReqs || new Map()).filter((r) => r.status === "PENDING" && inP(r.d) && S.emps.get(r.empId)).length; add("ot", !ot, "No overtime waiting for approval in the cutoff", ot, "ot", `${ot} overtime ${ot === 1 ? "request" : "requests"} waiting for approval`);
+  const ar = listOf(S.attReqs || new Map()).filter((r) => r.status === "PENDING" && (inP(r.d) || inP(r.from)) && S.emps.get(r.empId)).length; add("att", !ar, "No attendance changes waiting for approval", ar, "attreq", `${ar} attendance ${ar === 1 ? "change" : "changes"} waiting for approval`);
+  const ph = [...(S.rqPhone?.values?.() || [])].filter((f) => !f.done).length; add("phone", !ph, "No employee requests still to file", ph, "tkissues", `${ph} employee ${ph === 1 ? "request" : "requests"} still to file`);
+  // Missing time in or out and punches outside the site area block payroll; an absence with no leave is a normal outcome (unpaid), shown only.
+  let iss = 0, abs = 0; try { for (const l of tkIssuesAll().values()) for (const x of l) if (x.pid === pid) { if (x.kind === "MISS" || x.kind === "GEO") iss++; else if (x.kind === "ABS") abs++; } } catch {}
+  add("issues", !iss, "No missing time in or out, or punches outside the site area", iss, "tkissues", `${iss} missing time in or out, or punches outside the site area`);
+  if (abs) add("abs", true, `${abs} absent ${abs === 1 ? "day" : "days"} with no leave filed (unpaid unless leave is filed)`, abs, "tkissues", "", true);
+  return { pid, label: p.label, ok: items.every((x) => x.ok), items };
+}
+async function payAutoJob(by) {
+  const P = PA(); if (!P.on || !S.realEdit || !S.canEdit) return; const pid = paPrev(); if (isFinal(pid)) return;
+  const p = PAY.period(pid); if (todayISO() < addDays(p.end, P.readyDays)) return;
+  await loadClock(p.start, p.end); await new Promise((r) => setTimeout(r, 0));
+  const r = payReady(pid); const run = payrun(pid); const prev = periodDoc(pid).auto || {};
+  const auto = { at: new Date().toISOString(), ready: r.ok, readyAt: r.ok ? prev.readyAt || new Date().toISOString() : null, open: r.items.filter((x) => !x.ok).map((x) => ({ key: x.key, label: x.bad, n: x.n })), count: run.totals?.count || 0 };
+  const same = prev.ready === auto.ready && JSON.stringify(prev.open || []) === JSON.stringify(auto.open);
+  if (!same || !prev.at || Date.now() - Date.parse(prev.at) > 6 * 3600e3) {
+    if (S.periods.has(pid)) await S.db.doc("periods/" + pid).update({ auto }); else await S.db.doc("periods/" + pid).set({ start: p.start, end: p.end, status: "OPEN", rows: {}, auto });
+    S.periods.set(pid, { ...periodDoc(pid), auto }); S.ver++;
+  }
+  // Finalize by itself: only the scheduled runner, only when ready, and only from the set day after the cutoff.
+  if (by === "server" && P.autoFinal && r.ok && !run.missing && todayISO() >= addDays(p.end, P.finalDays)) await payFinalizeNow(pid, "Finalized by the scheduled run (cutoff autopilot)");
+}
+async function payFinalizeNow(pid, why) {
+  S.payTab = "register"; S.periodId = pid; go("payroll"); await new Promise((r) => setTimeout(r, 300));
+  const ok = $("#final-ok"); if (!ok) return false; ok.checked = true; S.auSys = why || null;
+  try { await finalizePayroll(pid); } finally { S.auSys = null; }
+  return isFinal(pid);
+}
+RUN_JOBS.push(["pay", "Payroll cutoff check", () => payAutoJob(runBy)]);
+let runBy = "browser"; { const b = hrRunAll; hrRunAll = async (by = "browser", ...a) => { runBy = by; try { return await b(by, ...a); } finally { runBy = "browser"; } }; window.__hrRunAll = hrRunAll; }
+
+/* Payroll page: the ready check for the cutoff on screen, with Approve and finalize. */
+{ const b = VIEWS.payroll; VIEWS.payroll = (...a) => { const html = b(...a); if ((S.payTab || "register") !== "register" || !S.realEdit) return html;
+  const id = S.periodId || curPeriod(); if (isFinal(id) || todayISO() <= PAY.period(id).end) return html;
+  const r = payReady(id); const P = PA(); const ed = S.canEdit;
+  const card = `<section class="card pa-card"><div class="card-head"><h2>${icon("robot", 18)} Cutoff check</h2>${r.ok ? '<span class="chip c-ok">Ready to pay</span>' : `<span class="chip c-gold">${r.items.filter((x) => !x.ok).length} to clear</span>`}</div>
+    <ul style="list-style:none;margin:0;padding:0;display:grid;gap:6px">${r.items.map((x) => `<li>${x.info ? '<span class="chip c-gray">i</span>' : x.ok ? '<span class="chip c-ok">✓</span>' : '<span class="chip c-bad">!</span>'} ${esc(x.ok ? x.label : x.bad)}${(!x.ok || x.info) && x.go ? ` <button class="link" data-go="${x.go}">Open</button>` : ""}</li>`).join("")}</ul>
+    ${ed ? `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px"><button class="btn btn-primary" data-pa-final="${esc(id)}" ${r.ok ? "" : "disabled"}>Approve and finalize</button>
+      <label class="check"><input type="checkbox" data-pa-set="autoFinal" ${P.autoFinal ? "checked" : ""}><span>Finalize by itself when ready, ${P.finalDays} days after the cutoff ends</span></label></div>` : ""}
+    <p class="t-muted" style="font-size:13px;margin:8px 0 0">Checked every hour by the scheduled run. Approvers get an email when the cutoff is ready. Finalizing releases the payslips and fixes the figures for remittances.</p></section>`;
+  const i = html.indexOf('<section class="stats">'); return i >= 0 ? html.slice(0, i) + card + html.slice(i) : html + card; }; }
+document.addEventListener("click", async (ev) => {
+  const t = ev.target.closest?.("[data-pa-final]"); if (!t || !S.canEdit) return; const pid = t.dataset.paFinal;
+  if (!(await askConfirm(`Finalize payroll for ${PAY.period(pid).label}? Payslips will be released to employees.`, "Finalize"))) return;
+  t.disabled = true; await payFinalizeNow(pid, null); render();
+});
+document.addEventListener("change", async (ev) => {
+  const t = ev.target.closest?.("[data-pa-set]"); if (!t || !S.canEdit) return; const k = t.dataset.paSet;
+  const next = { ...(S.ops || {}), payAuto: { ...PA(), [k]: t.checked } };
+  try { await S.db.doc("org/ops").set(JSON.parse(JSON.stringify(next))); S.ops = next; S.ver++; logActivity(`${t.checked ? "Turned on" : "Turned off"} finalizing payroll by itself`); toast("Saved."); render(); } catch { toast("Couldn't save. Try again."); render(); }
+});
+
+/* ---------- Government remittance files (Glenn 2026-10-20: full automation) ----------
+   Once both cutoffs of a month are final, the scheduled run (runner.js) prepares the month's filing pack: it saves the totals,
+   head count and anyone missing an SSS, PhilHealth, Pag-IBIG or TIN number on remit/<month>.pack, and the notice job emails
+   HR that the month is ready to file. The Gov't Contributions page shows the pack: due date and status per agency, the upload
+   file in each agency's layout (SSS R-3 list, PhilHealth RF-1 / EPRS, Pag-IBIG MCRF / eSRS), the BIR 1601-C figures, and the
+   company's employer numbers. "Mark filed" (ops.js) records the filing and stops the reminders. */
+const RM_ID = { sss: ["sss", "SSS"], ph: ["philhealth", "PhilHealth"], hdmf: ["pagibig", "Pag-IBIG"], bir: ["tin", "TIN"] };
+const rmMonthOf = () => S.month || PAY.shiftPeriod(curPeriod(), -2).slice(0, 7);
+const rmLabel = (m) => new Date(m + "-01T00:00:00").toLocaleString("en-PH", { month: "long", year: "numeric" });
+const rmDigits = (s) => String(s || "").replace(/\D/g, "");
+/* New hires and people who left in the month: SSS, PhilHealth and Pag-IBIG want them flagged on the list. */
+function rmStatus(e, month) {
+  const sep = e.separated?.date || ""; if (sep.startsWith(month)) return ["S", sep];
+  if ((e.hire || "").startsWith(month)) return ["N", e.hire]; return ["", ""];
+}
+/* BIR 1601-C items 14 to 25 from the month's payroll lines. */
+function bir1601c(runs) {
+  const t = { gross: 0, mwe: 0, mweX: 0, b13: 0, dm: 0, gov: 0, otherN: 0, notSub: 0, tax: 0 };
+  for (const r of runs) for (const l of Object.values(r.lines || {})) {
+    t.gross += l.gross || 0; t.tax += l.tax || 0;
+    const mwe = l.mwe ? regularPay(l) : 0; const mweX = l.mwe ? (l.hol || 0) + (l.ot || 0) + (l.nd || 0) + (l.rd || 0) + (l.rhw || 0) + (l.sh || 0) + (l.xp || 0) : 0;
+    const dm = (l.allowN || 0) + (l.flexN || 0) + (l.flexE || 0) + (l.flexB || 0); const gov = (l.sss || 0) + (l.ph || 0) + (l.hd || 0);
+    const nonTax = Math.max(0, (l.gross || 0) - (l.taxable || 0)); // gross less taxable is everything exempt, contributions included
+    t.mwe += mwe; t.mweX += mweX; t.dm += dm; t.gov += gov; t.otherN += Math.max(0, nonTax - mwe - mweX - dm - gov);
+    if (!l.mwe && !(l.tax > 0)) t.notSub += l.taxable || 0;
+  }
+  const r2 = PAY.r2; const nt = r2(t.mwe + t.mweX + t.b13 + t.dm + t.gov + t.otherN); const taxable = r2(Math.max(0, t.gross - nt));
+  return [["14", "Total amount of compensation", r2(t.gross)], ["15", "Statutory minimum wage (minimum wage earners)", r2(t.mwe)],
+    ["16", "Holiday, overtime, night differential and hazard pay (minimum wage earners)", r2(t.mweX)], ["17", "13th month pay and other benefits", r2(t.b13)],
+    ["18", "De minimis benefits", r2(t.dm)], ["19", "SSS, PhilHealth, Pag-IBIG contributions and union dues (employee share)", r2(t.gov)],
+    ["20", "Other non-taxable compensation", r2(t.otherN)], ["21", "Total non-taxable compensation", nt], ["22", "Total taxable compensation", taxable],
+    ["23", "Less: taxable compensation not subject to withholding tax", r2(Math.min(taxable, t.notSub))], ["24", "Net taxable compensation", r2(Math.max(0, taxable - t.notSub))],
+    ["25", "Total taxes withheld", r2(t.tax)]];
+}
+function rmMissing(rows) { const m = {}; for (const k of Object.keys(RM_ID)) m[k] = rows.filter((r) => !rmDigits(r.e[RM_ID[k][0]])).length; return m; }
+function rmFile(kind, month) {
+  const rows = contribRows([month + "-1", month + "-2"].map(payrun)); const O = S.org || {}; const ym = month.replace("-", ""); const mmyyyy = month.slice(5) + month.slice(0, 4);
+  const nm = (e) => [String(e.last || "").toUpperCase(), String(e.first || "").toUpperCase(), String(e.middle || "").toUpperCase()];
+  if (kind === "sss") return offer(`SSS-R3-${ym}.csv`, toCSV([["Employer No", rmDigits(O.sssEr), "Applicable month", mmyyyy, "Employer", O.companyName || CO_DEFAULT],
+    ["SS Number", "Last Name", "First Name", "Middle Name", "Monthly Salary Credit", "SS Contribution (ER+EE)", "EC", "Total", "WISP (MPF)", "Remarks", "Date hired or separated"],
+    ...rows.map((r) => { const [st, d] = rmStatus(r.e, month); const wisp = PAY.r2(Math.max(0, r.msc - 20000) * 0.15); return [rmDigits(r.e.sss), ...nm(r.e), r.msc, PAY.r2(r.sss + r.sssEr - wisp), r.ec, PAY.r2(r.sss + r.sssEr + r.ec), wisp, st, d]; })]));
+  if (kind === "ph") return offer(`PhilHealth-RF1-${ym}.csv`, toCSV([["PhilHealth Employer No", rmDigits(O.phEr), "Applicable period", mmyyyy, "Employer", O.companyName || CO_DEFAULT],
+    ["PhilHealth No", "Last Name", "First Name", "Middle Name", "Birth date", "Sex", "Monthly Basic Salary", "Personal Share (PS)", "Employer Share (ES)", "Total", "Status (NH new hire, S separated)", "Effectivity date"],
+    ...rows.map((r) => { const [st, d] = rmStatus(r.e, month); return [rmDigits(r.e.philhealth), ...nm(r.e), r.e.birth || "", (r.e.gender || "").slice(0, 1).toUpperCase(), r.monthly, r.ph, r.phEr, PAY.r2(r.ph + r.phEr), st === "N" ? "NH" : st, d]; })]));
+  if (kind === "hdmf") return offer(`PagIBIG-MCRF-${ym}.csv`, toCSV([["Pag-IBIG Employer ID", rmDigits(O.hdmfEr), "Period covered", ym, "Employer", O.companyName || CO_DEFAULT],
+    ["Pag-IBIG MID No", "Employee No", "Membership Program", "Last Name", "First Name", "Name Extension", "Middle Name", "Period Covered", "Monthly Compensation", "Employee Share", "Employer Share", "Total", "TIN", "Birth date", "Remarks"],
+    ...rows.map((r) => { const [st] = rmStatus(r.e, month); return [rmDigits(r.e.pagibig), r.e.no || "", "F1", ...nm(r.e).slice(0, 2), String(r.e.suffix || "").toUpperCase(), nm(r.e)[2], ym, r.monthly, r.hd, r.hdEr, PAY.r2(r.hd + r.hdEr), rmDigits(r.e.tin), r.e.birth || "", st === "N" ? "NEW" : st === "S" ? "SEPARATED" : ""]; })]));
+  if (kind === "bir") return offer(`BIR-1601C-${ym}.csv`, toCSV([["Employer TIN", rmDigits(O.tin), "RDO", O.rdo || "", "Month", mmyyyy], ["Item", "Description", "Amount"], ...bir1601c([month + "-1", month + "-2"].map(payrun))]));
+}
+
+/* The month's filing pack, prepared by the scheduled run once both cutoffs are final. */
+async function remitJob() {
+  if (!S.realEdit || !S.canEdit) return; const month = addDays(todayISO().slice(0, 7) + "-01", -1).slice(0, 7); const ids = [month + "-1", month + "-2"];
+  if (!ids.every(isFinal)) return; const done = S.remits.get(month) || {}; if (done.pack) return;
+  for (const id of ids) await ensureRun(id); if (!ids.every((id) => S.runs.has(id))) return;
+  const runs = ids.map(payrun); const rows = contribRows(runs); if (!rows.length) return;
+  const T = (k) => PAY.r2(rows.reduce((a, r) => a + r[k], 0));
+  const pack = { at: new Date().toISOString(), heads: rows.length, missing: rmMissing(rows), total: { sss: PAY.r2(T("sss") + T("sssEr") + T("ec")), ph: PAY.r2(T("ph") + T("phEr")), hdmf: PAY.r2(T("hd") + T("hdEr")), bir: T("tax") },
+    due: Object.fromEntries(REMIT.map(([k]) => [k, remitDue(month, k)])) };
+  const next = { ...done, month, pack }; await S.db.doc(`remit/${month}`).set(JSON.parse(JSON.stringify(next))); S.remits.set(month, next); S.ver++;
+  logActivity(`Prepared the government remittance files for ${rmLabel(month)}`);
+}
+RUN_JOBS.push(["remit", "Government remittance files", () => remitJob()]);
+
+/* Gov't Contributions page: filing pack and employer numbers above the per-employee table. */
+{ const b = VIEWS.contrib; VIEWS.contrib = (...a) => { const html = b(...a); const month = rmMonthOf(); const ids = [month + "-1", month + "-2"];
+  const runs = ids.map(payrun); const rows = contribRows(runs); const miss = rmMissing(rows); const done = S.remits.get(month) || {}; const today = todayISO(); const O = S.org || {}; const ed = S.canEdit;
+  const tot = { sss: (r) => r.sss + r.sssEr + r.ec, ph: (r) => r.ph + r.phEr, hdmf: (r) => r.hd + r.hdEr, bir: (r) => r.tax };
+  const erNo = { sss: O.sssEr, ph: O.phEr, hdmf: O.hdmfEr, bir: O.tin };
+  const final = ids.every(isFinal);
+  const pack = `<section class="card rm-pack"><div class="card-head"><h2>${icon("doc", 18)} Filing pack for ${esc(rmLabel(month))}</h2>${final ? done.pack ? `<span class="chip c-ok">Prepared ${esc(fmtDate(done.pack.at.slice(0, 10)))}</span>` : '<span class="chip c-gold">Ready</span>' : '<span class="chip c-warn">Waiting for both cutoffs to be final</span>'}</div>
+    <div class="table-wrap"><table><thead><tr><th>Filing</th><th>Due</th><th class="num">Amount</th><th>Check</th><th>Status</th><th></th></tr></thead><tbody>
+    ${REMIT.map(([k, l]) => { const due = remitDue(month, k); const f = done[k]; const left = daysBetween(today, due); const m = miss[k];
+      return `<tr><td><b>${esc(l)}</b></td><td style="white-space:nowrap">${fmtDate(due)}</td><td class="num">${money(PAY.r2(rows.reduce((s, r) => s + tot[k](r), 0)))}</td>
+      <td style="font-size:13px">${m ? `<span class="chip c-warn">${m} without ${k === "bir" ? "TIN" : RM_ID[k][1] + " no."}</span>` : '<span class="chip c-ok">All numbers on file</span>'}${erNo[k] ? "" : ` <span class="chip c-bad">Employer ${k === "bir" ? "TIN" : "number"} missing</span>`}</td>
+      <td>${f ? `<span class="chip c-ok">Filed ${esc(fmtDate(String(f.at || "").slice(0, 10)))}</span>` : left < 0 ? `<span class="chip c-bad">${-left} days overdue</span>` : `<span class="chip c-gray">Due in ${left} days</span>`}</td>
+      <td style="white-space:nowrap"><button class="btn btn-ghost btn-sm" data-rm-file="${k}">${k === "bir" ? "1601-C figures" : "Upload file"} (CSV)</button>${ed && !f && final ? ` <button class="btn btn-primary btn-sm" data-remit="${month}|${k}">Mark filed</button>` : ""}</td></tr>`; }).join("")}
+    </tbody></table></div>
+    <p class="t-muted" style="font-size:13px;margin:8px 0 0">The files follow each agency's upload columns (SSS R-3 list, PhilHealth RF-1 / EPRS, Pag-IBIG MCRF / eSRS). Check the first one against your portal's template; ask me if a column needs to move. New hires and people who left this month are flagged.${miss.sss || miss.ph || miss.hdmf || miss.bir ? " Add the missing ID numbers in each person's 201 file before filing." : ""}</p></section>
+  <section class="card"><div class="card-head"><h2>BIR 1601-C for ${esc(rmLabel(month))}</h2></div><div class="table-wrap"><table><thead><tr><th>Item</th><th>Description</th><th class="num">Amount</th></tr></thead><tbody>
+    ${bir1601c(runs).map(([i, d, v]) => `<tr${["21", "22", "25"].includes(i) ? ' style="font-weight:700"' : ""}><td>${i}</td><td>${esc(d)}</td><td class="num">${money(v)}</td></tr>`).join("")}</tbody></table></div>
+    <p class="t-muted" style="font-size:13px;margin:8px 0 0">13th month pay is paid outside the regular payroll, so item 17 counts only what went through these cutoffs. Item 23 is the taxable pay of employees with no tax withheld this month. Add any adjustment from earlier months on the return itself.</p></section>
+  <section class="card"><div class="card-head"><h2>Employer numbers</h2></div>
+    <form id="rm-er" class="form-grid">${[["tin", "Employer TIN"], ["rdo", "BIR RDO code"], ["sssEr", "SSS employer number"], ["phEr", "PhilHealth employer number (PEN)"], ["hdmfEr", "Pag-IBIG employer ID"]].map(([k, l]) => `<div class="field"><label for="rm-${k}">${l}</label><input class="input" id="rm-${k}" name="${k}" maxlength="40" value="${esc(O[k] || "")}" ${ed ? "" : "disabled"}></div>`).join("")}
+    ${ed ? '<div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Save</button></div>' : ""}</form></section>`;
+  const i = html.indexOf('<section class="card"><div class="card-head"><h2>Per employee'); return i >= 0 ? html.slice(0, i) + pack + html.slice(i) : html + pack; }; }
+Object.assign(ICON, ICON.doc ? {} : { doc: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/>' });
+document.addEventListener("click", (ev) => { const t = ev.target.closest?.("[data-rm-file]"); if (t) rmFile(t.dataset.rmFile, rmMonthOf()); });
+window.addEventListener("submit", async (ev) => {
+  if (ev.target.id !== "rm-er") return; ev.preventDefault(); if (!S.canEdit) return;
+  const f = new FormData(ev.target); const org = JSON.parse(JSON.stringify(S.org || {}));
+  for (const k of ["tin", "rdo", "sssEr", "phEr", "hdmfEr"]) org[k] = String(f.get(k) || "").trim().slice(0, 40);
+  try { await S.db.doc("org/main").set(org); S.org = org; S.ver++; logActivity("Updated the employer registration numbers"); toast("Saved."); render(); } catch { toast("Couldn't save. Try again."); }
+});
+
+/* ---------- Approvals everywhere (Glenn 2026-10-20: full automation) ----------
+   1. One-tap approve: approval emails carry a link to the app ending in #apv=<kind>:<key>. The app opens that request and asks
+      "Approve?"; yes presses the request's own Approve button, so the approval chain (ops.js) and every module's checks and
+      follow-up steps still run. The link approves nothing by itself, and only HR editors can approve.
+   2. Filing leave as "Approved", or overtime with "Approve now", is not offered when an approval chain is set for that kind
+      (review F5): the request is filed as waiting and goes through the chain. */
+const APV_KEY = "hr-apv";
+{ const m = /[#&]apv=([^&]+)/.exec(location.hash || ""); if (m) { try { sessionStorage.setItem(APV_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); } }
+window.addEventListener("hashchange", () => { const m = /[#&]apv=([^&]+)/.exec(location.hash || ""); if (!m) return; try { sessionStorage.setItem(APV_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); apvTry(); });
+let apvBusy = false;
+async function apvTry() {
+  let v = null; try { v = sessionStorage.getItem(APV_KEY); } catch {} if (!v || apvBusy) return;
+  if (!S.db || !S.loaded?.emps || !S.realEdit && !S.selfMode) return;
+  apvBusy = true; try { sessionStorage.removeItem(APV_KEY); } catch {}
+  try {
+    const i = v.indexOf(":"); const kind = v.slice(0, i), key = v.slice(i + 1); const K = OPK_BY[kind];
+    if (!K || S.selfMode) { toast("This link is for HR approvers."); return; }
+    let r = null; try { r = K[3]().find((x) => String(x.key || x.id) === key); } catch {}
+    go(K[2](r || {})); await new Promise((res) => setTimeout(res, 300));
+    if (!r) { toast("That request was not found. It may have been deleted."); return; }
+    const who = r.empId ? opEmp(r) : null; const label = `${K[1].toLowerCase()}${who ? ` of ${fullName(who)}` : ""}`;
+    if (r.status !== "PENDING") { toast(`This ${label} is already ${String(r.status || "").toLowerCase()}.`); return; }
+    if (!S.canEdit || !K[4]) { toast(`Open the ${label} below to decide on it.`); return; }
+    const ch = OPS().chains[kind] || []; const done = S.apprs.get(apprId(kind, key))?.steps?.length || 0; const step = ch[done];
+    if (!(await askConfirm(step ? `Endorse the ${label} as ${step.name}?` : `Approve the ${label}?${r.from ? ` (${fmtDate(r.from)}${r.to && r.to !== r.from ? ` to ${fmtDate(r.to)}` : ""})` : r.d ? ` (${fmtDate(r.d)})` : ""}`, step ? "Endorse" : "Approve"))) return;
+    const b = document.createElement("button"); b.hidden = true; b.setAttribute(`data-${K[4]}-set`, `${key}:APPROVED`); (document.getElementById("main") || document.body).appendChild(b);
+    S.apvOk = !!step; b.click(); S.apvOk = false; setTimeout(() => b.remove(), 0);
+  } finally { apvBusy = false; }
+}
+{ const b = render; render = (...a) => { const r = b(...a); if (!apvBusy) { let v = null; try { v = sessionStorage.getItem(APV_KEY); } catch {} if (v) setTimeout(apvTry, 0); } return r; }; }
+
+/* F5: no straight-to-approved filing where a chain is set */
+function apvChainForms(root) {
+  let O; try { O = OPS(); } catch { return; } if (!Object.keys(O.chains || {}).length) return;
+  if (O.chains.leave?.length) for (const sel of root.querySelectorAll?.("#lf-status") || []) {
+    const op = sel.querySelector('option[value="APPROVED"]'); if (!op) continue; op.remove(); sel.value = "PENDING";
+    if (!sel.parentElement.querySelector(".apv-note")) sel.insertAdjacentHTML("afterend", `<small class="t-muted apv-note">Goes through the approval chain: ${esc(O.chains.leave.map((c) => c.name).join(", then "))}.</small>`); }
+  if (O.chains.ot?.length) for (const cb of root.querySelectorAll?.("#ot-ok") || []) {
+    if (cb.disabled) continue; cb.checked = false; cb.disabled = true; const lab = cb.closest("label");
+    if (lab && !lab.querySelector(".apv-note")) lab.insertAdjacentHTML("beforeend", ` <small class="t-muted apv-note">(off: overtime goes through the approval chain)</small>`); }
+}
+new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) apvChainForms(n.querySelector ? n : document); }).observe(document.body, { childList: true, subtree: true });
+
+/* ---------- Hiring to onboarding (Glenn 2026-10-20: full automation) ----------
+   The applicant accepts the job offer on the careers page (hr_offer_respond). Once the offer is accepted, a start date is set
+   and HR has accepted every pre-employment requirement, the scheduled run (runner.js) hires the applicant by itself: it creates
+   the 201 file with the next employee number, copies the SSS, PhilHealth, Pag-IBIG and TIN numbers and the requirement files
+   the applicant sent, starts the onboarding checklist and marks the applicant hired. The notice job then emails the new hire
+   their employee number and how to open their employee account; on the website that account is approved and linked by itself
+   when it is made with the same email (hosted.js). HR can switch hiring by itself off on Offer letter requests. */
+const HA_DEF = { on: true };
+const HA = () => ({ ...HA_DEF, ...(S.ops?.hireAuto || {}) });
+/* Next employee number in the company's own pattern: the most common "<prefix><number>" among all employees, plus one. */
+function hireNextNo() {
+  const by = new Map();
+  for (const e of (S.allEmps || S.emps).values()) { const m = /^(.*?)(\d+)$/.exec(String(e.no || "").trim()); if (!m) continue;
+    const g = by.get(m[1]) || { n: 0, max: 0, w: 0 }; g.n++; g.max = Math.max(g.max, Number(m[2])); g.w = Math.max(g.w, m[2].length); by.set(m[1], g); }
+  const [pre, g] = [...by.entries()].sort((a, b) => b[1].n - a[1].n)[0] || ["EMP-", { max: 0, w: 4 }];
+  const taken = new Set([...(S.allEmps || S.emps).values()].map((e) => String(e.no || "").toLowerCase()));
+  for (let k = g.max + 1; ; k++) { const no = pre + String(k).padStart(g.w, "0"); if (!taken.has(no.toLowerCase())) return no; }
+}
+const hireReqsDone = (a) => PRE_REQS.every(([k]) => a.reqs?.[k] || a.portal?.reqs?.[k]?.status === "ACCEPTED");
+const hireWaits = (a) => {
+  if (a.empId || ["HIRED", "REJECTED", "WITHDRAWN"].includes(a.stage) || a.sample) return null;
+  if (a.offer?.status !== "ACCEPTED") return null; const w = [];
+  if (!(a.offer.start || a.olr?.start)) w.push("a start date on the offer");
+  const left = PRE_REQS.filter(([k]) => !(a.reqs?.[k] || a.portal?.reqs?.[k]?.status === "ACCEPTED")).map(([, l]) => l); if (left.length) w.push(`${left.length} ${left.length === 1 ? "requirement" : "requirements"} (${left.join(", ")})`);
+  return w;
+};
+async function hireAuto(a) {
+  const j = S.jobs.get(a.jobId); const o = { ...(a.olr || {}), ...(a.offer || {}) }; const start = o.start; const no = hireNextNo();
+  const status = STATUS[a.olr?.empType] ? a.olr.empType : STATUS[j?.empType] ? j.empType : "PROBATIONARY";
+  const proj = j?.projectId ? S.projects.get(j.projectId) : null; const title = a.olr?.title || pos(j?.posId)?.title || j?.title || "employee";
+  const num = (k) => { const v = a.portal?.reqs?.[k]?.num; return v ? String(v).trim().slice(0, 40) : null; };
+  const docs = [...(a.resume ? [{ id: a.resume.id, kind: "Resume", name: a.resume.name || "Resume", at: todayISO(), exp: null }] : []),
+    ...PRE_REQS.filter(([k]) => a.portal?.reqs?.[k]?.file).map(([k, l]) => ({ id: a.portal.reqs[k].file, kind: l, name: a.portal.reqs[k].name || l, at: todayISO(), exp: null })),
+    ...Object.entries(a.portal?.back || {}).filter(([, f]) => f?.file).map(([k, f]) => ({ id: f.file, kind: "Signed document", name: f.name || (a.portal?.shared || []).find((s) => s.id === k)?.name || "Signed document", at: todayISO(), exp: null }))];
+  const e = { id: uid(), no, first: a.first, middle: a.middle || null, last: a.last, suffix: null, title: null, photo: null, birth: a.birth || null, gender: a.gender || null, civil: null, email: a.email || null, mobile: a.mobile || null, address: a.address || null,
+    emergencyName: null, emergencyRelation: null, emergencyPhone: null, tin: num("tin"), sss: num("sss"), philhealth: num("philhealth"), pagibig: num("pagibig"), hire: start, status, payType: o.payType || j?.payType || "MONTHLY", basicPay: Number(o.rate) || 0,
+    deptId: j?.deptId || null, posId: j?.posId || null, supervisorId: j?.mgrId || null, projectId: proj?.id || null, projectRole: proj ? title : null, projectSince: proj ? start : null, projectUntil: proj && status === "PROJECT_BASED" ? proj.end || null : null,
+    separated: null, shiftId: "day", bank: null, bankAcct: null, docs, appId: a.id,
+    history: [{ d: start, kind: "Hired", text: `Hired as ${title} (${STATUS[status][0]}) from the ${j?.title || ""} job opening; offer accepted on the careers page and hired by the scheduled run` }] };
+  await saveEmp(e); S.emps.set(e.id, e); await startOnboarding(e);
+  await put("applicants", { ...a, stage: "HIRED", stageAt: todayISO(), empId: e.id, autoHired: new Date().toISOString() });
+  if (j && jobHired(j) >= j.slots && j.status === "OPEN") await put("jobs", { ...j, status: "FILLED" });
+  logActivity(`Hired ${fullName(e)} (${e.no}) as ${title} by the scheduled run: offer accepted and requirements complete`);
+  return e;
+}
+async function hireJob() {
+  if (!S.realEdit || !S.canEdit || !HA().on || !S.apps) return;
+  for (const a of listOf(S.apps)) { const w = hireWaits(a); if (!w || w.length) continue;
+    if ([...(S.allEmps || S.emps).values()].some((e) => e.appId === a.id)) continue; // already made, the applicant save failed
+    await hireAuto(a); }
+}
+RUN_JOBS.push(["hire", "Hiring accepted offers", () => hireJob()]);
+
+/* Applicant page: what the automatic hire still waits for. */
+{ const b = VIEWS.applicant; VIEWS.applicant = (...x) => { const h = b(...x); const a = S.apps.get(S.view.id); if (!a) return h; const w = hireWaits(a); if (!w) return h;
+  const card = `<section class="card"><div class="card-head"><h2>${icon("door", 18)} Hiring by itself</h2>${w.length ? '<span class="chip c-warn">Waiting</span>' : '<span class="chip c-ok">Ready</span>'}</div>
+    <p style="margin:0">${a.first} accepted the offer${a.offer?.via === "careers" ? " on the careers page" : ""}. ${!HA().on ? "Hiring by itself is switched off, so hire from this page." : w.length ? `The 201 file is made by itself once HR has ${esc(w.join(" and "))}.` : "The 201 file and onboarding will be made on the next scheduled run, with the next employee number."}</p></section>`;
+  const i = h.indexOf('<section class="card"><div class="steps"'); return i >= 0 ? h.slice(0, i) + card + h.slice(i) : h + card; }; }
+/* Offer letter requests: the switch */
+{ const b = VIEWS.olr; if (b) VIEWS.olr = (...x) => { const h = b(...x); if (!S.canEdit) return h;
+  const sw = `<section class="card"><label class="check"><input type="checkbox" data-ha-on ${HA().on ? "checked" : ""}><span><b>Hire by itself</b><div class="t-muted" style="font-size:13px">When the applicant accepts the offer and every requirement is accepted, the scheduled run makes the 201 file with the next employee number (${esc(hireNextNo())}), starts onboarding and emails the new hire how to open their employee account.</div></span></label></section>`;
+  const i = h.indexOf('<div class="tabs'); return i >= 0 ? h.slice(0, i) + sw + h.slice(i) : h + sw; }; }
+document.addEventListener("change", async (ev) => {
+  const t = ev.target.closest?.("[data-ha-on]"); if (!t || !S.canEdit) return;
+  const next = { ...(S.ops || {}), hireAuto: { ...HA(), on: t.checked } };
+  try { await S.db.doc("org/ops").set(JSON.parse(JSON.stringify(next))); S.ops = next; S.ver++; logActivity(`${t.checked ? "Turned on" : "Turned off"} hiring by itself`); toast("Saved."); render(); } catch { toast("Couldn't save. Try again."); render(); }
+});
+
+/* ---------- Offboarding on its own (Glenn 2026-10-20: full automation) ----------
+   1. An accepted resignation starts offboarding by itself on the next scheduled run (runner.js), with the last day from the
+      notice; the last day still takes effect by itself (links.js applyDueSeparations).
+   2. Clearance is routed: HR sets who signs each clearance step (Exit clearance > Who signs clearance, org/ops.clrTo). The notice
+      job emails each signer their steps with a one-tap link (#clr=<empId>:<step>); the link opens the offboarding record and
+      asks "Mark as cleared?". When every clearance step before final pay is done, the approvers are told the final pay can be
+      released. Final pay itself is computed from the 201 file and payroll as before (talent.js finalPay). */
+async function offbJob() {
+  if (!S.realEdit || !S.canEdit || !S.resigns || !S.offb) return;
+  for (const r of listOf(S.resigns)) {
+    if (r.status !== "ACCEPTED" || !r.last || S.offb.has(r.empId) || r.offbAuto) continue; const e = S.emps.get(r.empId); if (!e || e.separated || r.last < e.hire) continue;
+    const o = { id: e.id, empId: e.id, notice: r.filed || todayISO(), last: r.last, reason: "Resignation", cause: null, notes: r.reason ? String(r.reason).slice(0, 500) : null,
+      items: TSET().offboard.map(({ k, label, who }) => ({ k, label, who, done: k === "notice" ? r.filed || todayISO() : null })), pay: {}, released: null, closed: null, auto: true };
+    await put("offboard", o); await put("resign", { ...r, offbAuto: todayISO() });
+    logActivity(`Started offboarding for ${fullName(e)} by itself: resignation accepted, last day ${fmtDate(r.last)}`);
+    if (r.last <= todayISO()) await markSeparated(e.id, true);
+  }
+}
+RUN_JOBS.push(["offb", "Offboarding from accepted resignations", () => offbJob()]);
+
+/* Who signs each clearance step */
+const clrWhos = () => [...new Set(TSET().offboard.map((i) => i.who).filter(Boolean))];
+{ const k = VIEWS.offboarding ? "offboarding" : "lifecycle"; const b = VIEWS[k]; VIEWS[k] = (...x) => { const h = b(...x); if (!S.canEdit || (k === "lifecycle" && (S.lifeTab || "onboard") !== "offboard")) return h;
+  const to = OPS().clrTo || {}; const users = opUserIds();
+  return h + `<section class="card"><div class="card-head"><h2>${icon("door", 18)} Who signs clearance</h2></div>
+    <p class="t-muted" style="margin:0 0 10px;font-size:14px">Each person gets an email with their clearance steps and a one-tap link to mark them cleared. Steps with no one set stay with HR.</p>
+    <form id="clr-form" class="form-grid">${clrWhos().map((w, i) => `<div class="field"><label for="clr-${i}">${esc(w)}</label><select class="input" id="clr-${i}" name="${esc(w)}">${opts(users.map((u) => [u, personName(u)]), to[w] || "", "HR (no one set)")}</select></div>`).join("")}
+    <div class="field" style="align-self:end"><button class="btn btn-primary" type="submit">Save</button></div></form></section>`; }; }
+window.addEventListener("submit", async (ev) => {
+  if (ev.target.id !== "clr-form") return; ev.preventDefault(); if (!S.canEdit) return;
+  const f = new FormData(ev.target); const clrTo = {}; for (const w of clrWhos()) { const u = f.get(w); if (u) clrTo[w] = String(u); }
+  const next = { ...(S.ops || {}), clrTo }; try { await S.db.doc("org/ops").set(JSON.parse(JSON.stringify(next))); S.ops = next; S.ver++; logActivity("Updated who signs each clearance step"); toast("Saved."); render(); } catch { toast("Couldn't save. Try again."); }
+});
+
+/* One-tap clearance link: #clr=<empId>:<step key> */
+const CLR_KEY = "hr-clr";
+{ const m = /[#&]clr=([^&]+)/.exec(location.hash || ""); if (m) { try { sessionStorage.setItem(CLR_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); } }
+window.addEventListener("hashchange", () => { const m = /[#&]clr=([^&]+)/.exec(location.hash || ""); if (!m) return; try { sessionStorage.setItem(CLR_KEY, decodeURIComponent(m[1])); } catch {} history.replaceState(null, "", location.pathname + location.search); clrTry(); });
+let clrBusy = false;
+async function clrTry() {
+  let v = null; try { v = sessionStorage.getItem(CLR_KEY); } catch {} if (!v || clrBusy || !S.db || !S.loaded?.emps || !S.offb) return;
+  clrBusy = true; try { sessionStorage.removeItem(CLR_KEY); } catch {}
+  try {
+    const [empId, k] = v.split(":"); const o = S.offb.get(empId); const e = S.emps.get(empId);
+    if (!o || !e) { toast("That offboarding record was not found."); return; } go("offboard", { id: empId }); await new Promise((r) => setTimeout(r, 300));
+    const i = o.items.findIndex((x) => x.k === k); if (i < 0) return; const it = o.items[i];
+    if (it.done) { toast(`"${it.label}" was already cleared on ${fmtDate(it.done)}.`); return; }
+    if (!S.canEdit) { toast("Ask HR to mark this step cleared."); return; }
+    if (!(await askConfirm(`Mark "${it.label}" as cleared for ${fullName(e)}?`, "Cleared"))) return;
+    await toggleCheck("offboard", empId, i, true); logActivity(`Cleared "${it.label}" for ${fullName(e)} from the clearance email`); toast("Marked as cleared.");
+  } finally { clrBusy = false; }
+}
+{ const b = render; render = (...a) => { const r = b(...a); if (!clrBusy) { let v = null; try { v = sessionStorage.getItem(CLR_KEY); } catch {} if (v) setTimeout(clrTry, 0); } return r; }; }
+
+/* ---------- Leave year-end on its own (Glenn 2026-10-20: full automation; balances refresh every January 15, no carry-over) ----------
+   Leave credits are earned and refreshed by themselves (time.js leaveCredit over the leave year). On the reset day the
+   scheduled run (runner.js) records the year-end list for the leave year that just ended (as "Record the conversion" does on
+   Leave year-end). Unused leave lapses (Glenn 2026-10-20); only if HR ticks a conversion in the leave policy is it paid in the
+   first open cutoff: up to 10 VL days a year tax-free (de minimis), the rest counted with the 13th month and other benefits.
+   Leave years before 2026 are left to HR. */
+const LVA_FROM = "2026";
+const lvaPid = () => { let id = curPeriod(); for (let i = 0; i < 4 && isFinal(id); i++) id = PAY.shiftPeriod(id, 1); return id; };
+async function lvAutoJob() {
+  if (!S.realEdit || !S.canEdit || !S.lvye) return; const y = String(Number(leaveYear(todayISO())) - 1);
+  if (y < LVA_FROM || S.lvye.has(y) || todayISO() <= lyEnd(y)) return;
+  const rows = lvYearEnd(y); const total = PAY.r2(rows.reduce((a, r) => a + r.amt, 0)); const payPid = total ? lvaPid() : null;
+  const doc = { year: y, at: new Date().toISOString(), by: null, auto: true, total, payPid, rows: rows.map((r) => ({ empId: r.e.id, vl: r.vl, sl: r.sl, cVL: r.cVL, cSL: r.cSL, conv: r.conv, daily: r.daily, amt: r.amt })) };
+  await S.db.doc(`lvye/${y}`).set(JSON.parse(JSON.stringify(doc))); S.lvye.set(y, doc); S.ver++;
+  logActivity(`Recorded the ${y} leave year-end by itself${total ? `; ${peso.format(total)} of converted leave goes into the ${PAY.period(payPid).label} payroll` : ""}`);
+}
+RUN_JOBS.push(["lvye", "Leave year-end", () => lvAutoJob()]);
+/* Converted leave in payroll: paid through the same list as FlexBen claims, with its own id (lv:<year>:<employee>). */
+{ const b = payExt; payExt = (pid) => { const x = b(pid); const ff = x.flexFor; return { ...x, flexFor: (e, p) => {
+  const out = ff ? ff(e, p) : [];
+  for (const d of S.lvye?.values?.() || []) { if (d.payPid !== pid) continue; const r = (d.rows || []).find((z) => z.empId === e.id); if (!r?.amt) continue;
+    const dm = PAY.r2(Math.min(r.amt, Math.min(10, Math.max(0, (r.vl || 0) - (r.cVL || 0))) * (r.daily || 0)));
+    if (dm) out.push({ id: `lv:${d.year}:${e.id}:d`, amt: dm, tax: "DEMIN" }); if (r.amt - dm > 0) out.push({ id: `lv:${d.year}:${e.id}:b`, amt: PAY.r2(r.amt - dm), tax: "BENEFIT" }); }
+  return out; } }; }; }
+function lvOf(l) { let t = 0; for (const id of l?.flex || []) { const m = /^lv:(\d{4}):([^:]+):([db])$/.exec(String(id)); if (!m) continue; const r = (S.lvye.get(m[1])?.rows || []).find((z) => z.empId === m[2]); if (!r) continue;
+  const dm = PAY.r2(Math.min(r.amt, Math.min(10, Math.max(0, (r.vl || 0) - (r.cVL || 0))) * (r.daily || 0))); t += m[3] === "d" ? dm : PAY.r2(r.amt - dm); } return PAY.r2(t); }
+/* Leave year-end page: say what the scheduled run did. */
+{ const b = VIEWS.lvye; VIEWS.lvye = (...a) => { const h = b(...a); const rec = S.lvye.get(S.lvyeY); if (!rec?.auto) return h;
+  const note = `<div class="notice"><span><span class="chip c-blue">Recorded by itself</span> The scheduled run recorded this list on ${fmtDate(rec.at.slice(0, 10))}, the day after the leave year ended.${rec.payPid ? ` The converted leave is paid in the ${esc(PAY.period(rec.payPid).label)} payroll.` : ""}</span></div>`;
+  const i = h.indexOf('<section class="card"'); return i >= 0 ? h.slice(0, i) + note + h.slice(i) : h + note; }; }
+
+/* ---------- Punches with no signal (Glenn 2026-10-20: full automation; audit 2026-10-17 H4) ----------
+   A time in or out made on the employee's phone, or on a site kiosk, when there's no signal is kept on that device and sent
+   by itself when the signal is back (every minute, and as soon as the device is online). It keeps the time it was made and
+   is marked offline. On the website the server keeps that time only for punches from the last 48 hours in an open cutoff
+   (migration 20261020c); every offline punch waits for HR on Geofence review before it counts, like a punch without a
+   location, because its time came from the device. */
+const FC_KEY = "hr-punch-outbox";
+const fcRead = () => { try { const v = JSON.parse(localStorage.getItem(FC_KEY) || "[]"); return Array.isArray(v) ? v : []; } catch { return []; } };
+const fcWrite = (l) => { try { localStorage.setItem(FC_KEY, JSON.stringify(l.slice(-40))); return true; } catch { return false; } };
+const fcNet = (er) => navigator.onLine === false || /fetch|network|timed? ?out|abort|offline|load failed|connection/i.test(String(er?.message || er || ""));
+function fcQueue(item) {
+  const l = fcRead(); const why = `No signal: kept on the ${item.kind === "self" ? "phone" : "kiosk"} at ${timeFmt.format(new Date(item.punch.t))} and sent when the signal came back`;
+  item.punch = { ...item.punch, offline: true, why: item.punch.why ? `${item.punch.why} (${why.toLowerCase()})` : why, ...(item.kind === "kiosk" ? { needsOk: true } : {}) };
+  if (!fcWrite([...l, { ...item, tries: 0 }])) throw new Error("no room on this device");
+  S.fcN = l.length + 1; return "queued";
+}
+{ const b = selfSave; selfSave = async (u, id, punch) => { try { return await b(u, id, punch); } catch (er) { if (!fcNet(er)) throw er; return fcQueue({ kind: "self", u, id, punch }); } }; }
+{ const b = savePunch; savePunch = async (dev, punch, devInfo) => {
+  try { return await b(dev, punch, devInfo); } catch (er) { if (!String(dev).startsWith("kiosk-") || !fcNet(er)) throw er; return fcQueue({ kind: "kiosk", dev, devInfo, id: uid(), punch }); } }; }
+let fcBusy = false;
+async function fcFlush() {
+  if (fcBusy || navigator.onLine === false || !S.db) return; let l = fcRead(); if (!l.length) { S.fcN = 0; return; }
+  fcBusy = true; let sent = 0, dropped = 0;
+  try {
+    for (const it of [...l]) {
+      if (it.kind === "self" ? S.self?.uid !== it.u : !(S.realEdit && S.canEdit)) continue; // only the account that made it sends it
+      try {
+        if (it.kind === "self") { const date = manilaDay(it.punch.t); const ref = S.db.doc(`clockins/${it.u}/days/${date}`); const cur = await ref.get();
+          if (cur.exists) await ref.update({ punches: { [it.id]: it.punch } }); else await ref.set({ d: date, dev: it.u, punches: { [it.id]: it.punch } }); }
+        else { const date = manilaDay(it.punch.t); const ref = S.db.doc(`clockins/${it.dev}/days/${date}`); const cur = await ref.get();
+          if (!S.clockDevs.has(it.dev)) { await S.db.doc(`clockins/${it.dev}`).set(it.devInfo || { kiosk: true }); S.clockDevs.set(it.dev, { id: it.dev, ...(it.devInfo || {}) }); }
+          if (cur.exists && cur.data().punches?.[it.id]) { /* already saved */ } else if (cur.exists) await ref.update({ punches: { [it.id]: it.punch } }); else await ref.set({ d: date, dev: it.dev, punches: { [it.id]: it.punch } });
+          S.clockLoaded.clear(); }
+        l = l.filter((x) => x !== it); sent++;
+      } catch (er) {
+        if (fcNet(er)) break;
+        if (/can.t be changed|already/i.test(String(er?.message || er))) { l = l.filter((x) => x !== it); sent++; continue; } // it got there before
+        it.tries = (it.tries || 0) + 1; if (it.tries >= 5) { l = l.filter((x) => x !== it); dropped++; }
+      }
+    }
+  } finally { fcWrite(l); S.fcN = l.length; fcBusy = false; }
+  if (sent) { toast(`${sent} ${sent === 1 ? "punch" : "punches"} made with no signal ${sent === 1 ? "was" : "were"} sent. HR checks ${sent === 1 ? "it" : "them"}.`); S.ver++; render(); }
+  if (dropped) toast(`${dropped} ${dropped === 1 ? "punch" : "punches"} made with no signal couldn't be saved. Tell HR the time.`);
+}
+window.addEventListener("online", () => setTimeout(fcFlush, 1500));
+setInterval(fcFlush, 60000); setTimeout(fcFlush, 8000);
+S.fcN = fcRead().length;
+
+/* What's still waiting on this device */
+const fcNote = () => { const n = S.fcN || 0; return n ? `<p class="t-warn" style="margin:0;font-size:13px">${n} ${n === 1 ? "punch is" : "punches are"} kept on this device until there's signal. Keep this page open; ${n === 1 ? "it's" : "they're"} sent by itself.</p>` : ""; };
+{ const b = selfView; selfView = () => { const h = b(); return S.fcN && h.includes(GRID) ? h.replace(GRID, fcNote() + GRID) : h; }; }
+{ const b = VIEWS.kiosk; VIEWS.kiosk = (...a) => { const h = b(...a); return S.fcN && h.includes(GRID) ? h.replace(GRID, fcNote() + GRID) : h; }; }
+
+/* HR: an offline punch waits for HR like one without a location, whatever the geofence rule. */
+{ const b = punchesIn; punchesIn = (from, to) => { const l = b(from, to).map((p) => (p.offline && !p.rev ? { ...p, needsOk: true } : p)); return S.geoAll ? l : l.filter((p) => !(p.offline && p.rev !== "OK")); }; }
 
 /* HRIS audit 2026-10-17 (phones and tablets).
    Privacy screen: when the app is hidden (app switcher, another tab, phone locked) the page is blurred, so the switcher's

@@ -492,7 +492,7 @@ function finalPay(e, o) {
   const loanItems = listOf(S.loans).filter((ln) => ln.empId === e.id && ["ACTIVE", "HOLD"].includes(ln.status)).map((ln) => ({ id: ln.id, label: loanLabel(ln.id), bal: loanBal(ln), gov: isGovLoan(ln), on: pay.loans?.[ln.id] ?? !isGovLoan(ln) })).filter((x) => x.bal > 0);
   const loanDed = PAY.r2(loanItems.filter((x) => x.on).reduce((a, x) => a + x.bal, 0));
   const yrsExact = (daysBetween(e.hire, last) + 1) / 365.25; const whole = Math.floor(yrsExact); const yrs = whole + (yrsExact - whole >= 0.5 ? 1 : 0);
-  const left = balances(e, year).find((b) => b.code === "VL")?.left ?? 0; const conv = TSET().convertVL;
+  const left = balances(e, leaveYear(last)).find((b) => b.code === "VL")?.left ?? 0; const conv = TSET().convertVL;
   const autoDays = conv === "ALL" ? left : conv === "SIL" && yrsExact >= 1 ? Math.min(5, left) : 0;
   const convDays = pay.conv != null ? pay.conv : autoDays; const leave = PAY.r2(convDays * daily);
   const age = e.birth ? Math.floor(daysBetween(e.birth, last) / 365.25) : null;
