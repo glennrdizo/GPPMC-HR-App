@@ -31,7 +31,8 @@ function empPrompt(sum, first) {
   return `You are the HR assistant of ${S.org?.companyName || "the company"}, chatting in the HR app with employee ${sum?.name || "an employee"}.
 ${BOT_RULES}
 - You only see this one employee's data. Never discuss other employees.
-- You cannot approve, file or change anything. For requests (leave, overtime, corrections, certificates, loans), tell them which tab to use or that HR will help.
+- ${S.selfMode ? "You can PREPARE a leave, overtime, time correction or certificate request, or a message to HR, with the tools. The employee confirms on screen before anything is sent, and HR or their supervisor approves it. Ask for missing details first, one short question at a time. Never say a request was sent or approved." : "You cannot approve, file or change anything. For requests (leave, overtime, corrections, certificates, loans), tell them which tab to use or that HR will help."}
+- Leave codes: ${(SET().leaveTypes || []).map((t) => `${t.code} = ${t.name}`).join("; ")}. Today is ${todayISO()}.
 - When the question needs a person (a complaint, a correction, a decision, something not in the data, or they ask for HR), say HR will follow up and put [[ASK_HR]] alone on the last line.
 
 COMPANY POLICIES (written by HR):
@@ -98,7 +99,7 @@ async function botSend(kind, text) {
   const ac = new AbortController(); S.botAbort = ac; const last = list[list.length - 1];
   const paint = () => { const el = document.querySelector(`#bot-${kind} li:last-child .bot-txt`); if (el) el.innerHTML = botFmt(last.content.replace(/\[\[ASK_HR\]\]/g, "").trim()) || "<i>Thinking…</i>"; botScroll(); };
   try {
-    const res = await sample(turns, { modelTier: kind === "hr" ? "default" : "quick", cache: false, signal: ac.signal, onText: ({ text }) => { last.content = text; paint(); }, ...(kind === "hr" ? { tools: hrTools() } : {}) });
+    const res = await sample(turns, { modelTier: kind === "hr" ? "default" : "quick", cache: false, signal: ac.signal, onText: ({ text }) => { last.content = text; paint(); }, ...(kind === "hr" ? { tools: hrTools() } : S.selfMode && typeof empBotTools === "function" ? { tools: empBotTools((p) => { last.prop = p; }) } : {}) });
     last.content = res.text || last.content;
   } catch (e) { last.content = e?.text || ""; last.err = e?.code === "not_granted" ? "You declined the assistant for this visit. Reload to allow it." : e?.code === "cancelled" ? "Stopped." : e?.code === "rate_limited" ? "Too many questions at once. Wait a moment and try again." : "The assistant couldn't answer. Try again or use Ask HR."; }
   last.pending = false; if (/\[\[ASK_HR\]\]/.test(last.content)) { last.content = last.content.replace(/\[\[ASK_HR\]\]/g, "").trim(); last.handoff = true; }
@@ -109,7 +110,7 @@ function botChat(kind, starters, note) {
   const list = S.bot[kind]; const can = !!S.sample;
   return `<section class="card bot-card"><ol class="bot-msgs" id="bot-${kind}" aria-live="polite">
       <li class="bot"><div class="bot-txt">${kind === "hr" ? "Hi! Ask me about employees, leave, attendance, headcount, recruitment and applicants, or what's waiting for approval. I can also draft job ads and interview questions." : "Hi! I'm the HR assistant. Ask me about your pay, leave, schedule, loans or company policies."}</div></li>
-      ${list.map((m) => `<li class="${m.role === "user" ? "me" : "bot"}"><div class="bot-txt">${m.pending && !m.content ? "<i>Thinking…</i>" : botFmt(m.content)}</div>${m.err ? `<small class="t-warn">${esc(m.err)}</small>` : ""}${m.handoff && kind === "emp" ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px" data-bot-handoff>${icon("mail")}Send this to HR</button>` : ""}</li>`).join("")}</ol>
+      ${list.map((m) => `<li class="${m.role === "user" ? "me" : "bot"}"><div class="bot-txt">${m.pending && !m.content ? "<i>Thinking…</i>" : botFmt(m.content)}</div>${m.err ? `<small class="t-warn">${esc(m.err)}</small>` : ""}${m.handoff && kind === "emp" ? `<button class="btn btn-ghost btn-sm" style="margin-top:6px" data-bot-handoff>${icon("mail")}Send this to HR</button>` : ""}${m.prop && typeof botPropCard === "function" ? botPropCard(m.prop, list.indexOf(m)) : ""}</li>`).join("")}</ol>
     ${!list.length ? `<div class="bot-starters">${starters.map((s) => `<button class="chip-btn" data-bot-ask="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : ""}
     ${can ? `<form id="bot-form" class="bot-form" data-kind="${kind}" data-keep><label class="sr-only" for="bot-in">Your question</label><textarea class="input" id="bot-in" rows="1" maxlength="1500" placeholder="Type your question" ${S.botBusy ? "disabled" : ""}></textarea>
       ${S.botBusy ? '<button type="button" class="btn btn-ghost" data-bot-stop>Stop</button>' : '<button class="btn btn-primary">Ask</button>'}</form>` : '<p class="t-muted" style="margin:10px 0 0;font-size:14px">The assistant needs Claude, which isn\'t available in this view. Use Ask HR instead.</p>'}

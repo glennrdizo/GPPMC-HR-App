@@ -3,7 +3,8 @@
 // Emails carry no pay amounts or government numbers: they say what happened and link to the app.
 
 export type Doc = Record<string, any>;
-export type Notice = { id: string; kind: string; to: string; mobile?: string | null; subject: string; text: string; sms?: string };
+// empId: the employee it is about, so it also reaches their linked chat (hr-bot); chatOnly: no email or SMS.
+export type Notice = { id: string; kind: string; to: string; mobile?: string | null; subject: string; text: string; sms?: string; empId?: string; chat?: string };
 export type Settings = {
   on: boolean; company: string; appUrl: string; careersUrl: string; digestHour: number;
   digestTo: string[]; approverTo: string[]; sms: boolean;
@@ -75,9 +76,9 @@ function reqNotices(col: string, id: string, oldR: Doc | null, r: Doc, ctx: Ctx,
     for (const t of to) out.push({ id: `apv-${col}-${id}-${t}`, kind: "approval", to: t, subject: `${label} from ${nameOf(e)} needs a decision`,
       text: `${nameOf(e)}${e?.no ? ` (${e.no})` : ""} filed a ${label.toLowerCase()}${what ? ` (${what})` : ""}. It's waiting for your ${first ? `endorsement as ${first.name || "the first approver"}` : "decision"}.\n\nApprove it in one tap (sign in if asked): ${apvLink(S, kind, key)}${footer(S)}` });
   }
-  if (was === "PENDING" && now && DONE[now] && S.kinds.decided && e && (isEmail(e.email) || (S.sms && e.mobile))) {
+  if (was === "PENDING" && now && DONE[now] && S.kinds.decided && e) {
     const line = `Your ${label.toLowerCase()}${what ? ` (${what})` : ""} ${DONE[now]}.`;
-    out.push({ id: `dec-${col}-${id}-${now}`, kind: "decided", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null,
+    out.push({ id: `dec-${col}-${id}-${now}`, kind: "decided", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null, empId: e.id, chat: `${line}${r.note || r.remarks ? `\nNote from HR: ${String(r.note || r.remarks).slice(0, 300)}` : ""}`,
       subject: `${label}: ${DONE[now].replace(/^(was|is) /, "")}`, text: `Hi ${e.first || nameOf(e)},\n\n${line}${r.note || r.remarks ? `\nNote from HR: ${String(r.note || r.remarks).slice(0, 300)}` : ""}${footer(S)}`,
       sms: `${S.company.split(" ")[0]} HR: ${line} Details in the HR app.` });
   }
@@ -122,8 +123,7 @@ function payNotices(id: string, oldP: Doc | null, p: Doc, ctx: Ctx): Notice[] {
   const S = ctx.settings; if (!S.kinds.payslip) return [];
   const before = new Set(Object.keys(oldP?.lines || {})); const out: Notice[] = []; const period = p.start && p.end ? `${fmt(p.start)} to ${fmt(p.end)}` : id;
   for (const empId of Object.keys(p.lines || {})) { if (before.has(empId)) continue; const e = ctx.emps.get(empId); if (!e) continue;
-    if (!isEmail(e.email) && !(S.sms && e.mobile)) continue;
-    out.push({ id: `pay-${id}-${empId}`, kind: "payslip", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null,
+    out.push({ id: `pay-${id}-${empId}`, kind: "payslip", to: isEmail(e.email) ? e.email.trim().toLowerCase() : "", mobile: S.sms ? e.mobile || null : null, empId, chat: `Your payslip for ${period} is ready. Open My payslips in the HR app to view it.`,
       subject: `Your payslip for ${period} is ready`, text: `Hi ${e.first || nameOf(e)},\n\nYour payslip for ${period} is ready. Sign in to the HR app and open My payslips to view it.${footer(S)}`,
       sms: `${S.company.split(" ")[0]} HR: Your payslip for ${period} is ready in the HR app.` }); }
   return out;
@@ -193,7 +193,8 @@ export function eventNotices(ev: { path: string; col: string; old: Doc | null; n
 }
 
 /* ---------- HR's morning digest ---------- */
-export type All = { emps: Doc[]; leaves: Doc[]; reqs: Record<string, Doc[]>; offboard: Doc[]; contracts: Doc[]; cases: Doc[]; remit: Map<string, Doc>; payruns: Set<string>; projects: Map<string, Doc> };
+// pay: pay/employees--<id> records (basic pay), when read; apprs: endorsements recorded so far (app/ops.js).
+export type All = { emps: Doc[]; leaves: Doc[]; reqs: Record<string, Doc[]>; offboard: Doc[]; contracts: Doc[]; cases: Doc[]; remit: Map<string, Doc>; payruns: Set<string>; projects: Map<string, Doc>; pay?: Map<string, Doc>; apprs?: Map<string, Doc> };
 const REMIT: [string, string][] = [["sss", "SSS contributions"], ["ph", "PhilHealth premiums"], ["hdmf", "Pag-IBIG contributions"], ["bir", "BIR 1601-C withholding tax"]];
 export function remitDue(month: string, k: string, due: Record<string, number>) {
   const [y, m] = month.split("-").map(Number); const ny = m === 12 ? y + 1 : y, nm = m === 12 ? 1 : m + 1; const d = Number(due[k]) || 0;
@@ -223,6 +224,16 @@ export function digestSections(A: All, ctx: Ctx) {
   const pay: [number, string][] = []; const c = cutoffOf(T), pc = cutoffOf(addDays(c.start, -1));
   if (act.length && !A.payruns.has(pc.id)) pay.push([daysBetween(pc.end, T), `Payroll for ${fmt(pc.start)} to ${fmt(pc.end)} is not finalized yet (cutoff ended ${fmt(pc.end)})`]);
   if (act.length && daysBetween(T, c.end) <= 1 && !A.payruns.has(c.id)) pay.push([0, `Cutoff ${fmt(c.start)} to ${fmt(c.end)} ends ${c.end === T ? "today" : "tomorrow"}: check time records, overtime and leave`]);
+  // HR helper: what would hold up the payroll that is due next (the open cutoff ending within 3 days, or the last one not finalized).
+  const nx = !A.payruns.has(pc.id) ? pc : daysBetween(T, c.end) <= 3 && !A.payruns.has(c.id) ? c : null;
+  if (act.length && nx) {
+    const label = `${fmt(nx.start)} to ${fmt(nx.end)}`;
+    if (A.pay) { const none = act.filter((e) => !(Number(A.pay!.get(e.id)?.basicPay) > 0) && !(Number(e.basicPay) > 0) && (!day(e.hire) || e.hire <= nx.end));
+      if (none.length) pay.push([1, `${plural(none.length, "employee")} without basic pay for the ${label} payroll${none.length <= 5 ? `: ${none.map(who).join(", ")}` : ` (for example ${none.slice(0, 3).map(who).join(", ")})`}`]); }
+    const inCut = (r: Doc) => { const d = day(r.from) || day(r.d) || day(r.date); const d2 = day(r.to) || d; return !!d && d <= nx.end && d2 >= nx.start; };
+    const waiting = [...A.leaves.filter((l) => l.status === "PENDING" && inCut(l)), ...["otreqs", "attreq"].flatMap((k) => (A.reqs[k] || []).filter((r) => r.status === "PENDING" && inCut(r)))].filter((r) => !r.sample && emp.get(r.empId) && !emp.get(r.empId)!.separated);
+    if (waiting.length) pay.push([1, `${plural(waiting.length, "leave, overtime or attendance request")} for ${label} still waiting for a decision`]);
+  }
   add("Payroll", pay);
 
   const fp: [number, string][] = [];
@@ -265,6 +276,23 @@ export function escalationNotices(A: All, ctx: Ctx): Notice[] {
   return out.slice(0, 60);
 }
 
+/* ---------- HR helper: once a day, each approver gets one message listing what has waited past its target for them ---------- */
+// The approver is the next level of the request's approval chain (Needs action > Rules), or the approver list when there is no chain.
+export function chaseNotices(A: All, ctx: Ctx): Notice[] {
+  const S = ctx.settings, O = ctx.ops || {}; const sla = { ...SLA_DEF, ...(O.sla || {}) };
+  const emp = new Map(A.emps.map((e) => [e.id, e])); const by = new Map<string, string[]>();
+  const one = (col: string, r: Doc, key: string) => { if (r.status !== "PENDING" || r.sample) return; const e = emp.get(r.empId); if (r.empId && (!e || e.separated)) return;
+    const filed = day(r.filed) || day(r.d) || day(r.date); if (!filed) return; const kind = REQ[col][0]; const late = daysBetween(addDays(filed, Number(sla[kind]) || 3), ctx.today); if (late <= 0) return;
+    const chain = O.chains?.[kind] || []; const done = (A.apprs?.get(`${kind}--${key}`)?.steps || []).length; const next = chain[done];
+    const to = next ? [next.uid ? ctx.userEmail(next.uid) : null].filter(Boolean) as string[] : S.approverTo;
+    for (const t of to.length ? to : S.approverTo) by.set(t, [...(by.get(t) || []), `• ${reqLabel(col, r)} from ${nameOf(e)}${reqWhat(col, r, ctx) ? ` (${reqWhat(col, r, ctx)})` : ""}, ${plural(late, "day")} past target\n  ${apvLink(S, kind, key)}`]); };
+  for (const l of A.leaves) one("leaves", l, `${l.month}:${l.id}`);
+  for (const [col, list] of Object.entries(A.reqs)) for (const r of list) one(col, r, String(r.id));
+  return [...by].map(([to, lines]) => ({ id: `chase-${ctx.today}-${to}`, kind: "approval", to, subject: `Reminder: ${plural(lines.length, "request")} waiting for you`,
+    text: `Good morning. These requests are past their target time and are waiting for your decision:\n\n${lines.slice(0, 30).join("\n")}${lines.length > 30 ? `\n…and ${lines.length - 30} more in the app` : ""}\n\nOpen each link to approve in one tap (sign in if asked).${footer(S)}`,
+    chat: `Reminder: ${plural(lines.length, "request")} waiting for your decision, past target:\n${lines.slice(0, 10).map((l) => l.split("\n")[0]).join("\n")}${lines.length > 10 ? `\n…and ${lines.length - 10} more` : ""}\n\nApprove them in the HR app: Overview > Needs action.` }));
+}
+
 export function digestNotices(A: All, ctx: Ctx): { notices: Notice[]; count: number } {
   const S = ctx.settings; const sec = digestSections(A, ctx); const count = sec.reduce((a, s) => a + s.lines.length, 0);
   if (!S.kinds.digest || !count || !S.digestTo.length) return { notices: [], count };
@@ -272,6 +300,13 @@ export function digestNotices(A: All, ctx: Ctx): { notices: Notice[]; count: num
   const text = `Good morning. Here is what needs HR's attention today, ${fmt(ctx.today)}.\n\n${body}\n\nThe full list is on Overview > Needs action.${footer(S)}`;
   return { count, notices: S.digestTo.map((to) => ({ id: `dig-${ctx.today}-${to}`, kind: "digest", to, subject: `HR to-do for ${fmt(ctx.today)}: ${plural(count, "item")}`, text })) };
 }
+
+// Morning reminder for an employee whose time records have issues to fix before payroll.
+export function fixReminder(sum: Doc | null): string | null {
+  const it = (sum?.fix?.items || []).filter((i: Doc) => !i.wait); if (!it.length) return null;
+  return `Hi ${sum?.first || ""}! Before payroll${sum?.fix?.due ? ` (cutoff ends ${fmt(sum.fix.due)})` : ""}, please fix:\n${it.slice(0, 8).map((i: Doc) => `• ${fmt(i.d)}: ${i.text}`).join("\n")}${it.length > 8 ? `\n…and ${it.length - 8} more` : ""}\n\nReply here, for example "I timed out at 5:30 pm on ${fmt(it[0].d)}", and I'll prepare the request for you.`.replace("Hi !", "Hi!");
+}
+
 
 /* ---------- message formats ---------- */
 const escH = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);

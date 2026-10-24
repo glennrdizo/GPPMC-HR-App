@@ -24,9 +24,9 @@ assert.equal(L.eventNotices({ path: "otreqs/o1", col: "otreqs", old: { empId: "e
 // Attendance request kinds get their own label
 n = L.eventNotices({ path: "attreq/a1", col: "attreq", old: { empId: "e1", status: "PENDING", kind: "OB" }, new: { empId: "e1", status: "REJECTED", kind: "OB", d: "2026-10-10" } }, ctx);
 assert.match(n[0].text, /official business request \(for Oct 10, 2026\) was not approved/);
-// Payslip: one per new line, none for someone without email or mobile
+// Payslip: one per new line; someone without email gets one with no address (it can still reach their linked chat)
 n = L.eventNotices({ path: "payruns/2026-10-1", col: "payruns", old: null, new: { start: "2026-10-01", end: "2026-10-15", lines: { e1: {}, e2: {} } } }, ctx);
-assert.deepEqual(n.map((x) => x.id), ["pay-2026-10-1-e1"]); assert.doesNotMatch(n[0].text, /net|gross/i);
+assert.deepEqual(n.map((x) => [x.id, x.to, x.empId]), [["pay-2026-10-1-e1", "ana@x.test", "e1"], ["pay-2026-10-1-e2", "", "e2"]]); assert.doesNotMatch(n[0].text + n[0].chat, /net|gross/i);
 // Applicant: received, interview, rejected; sample applicants ignored
 n = L.eventNotices({ path: "applicants/a9", col: "applicants", old: null, new: { first: "Dee", email: "dee@x.test", jobId: "j1", stage: "APPLIED" } }, ctx);
 assert.equal(n[0].subject, "We received your application"); assert.match(n[0].text, /HR Recruiter/);
