@@ -61,7 +61,8 @@
   }
   const errText = (e) => { const m = String(e?.message || e || ""); return /job_closed/.test(m) ? "This job is no longer open." : /consent_required/.test(m) ? "Please tick the privacy consent box." : /missing_fields/.test(m) ? "Fill in your first name, last name and mobile number."
     : /email_not_confirmed|not confirmed/i.test(m) ? "Confirm your email first: open the link we sent you." : /too_many/.test(m) ? "You already have 5 applications in progress. Withdraw one to apply for another job."
-    : /already_accepted/.test(m) ? "HR already accepted this requirement." : /application_closed/.test(m) ? "This application is closed." : /Invalid login/i.test(m) ? "Wrong email or password." : m || "Something went wrong. Try again."; };
+    : /already_accepted/.test(m) ? "HR already accepted this requirement." : /slot_taken/.test(m) ? "Someone just picked that time. Please choose another." : /slot_gone/.test(m) ? "That time is no longer offered. Please choose another."
+    : /already_scheduled/.test(m) ? "HR already set your interview schedule." : /not_interview_stage/.test(m) ? "Interview times open when HR moves your application to the interview stage." : /application_closed/.test(m) ? "This application is closed." : /Invalid login/i.test(m) ? "Wrong email or password." : m || "Something went wrong. Try again."; };
 
   /* ---------- page ---------- */
   const css = `
@@ -208,6 +209,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
       ${out ? "" : `<div class="steps" aria-label="Application progress">${STAGES.map(([, l], i) => `<span class="step ${i < idx ? "done" : i === idx ? "cur" : ""}">${l}</span>`).join("")}</div>`}
       <p style="margin:0">${esc(STAGE_TXT[a.stage] || "")}</p>
       ${ivs.map((i) => `<div class="iv"><span style="font-size:24px" aria-hidden="true">🗓️</span><span><b>${esc(i.kind || "Interview")}</b>${esc(fmtDay(i.d))}${i.t ? ` at ${esc(fmtTime(i.t))}` : ""}<br><small class="sub">Please come 15 minutes early and bring a valid ID and a copy of your resume.</small></span></div>`).join("")}
+      ${open && (a.slots || []).length ? slotPicker(a) : ""}
       ${a.offer ? `<div class="iv" style="background:${a.offer.status === "DECLINED" ? "var(--badbg)" : "var(--okbg)"}"><span style="font-size:24px" aria-hidden="true">📄</span><span><b>Job offer ${a.offer.status === "ACCEPTED" ? "accepted" : a.offer.status === "DECLINED" ? "declined" : "sent to you"}</b>${a.offer.rate ? `Pay: ${esc(peso.format(a.offer.rate))} ${a.offer.payType === "DAILY" ? "a day" : "a month"}` : ""}${a.offer?.status === "SENT" && a.stage !== "HIRED" ? `<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn gold" data-offer="${esc(a.id)}:1">Accept the offer</button><button class="btn" data-offer="${esc(a.id)}:0">Decline</button></div>` : ""}${a.offer.start ? ` · Start date: ${esc(fmtDate(a.offer.start))}` : ""}</span></div>` : ""}
       ${shared.length ? `<section class="sec"><h3 style="font-size:18px;margin-bottom:4px">Documents from HR</h3><p class="sub">Download each one. If it needs your signature, print and sign it, then upload a photo or scan of the signed copy.</p><ul class="reqs">${shared.map((s) => { const b = a.portal?.back?.[s.id];
         return `<li><span class="nm"><b>${esc(s.name)}</b><small>${s.sign ? (b ? `Signed copy sent ${esc(fmtDate(b.at))}` : "Needs your signature") : "For your information"}${s.note ? ` · ${esc(s.note)}` : ""}</small></span><span class="act"><button class="btn sm" data-dl="${esc(s.file)}" data-name="${esc(s.name)}">Download</button>
@@ -218,6 +220,15 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
             ${open && !done ? `<span class="act">${num ? `<input class="i" data-num="${esc(a.id)}:${esc(k)}" value="${esc(r?.num || "")}" placeholder="Type the number" aria-label="${esc(l)}"><button class="btn sm" data-save-num="${esc(a.id)}:${esc(k)}">Save</button>` : ""}<label class="btn sm ${r ? "" : "gold"} upl">${r?.file ? "Replace file" : num ? "Add photo" : "Upload"}<input type="file" accept="application/pdf,image/*" data-req="${esc(a.id)}:${esc(k)}"></label></span>` : ""}</li>`; }).join("")}</ul></section>`
         : !out ? `<p class="sub" style="margin:0">After you pass the interview, you'll send your pre-employment requirements here (NBI clearance, medical, PSA birth certificate, SSS, PhilHealth, Pag-IBIG, TIN and others).</p>` : ""}
       ${open ? `<div class="row" style="justify-content:flex-end">${a.stage === "APPLIED" && jobOf(a.jobId) ? `<button class="btn sm" data-edit-app="${esc(a.jobId)}">Edit my application</button>` : ""}<button class="btn sm" data-withdraw="${esc(a.id)}" style="color:var(--bad)">Withdraw</button></div>` : ""}</article>`;
+  }
+  // Interview times HR offers on the job (hr_my_apps slots); the applicant picks one, and can change it until the day before.
+  function slotPicker(a) {
+    const mine = (a.ivs || []).find((i) => i.slot && i.result === "PENDING" && i.d > today()); const days = {};
+    for (const s of a.slots) (days[s.d] = days[s.d] || []).push(s);
+    return `<section class="sec"><h3 style="font-size:18px;margin-bottom:4px">${mine ? "Your interview time" : "Pick your interview time"}</h3>
+      <p class="sub">${mine ? `You picked ${esc(fmtDay(mine.d))} at ${esc(fmtTime(mine.t))}. You can change it until the day before.` : "Choose the time that works best for you. Each time is for one applicant, so pick soon."}</p>
+      ${Object.entries(days).map(([d, list]) => `<p style="margin:10px 0 6px;font-weight:700">${esc(fmtDay(d))}</p><div class="row">${list.map((s) => { const cur = mine?.slot === s.id;
+        return `<button class="btn sm ${cur ? "primary" : ""}" data-book="${esc(a.id)}:${esc(s.id)}" ${cur ? 'aria-pressed="true" disabled' : ""}>${esc(fmtTime(s.t))}${s.kind && s.kind !== "Interview" ? ` · ${esc(s.kind)}` : ""}</button>`; }).join("")}</div>`).join("")}</section>`;
   }
   function formsCard() {
     return `<section class="card sec"><h2>Forms to download</h2><p class="sub">${session ? "Fill these in and bring them, or upload them with your requirements." : "Sign in to download the forms."}</p><ul class="reqs">${cfg.forms.map((f) => `<li><span class="nm"><b>${esc(f.name)}</b>${f.note ? `<small>${esc(f.note)}</small>` : ""}</span><span class="act">${session ? `<button class="btn sm" data-dl="${esc(f.file)}" data-name="${esc(f.name)}">Download</button>` : `<button class="btn sm" data-auth="in">Sign in to download</button>`}</span></li>`).join("")}</ul></section>`;
@@ -277,6 +288,10 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
     if (d.offer) { const [aid, yes] = d.offer.split(":"); if (!await askConfirm(yes === "1" ? "Accept this job offer? HR will prepare your first day." : "Decline this job offer?", yes === "1" ? "Accept" : "Decline")) return;
       t.disabled = true; const { error } = await sb.rpc("hr_offer_respond", { p_app: aid, p_accept: yes === "1" }); t.disabled = false; if (error) { toast(errText(error)); return; }
       toast(yes === "1" ? "Thank you! You accepted the offer. Please finish your requirements below." : "You declined the offer. Thank you for letting us know."); await loadApps(); render(); return; }
+    if (d.book) { const [aid, k] = d.book.split(":"); const s = apps?.find((x) => x.id === aid)?.slots?.find((x) => x.id === k); if (!s) return;
+      if (!await askConfirm(`Pick ${fmtDay(s.d)} at ${fmtTime(s.t)} for your ${(s.kind || "interview").toLowerCase()}?`, "Pick this time")) return;
+      t.disabled = true; const { error } = await sb.rpc("hr_portal_put", { p_app: aid, p_kind: "book", p_key: k }); t.disabled = false;
+      if (error) { toast(errText(error)); await loadApps(); render(); return; } toast("Done. We'll email you the schedule. Please come 15 minutes early."); await loadApps(); render(); return; }
     if (d.withdraw) { const a = apps.find((x) => x.id === d.withdraw); if (!await askConfirm(`Withdraw your application for ${a?.job || "this job"}? HR will stop processing it.`, "Withdraw")) return;
       const { error } = await sb.rpc("hr_portal_put", { p_app: d.withdraw, p_kind: "withdraw" }); if (error) { toast(errText(error)); return; } toast("Your application was withdrawn."); await loadApps(); render(); return; }
   });
@@ -332,6 +347,41 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
       busy = false;
     } catch (x) { fail(errText(x)); }
   });
+
+  /* ---------- careers assistant (Glenn 2026-10-24): job seekers ask about openings; answers come from hr-bot ?ch=careers ---------- */
+  const CB = { on: false, open: false, busy: false, msgs: [] };
+  const cbCss = `.cb-btn{position:fixed;right:16px;bottom:16px;z-index:30;display:flex;gap:8px;align-items:center;background:var(--navy);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:700;box-shadow:0 8px 24px rgba(13,23,41,.25)}
+.cb{position:fixed;right:16px;bottom:16px;z-index:31;width:min(380px,calc(100vw - 32px));height:min(560px,calc(100vh - 32px));display:flex;flex-direction:column;background:#FFFDF8;border:1px solid var(--line);border-radius:16px;box-shadow:0 16px 48px rgba(13,23,41,.3);overflow:hidden}
+.cb header{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:var(--navy);color:#fff}.cb header b{font-family:"Playfair Display",Georgia,serif;font-size:17px}.cb header button{background:none;border:0;color:#fff;font-size:22px;line-height:1;min-width:40px;min-height:40px}
+.cb ol{list-style:none;margin:0;padding:12px;flex:1;overflow:auto;display:flex;flex-direction:column;gap:8px}.cb li{max-width:88%;padding:9px 12px;border-radius:12px;font-size:14.5px;white-space:pre-wrap;overflow-wrap:anywhere}
+.cb li.u{align-self:flex-end;background:var(--navy);color:#fff}.cb li.b{align-self:flex-start;background:var(--bluebg)}.cb li .btn{margin-top:6px}
+.cb form{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}.cb textarea{flex:1;resize:none;font:inherit;font-size:16px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;min-height:44px}.cb small{display:block;padding:0 12px 8px;color:var(--muted);font-size:12px}`;
+  { const x = document.createElement("style"); x.textContent = cbCss; document.head.appendChild(x); }
+  const cbHost = document.createElement("div"); document.body.appendChild(cbHost);
+  const cbFmt = (t) => esc(t).replace(/\[\[JOB:([^\]\s]+)\]\]\n?/g, (m, id) => { const j = jobOf(id); return j ? `<button class="btn sm gold" data-cb-job="${esc(id)}">${esc(j.title)} →</button>\n` : ""; }).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+  function cbRender() {
+    if (!CB.on) { cbHost.innerHTML = ""; return; }
+    if (!CB.open) { cbHost.innerHTML = `<button class="cb-btn" data-cb="open" aria-label="Ask about our jobs"><span aria-hidden="true">💬</span>Ask about our jobs</button>`; return; }
+    cbHost.innerHTML = `<section class="cb" role="dialog" aria-label="Careers assistant"><header><b>Ask about our jobs</b><button data-cb="close" aria-label="Close">×</button></header>
+      <ol aria-live="polite"><li class="b">Hi! I can tell you about our openings, how to apply and the requirements. What kind of work are you looking for?</li>${CB.msgs.map((m) => `<li class="${m.role === "user" ? "u" : "b"}">${m.role === "user" ? esc(m.content) : cbFmt(m.content)}</li>`).join("")}${CB.busy ? '<li class="b"><i>Typing…</i></li>' : ""}</ol>
+      <form id="cb-f"><label class="sr" for="cb-in" style="position:absolute;left:-9999px">Your question</label><textarea id="cb-in" rows="1" maxlength="800" placeholder="Type your question" ${CB.busy ? "disabled" : ""}></textarea><button class="btn primary" ${CB.busy ? "disabled" : ""}>Send</button></form>
+      <small>Answers come from an AI assistant and can be wrong. HR makes every hiring decision. Please don't share ID numbers here.</small></section>`;
+    const ol = cbHost.querySelector("ol"); if (ol) ol.scrollTop = ol.scrollHeight; if (!CB.busy) cbHost.querySelector("#cb-in")?.focus();
+  }
+  async function cbCall(body) {
+    const r = await fetch(`${SB_URL}/functions/v1/hr-bot?ch=careers`, { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || "The assistant couldn't answer. Try again."); return j;
+  }
+  async function cbAsk(text) {
+    CB.msgs.push({ role: "user", content: text }); CB.busy = true; cbRender();
+    try { const r = await cbCall({ messages: CB.msgs.slice(-10) }); CB.msgs.push({ role: "assistant", content: r.text || "" }); }
+    catch (x) { CB.msgs.push({ role: "assistant", content: x.message }); } finally { CB.busy = false; cbRender(); }
+  }
+  cbHost.addEventListener("click", (e) => { const t = e.target.closest("[data-cb],[data-cb-job]"); if (!t) return; e.stopPropagation();
+    if (t.dataset.cbJob) { CB.open = false; cbRender(); go({ v: "job", id: t.dataset.cbJob }); return; } CB.open = t.dataset.cb === "open"; cbRender(); });
+  cbHost.addEventListener("submit", (e) => { e.preventDefault(); e.stopPropagation(); const i = cbHost.querySelector("#cb-in"); const q = i?.value.trim(); if (q && !CB.busy) cbAsk(q); });
+  cbHost.addEventListener("keydown", (e) => { if (e.target.id === "cb-in" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.target.form?.requestSubmit(); } if (e.key === "Escape" && CB.open) { CB.open = false; cbRender(); } });
+  cbCall({ ping: true }).then((r) => { CB.on = !!r.ok; cbRender(); }).catch(() => {});
 
   /* ---------- start ---------- */
   async function signedIn(s) {
