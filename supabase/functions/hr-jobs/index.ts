@@ -10,8 +10,9 @@
 // day's summary and employees get what to fix before payroll; org/helper keeps the latest summary for the app and the bot.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { aiScreen, genQuestions } from "./screen.ts";
-import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, manila, eventNotices, digestNotices, digestSections, escalationNotices, chaseNotices, fixReminder, toHtml, phMobile, outId, isEmail } from "./logic.ts";
+import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, readRules, ruleActions, manila, eventNotices, digestNotices, digestSections, escalationNotices, chaseNotices, fixReminder, toHtml, phMobile, outId, isEmail } from "./logic.ts";
 import { type Target, chatKeys, sendChat } from "./chat.ts";
+import { type IvState, IV_MODEL_SCORE, scorePrompt, parseScore, jobText as ivJobText } from "./iv.ts";
 
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
@@ -46,6 +47,25 @@ function screenDeps() {
       return r.ok ? { type: r.headers.get("content-type") || "", buf: await r.arrayBuffer() } : null; },
     claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
       const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; } };
+}
+
+/* ---------- recruitment rules by score, and interviews whose scoring failed (logic.ts ruleActions, iv.ts) ---------- */
+async function recruitRules(today: string) {
+  const R = readRules((await getDoc("org/ops"))?.recRules); const apps = await docsOf("applicants"); const live = apps.filter((a) => a.ai || a.aiiv);
+  if (!live.length) return { moved: 0, scored: 0 };
+  const jobs = new Map((await docsOf("jobs")).map((j) => [j.id, j])); const key = env("ANTHROPIC_API_KEY"); const deps = screenDeps(); let moved = 0, scored = 0;
+  const company = String((await getDoc("org/main"))?.companyName || "GD Prime Property Management Corporation");
+  for (const a of live) {
+    const path = `applicants/${a.id}`; const s = a.aiiv as IvState | undefined;
+    if (key && s?.status === "DONE" && !s.result && (s.tries || 0) < 3 && scored < 3) { scored++;
+      try { const out = await deps.claude({ model: IV_MODEL_SCORE, max_tokens: 1800, messages: [{ role: "user", content: scorePrompt({ company, jobText: ivJobText(jobs.get(a.jobId) || {}), s }) }] });
+        const r = parseScore((out?.content || []).filter((c: Doc) => c.type === "text").map((c: Doc) => c.text).join("")); if (!r) throw new Error("The scoring answer couldn't be read.");
+        await deps.patch(path, { aiiv: { result: { ...r, at: new Date().toISOString(), model: IV_MODEL_SCORE }, err: null } }); a.aiiv = { ...s, result: r };
+      } catch (e) { await deps.patch(path, { aiiv: { err: String((e as Error)?.message || e).slice(0, 200), tries: (s.tries || 0) + 1 } }).catch(() => null); continue; } }
+    const act = ruleActions(a, jobs.get(a.jobId) || null, R, today); if (!act) continue;
+    try { await deps.patch(path, act.patch); moved++; } catch (e) { console.error("rule", a.id, e); }
+  }
+  return { moved, scored };
 }
 
 /* ---------- senders ---------- */
@@ -164,10 +184,11 @@ async function run(force = false) {
   // AI screening of new applications and qualification questions for open jobs (screen.ts), when the Claude key is set.
   let screen: Doc | null = null;
   if (env("ANTHROPIC_API_KEY")) { try { const deps = screenDeps(); const q = await genQuestions(deps); screen = { ...(await aiScreen(deps, 60_000)), questions: q }; } catch (e) { console.error("screen", e); screen = { error: String((e as Error)?.message || e).slice(0, 160) }; } }
+  let rules: Doc | null = null; try { rules = await recruitRules(today); } catch (e) { console.error("rules", e); rules = { error: String((e as Error)?.message || e).slice(0, 160) }; }
   const entry = { date: today, runs: (log.runs || 0) + 1, lastAt: at, events: (log.events || 0) + events.length, queued: (log.queued || 0) + queued, sent: (log.sent || 0) + sent, failed: (log.failed || 0) + failed,
     digestAt: log.digestAt || (digestCount != null ? at : null), digestItems: digestCount ?? log.digestItems ?? null, on: settings.on, sender: sender(),
     helperAt: helperAt || log.helperAt || null, botDayAt: log.botDayAt || botDayAt, chat: chatOn,
-    screened: (log.screened || 0) + (screen?.done || 0), ...(screen ? { screen } : {}) };
+    screened: (log.screened || 0) + (screen?.done || 0), ...(screen ? { screen } : {}), ...(rules ? { rules } : {}) };
   await rest("hr_job_runs?on_conflict=day", { method: "POST", body: JSON.stringify([{ day: today, data: entry, updated_at: at }]) }, { prefer: "resolution=merge-duplicates,return=minimal" });
   return entry;
 }

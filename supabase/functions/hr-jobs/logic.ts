@@ -87,6 +87,7 @@ function reqNotices(col: string, id: string, oldR: Doc | null, r: Doc, ctx: Ctx,
 
 /* ---------- applicants ---------- */
 const STAGE_MSG: Record<string, [string, string]> = {
+  INTERVIEW: ["Interview for {job}", "Good news: you're invited to an interview for {job}. Sign in to the careers page to see your schedule, or to pick a time when HR offers interview times."],
   APPLIED: ["We received your application", "Thank you for applying for {job}. We received your application and our HR team will review it. You can follow it on our careers page."],
   REQUIREMENTS: ["Please prepare your requirements", "Good news: your application for {job} moved to the requirements stage. Please sign in to the careers page to see the documents to prepare and upload."],
   OFFER: ["Job offer for {job}", "We are pleased to let you know that we'd like to offer you the position of {job}. HR will contact you with the offer details."],
@@ -98,12 +99,16 @@ function appNotices(id: string, oldA: Doc | null, a: Doc, ctx: Ctx): Notice[] {
   const to = a.email.trim().toLowerCase(); const job = ctx.jobs.get(a.jobId)?.title || "the position"; const hi = `Hi ${a.first || "there"},\n\n`;
   const sub = (s: string) => s.replace("{job}", job).replace("{company}", S.company); const out: Notice[] = [];
   const end = `\n\nCareers page: ${S.careersUrl}\n\n${S.company} · Human Resources\nThis is an automatic message.`;
-  const stage = a.stage || "APPLIED";
-  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage]) { const [s, t] = STAGE_MSG[stage]; const e = stage === "HIRED" && a.empId ? ctx.emps.get(a.empId) : null;
+  const stage = a.stage || "APPLIED"; const had = new Set((oldA?.ivs || []).map((i: Doc) => i.id));
+  // Moved to Interview with a schedule set at the same time: the schedule email says it all.
+  const newIv = (a.ivs || []).some((i: Doc) => !had.has(i.id) && i.result === "PENDING");
+  if (stage !== (oldA ? oldA.stage || "APPLIED" : null) && STAGE_MSG[stage] && !(stage === "INTERVIEW" && newIv)) { const [s, t] = STAGE_MSG[stage]; const e = stage === "HIRED" && a.empId ? ctx.emps.get(a.empId) : null;
     // New hires get their employee number and how to open their employee account (approved by itself when made with this email).
     const acct = e?.no ? `\n\nYour employee number is ${e.no}${e.hire ? ` and your first day is ${fmt(e.hire)}` : ""}. To see your schedule, time records, payslips and leave on your phone, open ${S.appUrl}, sign in with the same email you used on the careers page (${to}), fill in your details with your employee number and press "Send to HR for approval". It is approved automatically.` : "";
     out.push({ id: `app-${id}-${stage}`, kind: "applicant", to, subject: sub(s), text: hi + sub(t) + acct + end }); }
-  const had = new Set((oldA?.ivs || []).map((i: Doc) => i.id));
+  if (a.aiiv?.status === "INVITED" && oldA?.aiiv?.status !== "INVITED")
+    out.push({ id: `aiiv-${id}-${a.aiiv.at || ""}`, kind: "applicant", to, subject: `Online interview for ${job}`,
+      text: `${hi}Thank you for applying for ${job}. The next step is a short online interview: a few questions about your work experience that you answer on the careers page, by typing or speaking, in English or Filipino. It takes about 15 to 20 minutes and you can do it any time${a.aiiv.until ? ` until ${fmt(a.aiiv.until)}` : ""}.\n\nSign in to the careers page, open My applications and press Start the interview. The questions are asked by an AI interviewer; a person in HR reads every interview and makes the decision. If you prefer to talk to a person instead, press "I prefer an interview with a person".${end}` });
   for (const iv of a.ivs || []) { if (had.has(iv.id) || iv.result !== "PENDING" || !day(iv.d) || day(iv.d) < ctx.today) continue;
     const k = String(iv.kind || "Interview"); out.push({ id: `iv-${id}-${iv.id}`, kind: "applicant", to, subject: `${k} schedule for ${job}`,
       text: `${hi}Your ${k.toLowerCase()} for ${job} is set on ${fmt(iv.d)}${iv.t ? ` at ${iv.t}` : ""}${iv.by ? ` with ${iv.by}` : ""}. Please be on time and bring a valid ID. If you can't make it, please reply through the careers page or contact HR.${end}` }); }
@@ -307,6 +312,45 @@ export function fixReminder(sum: Doc | null): string | null {
   return `Hi ${sum?.first || ""}! Before payroll${sum?.fix?.due ? ` (cutoff ends ${fmt(sum.fix.due)})` : ""}, please fix:\n${it.slice(0, 8).map((i: Doc) => `• ${fmt(i.d)}: ${i.text}`).join("\n")}${it.length > 8 ? `\n…and ${it.length - 8} more` : ""}\n\nReply here, for example "I timed out at 5:30 pm on ${fmt(it[0].d)}", and I'll prepare the request for you.`.replace("Hi !", "Hi!");
 }
 
+
+/* ---------- recruitment rules by score (Glenn 2026-10-25): Recruitment > Automatic rules, org/ops.recRules ---------- */
+// High scores move the applicant on by themselves; low scores are only suggested for rejection, which HR confirms.
+export const REC_RULES = { on: false, invite: 70, reject: 40, aiiv: true, pass: 70 };
+export function readRules(r: Doc | null | undefined) {
+  const o = { ...REC_RULES, ...(r || {}) }; const n = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Math.max(0, Math.min(100, Math.round(Number(v)))) : d);
+  return { on: o.on === true, aiiv: o.aiiv !== false, invite: n(o.invite, 70), reject: Math.min(n(o.reject, 40), n(o.invite, 70)), pass: n(o.pass, 70) };
+}
+const LIVE_STAGES = ["APPLIED", "SCREENING", "SCREEN"];
+// What the rules do to one applicant now: a patch for hr_update, or null. Each step runs once (a.rules.screen, a.rules.iv).
+export function ruleActions(a: Doc, job: Doc | null, R: ReturnType<typeof readRules>, today: string, now = new Date().toISOString()): { patch: Doc; text: string } | null {
+  if (!a || a.sample) return null;
+  // An unanswered invitation closes after its last day, whether or not the rules are on.
+  if (a.aiiv?.status === "INVITED" && a.aiiv.until && today > a.aiiv.until) return { patch: { aiiv: { status: "EXPIRED" } }, text: "The online interview invitation expired unanswered" };
+  if (!R.on || a.blacklist || a.refused || !LIVE_STAGES.includes(a.stage || "APPLIED")) return null;
+  const done = a.rules || {}; const log = (t: string) => [...(Array.isArray(a.ruleLog) ? a.ruleLog : []), { at: now, text: t }].slice(-20);
+  const step = (k: string, act: string, extra: Doc, text: string) => ({ patch: { ...extra, rules: { [k]: { at: now, act } }, ruleLog: log(text) }, text });
+  const toInterview = { stage: "INTERVIEW", stageAt: today };
+  const suggest = (why: string) => ({ suggest: { act: "REJECT", why, at: now } });
+  if (a.aiiv?.status === "DONE" && a.aiiv.result && !done.iv) {
+    const sc = Number(a.aiiv.result.score); if (a.aiiv.result.score == null || !Number.isFinite(sc)) return null;
+    if (sc >= R.pass) return step("iv", "interview", toInterview, `Moved to Interview: online interview score ${sc} (rule: ${R.pass} or more)`);
+    if (sc < R.reject) return step("iv", "suggest", suggest(`Online interview score ${sc} is under ${R.reject}`), `Suggested not a fit: online interview score ${sc} (rule: under ${R.reject}); waiting for HR`);
+    return step("iv", "none", {}, `Online interview score ${sc}: left for HR to decide`);
+  }
+  // An interview under way (invited by HR or a rule) is waited for; an expired one is left for HR.
+  if (a.ai && !done.screen && ["INVITED", "STARTED", "DONE"].includes(a.aiiv?.status)) return null;
+  if (a.ai && !done.screen) {
+    const sc = Number(a.ai.score); if (a.ai.score == null || !Number.isFinite(sc)) return null;
+    if (sc >= R.invite && a.aiiv?.status === "EXPIRED") return step("screen", "none", {}, `Screening score ${sc}, but the online interview invitation expired: left for HR to decide`);
+    if (sc >= R.invite) {
+      if (R.aiiv && job?.aiiv !== false && !a.aiiv) return step("screen", "aiiv", { stage: "SCREENING", stageAt: today, aiiv: { status: "INVITED", by: "rule", at: now, until: addDays(today, 7) } }, `Invited to the online interview: screening score ${sc} (rule: ${R.invite} or more)`);
+      return step("screen", "interview", toInterview, `Moved to Interview: screening score ${sc} (rule: ${R.invite} or more)`);
+    }
+    if (sc < R.reject) return step("screen", "suggest", suggest(`AI screening score ${sc} is under ${R.reject}`), `Suggested not a fit: screening score ${sc} (rule: under ${R.reject}); waiting for HR`);
+    return step("screen", "none", {}, `Screening score ${sc}: left for HR to decide`);
+  }
+  return null;
+}
 
 /* ---------- message formats ---------- */
 const escH = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
