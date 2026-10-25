@@ -64,7 +64,7 @@ window.addEventListener("click", (ev) => { const t = ev.target.closest?.("[data-
 S.rqPhone = S.rqPhone || new Map(); S.rqSubs = S.rqSubs || new Set();
 function rqWatch() {
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.rqSubs.has(d.id) || !S.emps.get(S.clockLinks[d.id])) continue; S.rqSubs.add(d.id);
-    fxQ(d.id, "reqs", 200).onSnapshot((snap) => { for (const k of [...S.rqPhone.keys()]) if (k.startsWith(d.id + ":")) S.rqPhone.delete(k); for (const x of snap.docs) S.rqPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+    fxQ(d.id, "reqs", 200).onSnapshot((snap) => { for (const k of [...S.rqPhone.keys()]) if (k.startsWith(d.id + ":")) S.rqPhone.delete(k); for (const x of snap.docs) S.rqPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {}); }
 }
 const rqDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/reqs/${f.id}`).update(extra); S.rqPhone.set(`${f.dev}:${f.id}`, { ...f, done: true, ...extra }); };
 async function rqOne(f) {

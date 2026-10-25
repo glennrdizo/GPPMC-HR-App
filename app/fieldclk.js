@@ -20,7 +20,7 @@ function fcQueue(item) {
 let fcBusy = false;
 async function fcFlush() {
   if (fcBusy || navigator.onLine === false || !S.db) return; let l = fcRead(); if (!l.length) { S.fcN = 0; return; }
-  fcBusy = true; let sent = 0, dropped = 0;
+  fcBusy = true; let sent = 0, dropped = 0; const ids0 = new Set(l.map((x) => x.id));
   try {
     for (const it of [...l]) {
       if (it.kind === "self" ? S.self?.uid !== it.u : !(S.realEdit && S.canEdit)) continue; // only the account that made it sends it
@@ -38,7 +38,8 @@ async function fcFlush() {
         it.tries = (it.tries || 0) + 1; if (it.tries >= 5) { l = l.filter((x) => x !== it); dropped++; }
       }
     }
-  } finally { fcWrite(l); S.fcN = l.length; fcBusy = false; }
+  } finally { // punches queued while this ran are kept (audit 2026-10-25)
+    const keep = new Map(l.map((x) => [x.id, x])); const now = fcRead().filter((x) => !ids0.has(x.id) || keep.has(x.id)).map((x) => keep.get(x.id) || x); fcWrite(now); S.fcN = now.length; fcBusy = false; }
   if (sent) { toast(`${sent} ${sent === 1 ? "punch" : "punches"} made with no signal ${sent === 1 ? "was" : "were"} sent. HR checks ${sent === 1 ? "it" : "them"}.`); S.ver++; render(); }
   if (dropped) toast(`${dropped} ${dropped === 1 ? "punch" : "punches"} made with no signal couldn't be saved. Tell HR the time.`);
 }

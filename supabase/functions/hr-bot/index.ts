@@ -76,7 +76,9 @@ async function chat(channel: "viber" | "messenger", ev: ChatIn) {
   if (!cfg.on || cfg[channel] === false) return;
   const rows = (await rest(`hr_chat_links?select=*&channel=eq.${channel}&sender=eq.${encodeURIComponent(ev.sender)}`)) as Doc[]; const link = rows?.[0];
   const it = intent(ev.text);
-  if (it?.k === "link") return linkWith(t, ev, it.code);
+  // Link codes are 6 digits: at most 5 tries a day per chat and 300 for everyone, so codes can't be guessed (audit 2026-10-25).
+  if (it?.k === "link") { if ((await rpc("hr_bot_hit", { p_k: `link:${channel}:${ev.sender}`, p_max: 5 })) !== true || (await rpc("hr_bot_hit", { p_k: "link:*", p_max: 300 })) !== true) return sendChat(t, "Too many tries today. Make a new code in the HR app and try again tomorrow.");
+    return linkWith(t, ev, it.code); }
   if (!link) return sendChat(t, notLinkedText(await appUrl()));
   const key = `channel=eq.${channel}&sender=eq.${encodeURIComponent(ev.sender)}`; const save = (x: Doc) => rest(`hr_chat_links?${key}`, { method: "PATCH", body: JSON.stringify({ ...x, last_at: new Date().toISOString() }) }, { prefer: "return=minimal" });
   const who = await whoIs(link.user_id);

@@ -54,7 +54,7 @@ RUN_JOBS.push(["hire", "Hiring accepted offers", () => hireJob()]);
 /* Applicant page: what the automatic hire still waits for. */
 { const b = VIEWS.applicant; VIEWS.applicant = (...x) => { const h = b(...x); const a = S.apps.get(S.view.id); if (!a) return h; const w = hireWaits(a); if (!w) return h;
   const card = `<section class="card"><div class="card-head"><h2>${icon("door", 18)} Hiring by itself</h2>${w.length ? '<span class="chip c-warn">Waiting</span>' : '<span class="chip c-ok">Ready</span>'}</div>
-    <p style="margin:0">${a.first} accepted the offer${a.offer?.via === "careers" ? " on the careers page" : ""}. ${!HA().on ? "Hiring by itself is switched off, so hire from this page." : w.length ? `The 201 file is made by itself once HR has ${esc(w.join(" and "))}.` : "The 201 file and onboarding will be made on the next scheduled run, with the next employee number."}</p></section>`;
+    <p style="margin:0">${esc(a.first)} accepted the offer${a.offer?.via === "careers" ? " on the careers page" : ""}. ${!HA().on ? "Hiring by itself is switched off, so hire from this page." : w.length ? `The 201 file is made by itself once HR has ${esc(w.join(" and "))}.` : "The 201 file and onboarding will be made on the next scheduled run, with the next employee number."}</p></section>`;
   const i = h.indexOf('<section class="card"><div class="steps"'); return i >= 0 ? h.slice(0, i) + card + h.slice(i) : h + card; }; }
 /* Offer letter requests: the switch */
 { const b = VIEWS.olr; if (b) VIEWS.olr = (...x) => { const h = b(...x); if (!S.canEdit) return h;

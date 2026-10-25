@@ -114,8 +114,8 @@ const fxQ = (dev, sub, n) => S.db.collection(`clockins/${dev}/${sub}`).orderBy("
 function fxWatch() {
   const live = new Set(active().map((e) => e.id));
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.fxSubs.has(d.id) || !live.has(S.clockLinks[d.id])) continue; S.fxSubs.add(d.id);
-    fxQ(d.id, "fixes", 200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {});
-    fxQ(d.id, "decide", 300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+    fxQ(d.id, "fixes", 200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {});
+    fxQ(d.id, "decide", 300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {}); }
 }
 const FX_DAY = /^\d{4}-\d\d-\d\d$/, FX_HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const fxText = (v, n = 200) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, n);

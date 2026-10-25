@@ -2148,6 +2148,181 @@ window.addEventListener("submit", (ev) => {
   }, true);
   document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
 
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
+/* Code review 2026-10-17 (screens and forms). Loaded first in the chain so it runs before every form's own save listener.
+   One save per tap: a second press of a form's Save while the first is still going is ignored (a double click on a slow
+   connection used to save a loan, overtime or a pay raise twice, and both counted in payroll). The form's buttons come back
+   when the person changes anything in it, or after 3 seconds. Forms re-sent by the app itself are not affected. */
+// Small checks the forms missed: a project assignment can't end before it starts, and "already paid" on a loan can't be
+// negative or more than the loan.
+window.addEventListener("submit", (ev) => {
+  const f = ev.target; const v = (sel) => f.querySelector(sel)?.value || "";
+  const end = f.querySelector('[name="end"],[id$="-end"]'), start = f.querySelector('[name="start"],[id$="-start"],#as-from');
+  if (end?.value && start?.value && /^\d{4}-\d{2}-\d{2}$/.test(end.value) && /^\d{4}-\d{2}-\d{2}$/.test(start.value) && end.value < start.value) {
+    ev.preventDefault(); ev.stopImmediatePropagation(); toast("The end date is before the start date."); return; }
+  const paid = f.querySelector("#lf2-before"); if (paid && v("#lf2-before") !== "") { const p = Number(v("#lf2-before")), amt = Number(v("#lf2-amt") || NaN);
+    if (!(p >= 0) || (amt > 0 && p > amt)) { ev.preventDefault(); ev.stopImmediatePropagation(); toast("Already paid must be from 0 up to the loan amount."); } }
+}, true);
+
+{ const busy = new WeakMap();
+  const free = (f) => { clearTimeout(busy.get(f)); busy.delete(f); f.removeAttribute("aria-busy"); f.querySelectorAll("button[data-sv-off]").forEach((b) => { b.disabled = false; b.removeAttribute("data-sv-off"); }); };
+  window.addEventListener("submit", (ev) => {
+    const f = ev.target; if (!(f instanceof HTMLFormElement) || !ev.isTrusted) return;
+    if (busy.has(f)) { ev.preventDefault(); ev.stopImmediatePropagation(); return; }
+    busy.set(f, setTimeout(() => free(f), 3000)); f.setAttribute("aria-busy", "true");
+    setTimeout(() => { if (busy.has(f)) f.querySelectorAll('button:not([type="button"]):not(:disabled)').forEach((b) => { b.disabled = true; b.setAttribute("data-sv-off", ""); }); }, 0);
+  }, true);
+  document.addEventListener("input", (ev) => { const f = ev.target?.form || ev.target?.closest?.("form"); if (f && busy.has(f)) free(f); }, true); }
+
 /* ---------- PH pay rules (pure functions; also run by Node to build sample payroll) ---------- */
 const PAY = (() => {
   const r2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
@@ -4789,7 +4964,7 @@ function bootExtra(db) {
   db.doc("org/clocklinks").onSnapshot((d) => { S.clockLinks = d.exists ? d.data().links || {} : {}; refresh(); }, () => {});
   let first = true;
   db.collection("clockins").limit(1000).onSnapshot((snap) => {
-    S.clockDevs = new Map(snap.docs.map((d) => { const x = { id: d.id, ...d.data() }; if (!hrDev(d.id)) { delete x.kiosk; delete x.bio; delete x.adj; } return [d.id, x]; }));
+    S.clockDevs = new Map(snap.docs.map((d) => { const x = { ...d.data(), id: d.id }; if (!hrDev(d.id)) { delete x.kiosk; delete x.bio; delete x.adj; } return [d.id, x]; }));
     if (first) { first = false; loadClock(todayISO(), todayISO()); } else refresh();
   }, () => {});
 }
@@ -4947,7 +5122,7 @@ function clockLinksTab(claims) {
         return `<tr><td><b>${esc(c.name || "No name given")}</b><div class="t-muted" style="font-size:13px">${esc(c.empNo || "")} · since ${esc(fmtDate((c.at || "").slice(0, 10)))}</div><div style="font-size:13px">Signed in as <b>${esc(personName(c.id))}</b></div>${!linked && match && Object.entries(S.clockLinks).some(([k, v]) => v === match.id && k !== c.id) ? '<div class="t-bad" style="font-size:13px">This employee already has a linked phone. Check before confirming.</div>' : ""}</td>
           <td>${match ? personCell(match, esc(match.no)) : '<span class="t-bad" style="font-size:14px">No employee with that number</span>'}</td>
           <td>${linked ? '<span class="chip c-ok">Confirmed</span>' + (S.meErr?.[c.id] ? `<div class="t-bad" style="font-size:13px">Dashboard not shared yet: ${esc(S.meErr[c.id])}</div>` : S.meSynced?.[c.id] != null ? '<div class="t-muted" style="font-size:13px">Dashboard shared</div>' : '<div class="t-muted" style="font-size:13px">Sharing their dashboard…</div>') : '<span class="chip c-warn">Waiting</span>'}${c.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td>
-          ${S.canEdit ? `<td class="num">${linked ? `<button class="link danger" data-clock-unlink="${c.id}">Remove</button>` : match ? `<button class="btn btn-primary btn-sm" data-clock-link="${c.id}:${match.id}">Confirm</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="4" class="empty">No one has linked a phone yet.</td></tr>`}
+          ${S.canEdit ? `<td class="num">${linked ? `<button class="link danger" data-clock-unlink="${esc(c.id)}">Remove</button>` : match ? `<button class="btn btn-primary btn-sm" data-clock-link="${esc(c.id)}:${esc(match.id)}">Confirm</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="4" class="empty">No one has linked a phone yet.</td></tr>`}
       </tbody></table></div></section>`;
 }
 function clockSitesTab() {
@@ -8085,7 +8260,7 @@ VIEWS.annForm = () => {
 function annDash() {
   const live = listOf(S.anns).filter((a) => annState(a) === "LIVE").sort(annSort).slice(0, 3);
   if (!live.length && !S.canEdit) return "";
-  return `<section class="card ann-dash"><div class="card-head"><h2>${icon("mega", 20)} Announcements</h2><button class="link" data-go="ann">${live.length ? "See all" : ""}</button></div>
+  return `<section class="card ann-dash"><div class="card-head"><h2>${icon("mega", 20)} Announcements</h2>${live.length ? `<button class="link" data-go="ann">See all</button>` : ""}</div>
     ${live.length ? `<div class="ann-dash-list">${live.map((a) => { const c = annCat(a.cat); return `<button class="ann-row" data-go="ann"><span class="chip ${c[2]}">${c[1]}</span><span class="ann-row-t"><b>${a.pinned ? "📌 " : ""}${esc(a.title)}</b><span class="t-muted">${esc(a.body.slice(0, 140))}${a.body.length > 140 ? "…" : ""}</span></span><span class="t-muted ann-row-d">${fmtDate(a.from || a.at)}</span></button>`; }).join("")}</div>`
       : `<div class="empty-state"><span class="es-ic">${icon("mega", 22)}</span><p>No announcements showing. <button class="link" data-go="annForm">Post one</button></p></div>`}</section>`;
 }
@@ -9437,7 +9612,7 @@ async function loadPages(base, id, chunks) { const out = []; for (let p = 0; p <
 async function loadLoanPosts(force) {
   if ((S.lpLoaded && !force) || S.lpLoading) return; S.lpLoading = true;
   try { const devs = [...S.clockDevs.values()].filter((d) => !d.kiosk && !d.bio); const m = new Map();
-    await Promise.all(devs.map(async (d) => { const snap = await S.db.collection(`clockins/${d.id}/loans`).limit(100).get().catch(() => ({ docs: [] })); for (const x of snap.docs) m.set(`${d.id}:${x.id}`, { id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d, ...x.data() }); }));
+    await Promise.all(devs.map(async (d) => { const snap = await S.db.collection(`clockins/${d.id}/loans`).limit(100).get().catch(() => ({ docs: [] })); for (const x of snap.docs) m.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d }); }));
     S.selfAll = m; S.lpLoaded = true; } finally { S.lpLoading = false; render(); }
 }
 const lpEmp = (p) => S.emps.get(p.src === "self" ? p.dev && S.clockLinks[p.dev] : p.empId) || null; // phone posts count only through a phone link HR confirmed
@@ -9623,7 +9798,7 @@ function syncStaff() {
 function watchPhones() {
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || S.akSubs.has(d.id)) continue; S.akSubs.add(d.id);
     S.db.collection(`clockins/${d.id}/tickets`).limit(200).onSnapshot((snap) => { for (const [k, t] of S.tixPhone) if (t.dev === d.id) S.tixPhone.delete(k);
-      for (const x of snap.docs) S.tixPhone.set(`${d.id}:${x.id}`, { id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d, ...x.data() }); akNotify(); refresh(); }, () => {}); }
+      for (const x of snap.docs) S.tixPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d }); akNotify(); refresh(); }, () => {}); }
 }
 { const b = bootIO; bootIO = (db) => { b(db);
   db.collection("tickets").limit(1000).onSnapshot((snap) => { S.tixHr = new Map(snap.docs.map((d) => [d.id, { id: d.id, key: `hr:${d.id}`, src: "hr", ...d.data() }])); akNotify(); refresh(); }, () => {});
@@ -16099,8 +16274,8 @@ const fxQ = (dev, sub, n) => S.db.collection(`clockins/${dev}/${sub}`).orderBy("
 function fxWatch() {
   const live = new Set(active().map((e) => e.id));
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.fxSubs.has(d.id) || !live.has(S.clockLinks[d.id])) continue; S.fxSubs.add(d.id);
-    fxQ(d.id, "fixes", 200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {});
-    fxQ(d.id, "decide", 300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+    fxQ(d.id, "fixes", 200).onSnapshot((snap) => { for (const k of [...S.fxPhone.keys()]) if (k.startsWith(d.id + ":")) S.fxPhone.delete(k); for (const x of snap.docs) S.fxPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {});
+    fxQ(d.id, "decide", 300).onSnapshot((snap) => { for (const k of [...S.dcPhone.keys()]) if (k.startsWith(d.id + ":")) S.dcPhone.delete(k); for (const x of snap.docs) S.dcPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {}); }
 }
 const FX_DAY = /^\d{4}-\d\d-\d\d$/, FX_HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const fxText = (v, n = 200) => String(v ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").trim().slice(0, n);
@@ -16357,7 +16532,7 @@ window.addEventListener("click", (ev) => { const t = ev.target.closest?.("[data-
 S.rqPhone = S.rqPhone || new Map(); S.rqSubs = S.rqSubs || new Set();
 function rqWatch() {
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || d.adjust || hrDev(d.id) || S.rqSubs.has(d.id) || !S.emps.get(S.clockLinks[d.id])) continue; S.rqSubs.add(d.id);
-    fxQ(d.id, "reqs", 200).onSnapshot((snap) => { for (const k of [...S.rqPhone.keys()]) if (k.startsWith(d.id + ":")) S.rqPhone.delete(k); for (const x of snap.docs) S.rqPhone.set(`${d.id}:${x.id}`, { id: x.id, dev: d.id, ...x.data() }); refresh(); }, () => {}); }
+    fxQ(d.id, "reqs", 200).onSnapshot((snap) => { for (const k of [...S.rqPhone.keys()]) if (k.startsWith(d.id + ":")) S.rqPhone.delete(k); for (const x of snap.docs) S.rqPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, dev: d.id }); refresh(); }, () => {}); }
 }
 const rqDone = async (f, extra) => { await S.db.doc(`clockins/${f.dev}/reqs/${f.id}`).update(extra); S.rqPhone.set(`${f.dev}:${f.id}`, { ...f, done: true, ...extra }); };
 async function rqOne(f) {
@@ -17165,7 +17340,7 @@ RUN_JOBS.push(["hire", "Hiring accepted offers", () => hireJob()]);
 /* Applicant page: what the automatic hire still waits for. */
 { const b = VIEWS.applicant; VIEWS.applicant = (...x) => { const h = b(...x); const a = S.apps.get(S.view.id); if (!a) return h; const w = hireWaits(a); if (!w) return h;
   const card = `<section class="card"><div class="card-head"><h2>${icon("door", 18)} Hiring by itself</h2>${w.length ? '<span class="chip c-warn">Waiting</span>' : '<span class="chip c-ok">Ready</span>'}</div>
-    <p style="margin:0">${a.first} accepted the offer${a.offer?.via === "careers" ? " on the careers page" : ""}. ${!HA().on ? "Hiring by itself is switched off, so hire from this page." : w.length ? `The 201 file is made by itself once HR has ${esc(w.join(" and "))}.` : "The 201 file and onboarding will be made on the next scheduled run, with the next employee number."}</p></section>`;
+    <p style="margin:0">${esc(a.first)} accepted the offer${a.offer?.via === "careers" ? " on the careers page" : ""}. ${!HA().on ? "Hiring by itself is switched off, so hire from this page." : w.length ? `The 201 file is made by itself once HR has ${esc(w.join(" and "))}.` : "The 201 file and onboarding will be made on the next scheduled run, with the next employee number."}</p></section>`;
   const i = h.indexOf('<section class="card"><div class="steps"'); return i >= 0 ? h.slice(0, i) + card + h.slice(i) : h + card; }; }
 /* Offer letter requests: the switch */
 { const b = VIEWS.olr; if (b) VIEWS.olr = (...x) => { const h = b(...x); if (!S.canEdit) return h;
@@ -17284,7 +17459,7 @@ function fcQueue(item) {
 let fcBusy = false;
 async function fcFlush() {
   if (fcBusy || navigator.onLine === false || !S.db) return; let l = fcRead(); if (!l.length) { S.fcN = 0; return; }
-  fcBusy = true; let sent = 0, dropped = 0;
+  fcBusy = true; let sent = 0, dropped = 0; const ids0 = new Set(l.map((x) => x.id));
   try {
     for (const it of [...l]) {
       if (it.kind === "self" ? S.self?.uid !== it.u : !(S.realEdit && S.canEdit)) continue; // only the account that made it sends it
@@ -17302,7 +17477,8 @@ async function fcFlush() {
         it.tries = (it.tries || 0) + 1; if (it.tries >= 5) { l = l.filter((x) => x !== it); dropped++; }
       }
     }
-  } finally { fcWrite(l); S.fcN = l.length; fcBusy = false; }
+  } finally { // punches queued while this ran are kept (audit 2026-10-25)
+    const keep = new Map(l.map((x) => [x.id, x])); const now = fcRead().filter((x) => !ids0.has(x.id) || keep.has(x.id)).map((x) => keep.get(x.id) || x); fcWrite(now); S.fcN = now.length; fcBusy = false; }
   if (sent) { toast(`${sent} ${sent === 1 ? "punch" : "punches"} made with no signal ${sent === 1 ? "was" : "were"} sent. HR checks ${sent === 1 ? "it" : "them"}.`); S.ver++; render(); }
   if (dropped) toast(`${dropped} ${dropped === 1 ? "punch" : "punches"} made with no signal couldn't be saved. Tell HR the time.`);
 }
@@ -17613,6 +17789,111 @@ window.addEventListener("click", (ev) => { if (iAmOwner()) return; const t = ev.
     if (d.name != null && typeof d.name !== "string") d.name = String(d.name); if (d.role != null && typeof d.role !== "string") d.role = "";
     d.items = Array.isArray(d.items) ? d.items.filter((it) => it && typeof it.at === "string" && !Number.isNaN(Date.parse(it.at))) : []; }
   data = m; } }); AU.data = data; }
+
+/* ---------- Back button, page titles, keyboard focus and unsaved forms (audit 2026-10-25) ----------
+   Every page change becomes a browser history entry, so the phone's Back gesture and the browser's Back button go to the
+   previous page instead of leaving the app. On the website the page is kept in the address (#/leave), so a refresh reopens it.
+   After a page change the tab title names the page and keyboard focus moves to its heading (screen readers read it).
+   Leaving a form with typed, unsaved text asks first. Form errors are announced, wide tables can be scrolled with the keyboard,
+   and Reopen payroll asks before it removes the final figures. */
+const NH_WEB = /^https?:$/.test(location.protocol);
+const NH = { restoring: false, booted: false, typed: false, form: null, pass: false, base: "GD Prime HR" };
+// Typing counts only while its form is still on the page (a form that was sent or closed is gone).
+const nhDirty = () => { if (NH.typed && !NH.form?.isConnected && !(NH.form?.id && document.getElementById(NH.form.id))) NH.typed = false; return NH.typed; };
+try { NH.base = (document.title || "").replace(/^\(\d+\) /, "").split(" · ").pop() || NH.base; } catch {}
+const nhPlain = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) if (v == null || ["string", "number", "boolean"].includes(typeof v)) r[k] = v; return r; };
+const nhState = () => (S.selfMode ? { self: S.selfTab || null } : nhPlain(S.view));
+const nhHash = (v) => (v.self !== undefined || !v.name ? undefined : "#/" + encodeURIComponent(v.name) + (v.id != null && v.id !== "" ? "/" + encodeURIComponent(v.id) : ""));
+function nhRecord(replace) {
+  if (NH.restoring) return; const v = nhState(); const cur = history.state?.hrv;
+  if (!replace && cur && JSON.stringify(cur) === JSON.stringify(v)) return;
+  try { history[replace || !cur ? "replaceState" : "pushState"]({ ...(history.state || {}), hrv: v }, "", NH_WEB ? nhHash(v) : undefined); } catch {}
+}
+function nhTitle() {
+  const h = $("#main h1")?.textContent?.trim(); const n = /^\(\d+\) /.exec(document.title || "")?.[0] || "";
+  try { document.title = n + (h && !/^Good (morning|afternoon|evening)/i.test(h) ? `${h} · ` : "") + NH.base; } catch {}
+}
+function nhFocus() {
+  const h = $("#main h1") || $("#main"); if (!h) return;
+  if (!h.hasAttribute("tabindex")) h.setAttribute("tabindex", "-1");
+  try { h.focus({ preventScroll: true }); } catch {}
+}
+{ const b = go; go = function (name, extra = {}) {
+  const r = b(name, extra); NH.typed = false;
+  if (NH.booted) { nhRecord(false); if (!NH.restoring) setTimeout(nhFocus, 0); }
+  nhTitle(); return r; }; }
+// Employee pages switch with the menu's tabs.
+document.addEventListener("click", (ev) => { if (!ev.target.closest?.("[data-self-tab]")) return; setTimeout(() => { if (!S.selfMode) return; NH.typed = false; nhRecord(false); nhTitle(); nhFocus(); }, 0); });
+
+window.addEventListener("popstate", async (ev) => {
+  const v = ev.state?.hrv; if (!v) return;
+  if (nhDirty() && !(await askConfirm("Leave this page? What you typed here isn't saved yet.", "Leave page"))) { nhRecord(false); return; }
+  NH.restoring = true;
+  try { if (v.self !== undefined) { if (S.selfMode) { S.selfTab = v.self; S.navOpen = false; render(); } } else { const { name, ...rest } = v; if (name) go(name, rest); } }
+  finally { NH.restoring = false; } NH.typed = false; nhTitle(); setTimeout(nhFocus, 0);
+});
+
+// Open the page named in the address once the records are loaded (website: #/leave or #/employee/<id>).
+{ const m = NH_WEB && /^#\/([A-Za-z0-9_]+)(?:\/([^/?#&]+))?$/.exec(location.hash || ""); const t0 = Date.now();
+  const tick = () => {
+    if (S.selfMode || (S.db && S.loaded?.emps)) {
+      NH.booted = true;
+      if (m && !S.selfMode && VIEWS[m[1]] && S.view?.name === "dash") { let id = null; try { id = m[2] ? decodeURIComponent(m[2]) : null; } catch {} NH.restoring = true; try { go(m[1], id ? { id } : {}); } finally { NH.restoring = false; } }
+      nhRecord(true); nhTitle(); return;
+    }
+    if (Date.now() - t0 < 120000) setTimeout(tick, 300); else NH.booted = true;
+  };
+  setTimeout(tick, 300); }
+
+// Unsaved typing in a form: ask before a menu or link click takes the person away, or before the tab is closed or reloaded.
+document.addEventListener("input", (ev) => { const f = ev.target.closest?.("#main form"); if (!f || ev.target.type === "search" || ev.target.dataset?.filter || f.matches("[data-nowarn]")) return; NH.typed = true; NH.form = f; }, true);
+document.addEventListener("submit", () => { setTimeout(() => { NH.typed = false; }, 0); }, true);
+window.addEventListener("click", async (ev) => {
+  if (NH.pass || !nhDirty()) return; const t = ev.target.closest?.("[data-go],[data-emp],[data-self-tab]"); if (!t || t.closest("#main form") || t.closest(".ac-back")) return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if (!(await askConfirm("Leave this page? What you typed here isn't saved yet.", "Leave page"))) return;
+  NH.typed = false; NH.pass = true; try { t.click(); } finally { NH.pass = false; }
+}, true);
+window.addEventListener("beforeunload", (ev) => { if (nhDirty()) { ev.preventDefault(); ev.returnValue = ""; } });
+
+// After each draw: form error lines are announced, and boxes that scroll sideways can be reached with the keyboard.
+function nhScan() { try {
+  for (const e of document.querySelectorAll("#main .err:not([role])")) e.setAttribute("role", "alert");
+  for (const w of document.querySelectorAll("#main .table-wrap, #main .board, #main .pm-wrap")) {
+    if (w.scrollWidth > w.clientWidth + 2 || (w.scrollHeight > w.clientHeight + 2 && /auto|scroll/.test(getComputedStyle(w).overflowY))) { if (!w.hasAttribute("tabindex")) { w.setAttribute("tabindex", "0"); w.setAttribute("role", "region"); w.setAttribute("aria-label", w.querySelector("caption,h2,h3")?.textContent?.trim() || w.closest("section")?.querySelector("h2")?.textContent?.trim() || "Table"); } }
+    else if (w.getAttribute("tabindex") === "0" && w.getAttribute("role") === "region") { w.removeAttribute("tabindex"); w.removeAttribute("role"); w.removeAttribute("aria-label"); }
+  } } catch {} }
+{ const b = render; render = function (...a) { const r = b.apply(this, a); nhScan(); return r; }; }
+// Parts drawn later (the Users grid, lazy tables) are checked once things settle.
+{ let t = 0; new MutationObserver(() => { clearTimeout(t); t = setTimeout(nhScan, 400); }).observe(document.getElementById("main") || document.body, { childList: true, subtree: true }); }
+// Form errors written after the draw (most forms) are announced too.
+new MutationObserver((ms) => { for (const m of ms) { const e = m.target.nodeType === 1 ? m.target : m.target.parentElement; if (e?.classList?.contains("err") && !e.hasAttribute("role")) e.setAttribute("role", "alert"); } })
+  .observe(document.getElementById("main") || document.body, { subtree: true, attributes: true, attributeFilter: ["hidden"], childList: true, characterData: true });
+
+// Reopening a final payroll removes its pay run, loan payments and FlexBen payments: ask first.
+window.addEventListener("click", async (ev) => {
+  const t = ev.target.closest?.('[data-pay-act="reopen"]'); if (!t || t.dataset.ok === "1") return;
+  ev.preventDefault(); ev.stopImmediatePropagation();
+  if (!(await askConfirm("Reopen this payroll? Its final figures, payslips and loan and FlexBen payments for this cutoff are removed until you finalize it again. Payslips already sent to employees stay with them.", "Reopen payroll", true))) return;
+  t.dataset.ok = "1"; try { t.click(); } finally { delete t.dataset.ok; }
+}, true);
+
+{ const st = document.createElement("style"); st.textContent = `
+html:not([data-theme="dark"]) .person .sub, html:not([data-theme="dark"]) .who .sub, html:not([data-theme="dark"]) #main .bday-item .sub, html:not([data-theme="dark"]) #main .bday-item small { color: #5E6575; }
+#main .rf-eyebrow b, #main .rf-toc a b { color: #1D4ED8; }
+/* Past birthdays were faded with opacity, which dropped their text below 4.5:1; they keep full contrast and a muted name. */
+#main .bday-item.is-past { opacity: 1; } #main .bday-item.is-past .name { color: var(--muted); }
+.seg button[aria-pressed="false"] { color: var(--ink, #121A2C); }
+/* Touch targets at least 24 px on tablets and touch screens (WCAG 2.5.8); the phone layout already uses bigger ones. */
+@media (max-width: 1100px), (pointer: coarse) {
+  #main button.link { min-height: 28px; }
+  #main input[type="checkbox"], #main input[type="radio"] { width: 22px; height: 22px; }
+}
+/* A menu item reached with Tab is scrolled clear of the sticky account box at the bottom of the menu (WCAG 2.4.11). */
+.rail { scroll-padding-bottom: 112px; }
+#main h1:focus { outline: none; }
+#main h1:focus-visible { outline: 2px solid var(--gold, #C9A45C); outline-offset: 4px; }
+#main .table-wrap[role="region"]:focus-visible, #main .board[role="region"]:focus-visible, #main .pm-wrap[role="region"]:focus-visible { outline: 2px solid var(--gold, #C9A45C); outline-offset: 2px; }`; document.head.appendChild(st); }
 
 /* ---------- events ---------- */
 document.addEventListener("click", async (ev) => {

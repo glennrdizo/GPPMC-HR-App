@@ -75,7 +75,7 @@ VIEWS.annForm = () => {
 function annDash() {
   const live = listOf(S.anns).filter((a) => annState(a) === "LIVE").sort(annSort).slice(0, 3);
   if (!live.length && !S.canEdit) return "";
-  return `<section class="card ann-dash"><div class="card-head"><h2>${icon("mega", 20)} Announcements</h2><button class="link" data-go="ann">${live.length ? "See all" : ""}</button></div>
+  return `<section class="card ann-dash"><div class="card-head"><h2>${icon("mega", 20)} Announcements</h2>${live.length ? `<button class="link" data-go="ann">See all</button>` : ""}</div>
     ${live.length ? `<div class="ann-dash-list">${live.map((a) => { const c = annCat(a.cat); return `<button class="ann-row" data-go="ann"><span class="chip ${c[2]}">${c[1]}</span><span class="ann-row-t"><b>${a.pinned ? "📌 " : ""}${esc(a.title)}</b><span class="t-muted">${esc(a.body.slice(0, 140))}${a.body.length > 140 ? "…" : ""}</span></span><span class="t-muted ann-row-d">${fmtDate(a.from || a.at)}</span></button>`; }).join("")}</div>`
       : `<div class="empty-state"><span class="es-ic">${icon("mega", 22)}</span><p>No announcements showing. <button class="link" data-go="annForm">Post one</button></p></div>`}</section>`;
 }

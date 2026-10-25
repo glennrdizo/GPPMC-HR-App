@@ -24,7 +24,7 @@ function bootExtra(db) {
   db.doc("org/clocklinks").onSnapshot((d) => { S.clockLinks = d.exists ? d.data().links || {} : {}; refresh(); }, () => {});
   let first = true;
   db.collection("clockins").limit(1000).onSnapshot((snap) => {
-    S.clockDevs = new Map(snap.docs.map((d) => { const x = { id: d.id, ...d.data() }; if (!hrDev(d.id)) { delete x.kiosk; delete x.bio; delete x.adj; } return [d.id, x]; }));
+    S.clockDevs = new Map(snap.docs.map((d) => { const x = { ...d.data(), id: d.id }; if (!hrDev(d.id)) { delete x.kiosk; delete x.bio; delete x.adj; } return [d.id, x]; }));
     if (first) { first = false; loadClock(todayISO(), todayISO()); } else refresh();
   }, () => {});
 }
@@ -182,7 +182,7 @@ function clockLinksTab(claims) {
         return `<tr><td><b>${esc(c.name || "No name given")}</b><div class="t-muted" style="font-size:13px">${esc(c.empNo || "")} · since ${esc(fmtDate((c.at || "").slice(0, 10)))}</div><div style="font-size:13px">Signed in as <b>${esc(personName(c.id))}</b></div>${!linked && match && Object.entries(S.clockLinks).some(([k, v]) => v === match.id && k !== c.id) ? '<div class="t-bad" style="font-size:13px">This employee already has a linked phone. Check before confirming.</div>' : ""}</td>
           <td>${match ? personCell(match, esc(match.no)) : '<span class="t-bad" style="font-size:14px">No employee with that number</span>'}</td>
           <td>${linked ? '<span class="chip c-ok">Confirmed</span>' + (S.meErr?.[c.id] ? `<div class="t-bad" style="font-size:13px">Dashboard not shared yet: ${esc(S.meErr[c.id])}</div>` : S.meSynced?.[c.id] != null ? '<div class="t-muted" style="font-size:13px">Dashboard shared</div>' : '<div class="t-muted" style="font-size:13px">Sharing their dashboard…</div>') : '<span class="chip c-warn">Waiting</span>'}${c.sample ? ' <span class="chip c-warn">Sample</span>' : ""}</td>
-          ${S.canEdit ? `<td class="num">${linked ? `<button class="link danger" data-clock-unlink="${c.id}">Remove</button>` : match ? `<button class="btn btn-primary btn-sm" data-clock-link="${c.id}:${match.id}">Confirm</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="4" class="empty">No one has linked a phone yet.</td></tr>`}
+          ${S.canEdit ? `<td class="num">${linked ? `<button class="link danger" data-clock-unlink="${esc(c.id)}">Remove</button>` : match ? `<button class="btn btn-primary btn-sm" data-clock-link="${esc(c.id)}:${esc(match.id)}">Confirm</button>` : ""}</td>` : ""}</tr>`; }).join("") || `<tr><td colspan="4" class="empty">No one has linked a phone yet.</td></tr>`}
       </tbody></table></div></section>`;
 }
 function clockSitesTab() {

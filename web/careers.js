@@ -387,7 +387,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
 
   /* ---------- AI first-round interview (Glenn 2026-10-25): HR or a rule invites the applicant; the questions and follow-ups come
      from hr-bot ?ch=iv, which keeps the transcript on the application. The score is never sent to this page. ---------- */
-  const IV = { by: {}, busy: false, draft: "", lang: "en-PH", rec: null };
+  const IV = { by: Object.create(null), busy: false, draft: "", lang: "en-PH", rec: null };
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   { const x = document.createElement("style"); x.textContent = `.ivx{background:#F6F1E4;border:1px solid #E8DCBC;border-radius:14px;padding:14px 16px}.ivx h3{font-size:18px;margin-bottom:4px}
 .ivchat{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}.ivchat li{max-width:86%;padding:10px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -399,7 +399,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
     const r = await fetch(`${SB_URL}/functions/v1/hr-bot?ch=iv`, { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${tok}` }, body: JSON.stringify(body) });
     const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || "failed"); e.data = j; throw e; } return j;
   }
-  async function loadIv() { if (!session) { IV.by = {}; return; } try { const r = await ivCall({ op: "mine" }); IV.by = {}; for (const x of r.list || []) IV.by[x.app] = x; } catch { /* interviews off or offline: the rest of the page works */ } }
+  async function loadIv() { if (!session) { IV.by = Object.create(null); return; } try { const r = await ivCall({ op: "mine" }); IV.by = Object.create(null); for (const x of r.list || []) IV.by[x.app] = x; } catch { /* interviews off or offline: the rest of the page works */ } }
   const ivErr = (e) => { const m = String(e?.message || e || ""); return /expired/.test(m) ? "The time for this online interview has passed. HR may contact you." : /already_done/.test(m) ? "You already finished this interview. Thank you!"
     : /not_invited|not_found/.test(m) ? "This online interview is no longer open." : /application_closed/.test(m) ? "This application is closed." : /consent_required/.test(m) ? "Please tick the box to agree first."
     : /too_many/.test(m) ? "Too many tries today. Please continue tomorrow." : /too_long/.test(m) ? "This interview is already long enough. HR will review it." : /out_of_date/.test(m) ? "Your interview was updated in another window. Here is the latest."
@@ -464,7 +464,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
 
   /* ---------- start ---------- */
   async function signedIn(s) {
-    session = s; await sb.rpc("hr_portal_link").catch(() => {}); await loadApps();
+    session = s; await sb.rpc("hr_portal_link").then(() => {}, () => {}); await loadApps();
     const p = pending.get();
     if (view.v === "auth" || (view.v === "mine")) { if (p?.job && jobOf(p.job) && !appFor(p.job)) { view = { v: "apply", id: p.job }; setUrl(`?job=${encodeURIComponent(p.job)}`); } else view = { v: "mine" }; }
     else if (view.v === "job" && p?.job === view.id && jobOf(view.id) && !appFor(view.id)) view = { v: "apply", id: view.id };
