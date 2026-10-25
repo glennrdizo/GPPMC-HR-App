@@ -2,6 +2,7 @@
 //  ?ch=viber      Viber bot webhook: employees and HR chat with the HR bot after linking with a code from the app.
 //  ?ch=messenger  Facebook Messenger webhook (GET answers Meta's verification).
 //  ?ch=careers    the careers page assistant: anyone may ask about open jobs, a few questions a day each.
+//  ?ch=iv         the AI first-round interview on the careers page: a signed-in applicant answers HR's invitation.
 //  (no ch)        HR Admins: status of the keys, and connecting the Viber webhook.
 // Nothing answers until an HR Admin switches the bots on in Overview > Bots (org/bot). Requests the bot prepares are filed
 // only after the person replies YES; they then go into the same queue as the app's own forms (clockins/<uid>/reqs).
@@ -10,6 +11,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { type Doc, type ChatIn, type Proposal, type Turn, parseViber, parseMessenger, intent, YES_NO, HELP_EMP, HELP_HR, notLinkedText, EMP_TOOLS, checkProposal, empSystem, hrSystem, quickAnswer, helperText, addHist, turnsFor, careersSystem, careersTurns, cleanJobLinks } from "./logic.ts";
 import { type Target, chatKeys, viberSigned, metaSigned, sendChat, setViberWebhook, hmacHex } from "./chat.ts";
+import { type IvState, IV_MAX_TURNS, IV_MAX_ANSWER, IV_MODEL_TURN, IV_MODEL_SCORE, ivQuestions, genQsPrompt, parseQs, openState, startTurns, turnSystem, parseTurn, answerTurns, scorePrompt, parseScore, jobText, publicView, manilaDate as ivToday } from "./iv.ts";
 
 const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const env = (k: string) => (Deno.env.get(k) || "").trim();
@@ -131,6 +133,56 @@ async function careers(req: Request, body: Doc) {
   return json({ text: cleanJobLinks(textOf(out.content) || "Sorry, I couldn't answer that. Please try again.", new Set((c.jobs || []).map((j: Doc) => j.id))) });
 }
 
+/* ---------- AI first-round interview (iv.ts) ---------- */
+const patchDoc = (p: string, patch: Doc) => rest("rpc/hr_update", { method: "POST", body: JSON.stringify({ p, patch }) });
+async function scoreIv(path: string, a: Doc, job: Doc | null) {
+  const s = a.aiiv as IvState; const company = String((await getDoc("org/main").catch(() => null))?.companyName || "GD Prime Property Management Corporation");
+  try { const out = await claude({ model: IV_MODEL_SCORE, max_tokens: 1800, messages: [{ role: "user", content: scorePrompt({ company, jobText: jobText(job || {}), s }) }] });
+    const r = parseScore(textOf(out.content)); if (!r) throw new Error("The scoring answer couldn't be read.");
+    await patchDoc(path, { aiiv: { result: { ...r, at: new Date().toISOString(), model: IV_MODEL_SCORE }, err: null } });
+  } catch (e) { await patchDoc(path, { aiiv: { err: String((e as Error)?.message || e).slice(0, 200), tries: (s.tries || 0) + 1 } }).catch(() => null); throw e; }
+}
+async function interview(req: Request, body: Doc) {
+  if (!env("ANTHROPIC_API_KEY")) return json({ error: "off" }, 503);
+  const auth = req.headers.get("authorization") || "";
+  const u = /^Bearer .+/.test(auth) ? await fetch(`${BASE}/auth/v1/user`, { headers: { apikey: ANON || SVC, authorization: auth } }).then((r) => (r.ok ? r.json() : null)).catch(() => null) : null;
+  if (!u?.id) return json({ error: "not_signed_in" }, 401);
+  const rows = ((await rest(`hr_docs?select=path,data&col=eq.applicants&data->>portalUid=eq.${encodeURIComponent(u.id)}`)) as { path: string; data: Doc }[]) || [];
+  const jobOf = async (a: Doc) => (a.jobId ? await getDoc(`jobs/${a.jobId}`) : null);
+  if (body.op === "mine") { const out = []; for (const r of rows) if (r.data.aiiv && !["CANCELLED"].includes(r.data.aiiv.status)) out.push(publicView(r.path.split("/")[1], r.data, await jobOf(r.data))); return json({ list: out }); }
+  const row = rows.find((r) => r.path === `applicants/${String(body.app || "")}`); if (!row) return json({ error: "not_found" }, 404);
+  const a = row.data, path = row.path, appId = path.split("/")[1], today = ivToday(), now = new Date().toISOString();
+  const open = openState(a, today); if ("error" in open) { if (open.error === "expired" && a.aiiv?.status !== "EXPIRED") await patchDoc(path, { aiiv: { status: "EXPIRED" } }).catch(() => null); return json({ error: open.error }, 409); }
+  if ((await rpc("hr_bot_hit", { p_k: `iv:${u.id}`, p_max: 120 })) !== true) return json({ error: "too_many" }, 429);
+  const job = await jobOf(a); const s0 = a.aiiv as IvState;
+  if (body.op === "decline") { await patchDoc(path, { aiiv: { status: "DECLINED", declined: now, why: String(body.why || "Asked for an interview with a person").slice(0, 200) } }); return json({ ok: true }); }
+  if (body.op === "start") {
+    if (body.consent !== true) return json({ error: "consent_required" }, 400);
+    if (s0.status === "STARTED") return json(publicView(appId, a, job));
+    let qs = ivQuestions(job);
+    if (!(Array.isArray(job?.aiivQs) && job!.aiivQs.length >= 3) && job) { // write questions for this job once, from its description
+      try { const out = await claude({ model: IV_MODEL_TURN, max_tokens: 700, messages: [{ role: "user", content: genQsPrompt(jobText(job)) }] }); const g = parseQs(textOf(out.content));
+        if (g.length >= 4) { qs = g; await patchDoc(`jobs/${a.jobId}`, { aiivQs: g, aiivAuto: true }).catch(() => null); } } catch (e) { console.error("iv qs", e); } }
+    const s = startTurns({ ...s0, qs, qi: 0, turns: [] }, String(a.first || ""), String(job?.title || "this"), now);
+    await patchDoc(path, { aiiv: { ...s, consent: now } }); return json(publicView(appId, { ...a, aiiv: s }, job));
+  }
+  if (body.op === "answer") {
+    if (s0.status !== "STARTED") return json({ error: "not_started" }, 409);
+    const text = String(body.text || "").replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, " ").trim().slice(0, IV_MAX_ANSWER); if (!text) return json({ error: "empty" }, 400);
+    if (Number(body.n) !== (s0.turns || []).length) return json({ error: "out_of_date", ...publicView(appId, a, job) }, 409); // another tab answered first
+    if ((s0.turns || []).length >= IV_MAX_TURNS) return json({ error: "too_long" }, 409);
+    const company = String((await getDoc("org/main").catch(() => null))?.companyName || "GD Prime Property Management Corporation");
+    const followUsed = s0.turns.some((t) => t.role === "ai" && t.q === s0.qi && t.follow);
+    let d = { follow: false, say: "" };
+    try { const out = await claude({ model: IV_MODEL_TURN, max_tokens: 300, system: turnSystem({ company, job: String(job?.title || "this"), jobText: jobText(job || {}), qs: s0.qs, qi: s0.qi, followUsed }),
+      messages: [{ role: "user", content: `Applicant's answer:\n${text}` }] }); d = parseTurn(textOf(out.content)); } catch (e) { console.error("iv turn", e); } // without the AI, go on to the next question
+    const s = answerTurns(s0, text, d, now); await patchDoc(path, { aiiv: s });
+    if (s.status === "DONE") later(scoreIv(path, { ...a, aiiv: s }, job));
+    return json(publicView(appId, { ...a, aiiv: s }, job));
+  }
+  return json({ error: "Bad request" }, 400);
+}
+
 /* ---------- requests ---------- */
 const later = (p: Promise<unknown>) => { const w = (globalThis as any).EdgeRuntime?.waitUntil; const q = p.catch((e) => console.error("bot", e)); if (w) w.call((globalThis as any).EdgeRuntime, q); return q; };
 Deno.serve(async (req) => {
@@ -158,6 +210,7 @@ Deno.serve(async (req) => {
       return new Response("EVENT_RECEIVED");
     }
     if (ch === "careers") return await careers(req, body);
+    if (ch === "iv") return await interview(req, body);
     // HR Admins only from here.
     const auth = req.headers.get("authorization") || "";
     if (!/^Bearer .+/.test(auth) || (await rpc("hr_is_admin", {}, auth, ANON || SVC)) !== true) return json({ error: "Only HR Admins can set up the bots." }, 403);

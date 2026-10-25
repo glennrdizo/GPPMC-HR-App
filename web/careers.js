@@ -35,11 +35,12 @@
   if (params.get("src")) pending.set({ ...(pending.get() || {}), src: params.get("src").toLowerCase().slice(0, 20), job: params.get("job") || pending.get()?.job || null });
   if (params.get("job")) view = { v: "job", id: params.get("job") };
   if (params.get("view") === "mine") view = { v: "mine" };
+  if (params.get("iv")) view = { v: "iv", id: params.get("iv") };
 
   /* ---------- data ---------- */
   const CO = "GD Prime Property Management Corporation";
   async function loadCfg() { const { data, error } = await sb.rpc("hr_careers"); if (error) { cfgErr = true; cfg = { jobs: [], forms: [] }; } else { cfg = data || { jobs: [] }; cfgErr = false; } if (!/gd\s*prime/i.test(cfg.company || "")) cfg.company = CO; }
-  async function loadApps() { if (!session) { apps = null; return; } const { data, error } = await sb.rpc("hr_my_apps"); apps = error ? [] : data || []; }
+  async function loadApps() { if (!session) { apps = null; return; } const [{ data, error }] = await Promise.all([sb.rpc("hr_my_apps"), loadIv()]); apps = error ? [] : data || []; }
   const jobOf = (id) => cfg?.jobs?.find((j) => j.id === id);
   const appFor = (jobId) => (apps || []).find((a) => a.jobId === jobId);
   const myName = () => session?.user?.user_metadata?.full_name || "";
@@ -119,8 +120,8 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
 
   const setUrl = (qs, push) => { try { const u = new URL(location.href); u.search = qs; u.hash = ""; history[push ? "pushState" : "replaceState"](null, "", u); } catch {} };
   const toast = (m) => { $(".toast")?.remove(); const t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 4200); };
-  function go(v) { view = v; flash = null; const u = new URL(location.href); u.search = ""; if (v.v === "job" || v.v === "apply") u.searchParams.set("job", v.id); if (v.v === "mine") u.searchParams.set("view", "mine"); try { history.pushState(null, "", u); } catch {} render(); scrollTo(0, 0); }
-  addEventListener("popstate", () => { const p = new URLSearchParams(location.search); view = p.get("job") ? { v: "job", id: p.get("job") } : p.get("view") === "mine" ? { v: session ? "mine" : "auth", mode: "in" } : { v: "jobs" }; render(); });
+  function go(v) { view = v; flash = null; const u = new URL(location.href); u.search = ""; if (v.v === "job" || v.v === "apply") u.searchParams.set("job", v.id); if (v.v === "mine") u.searchParams.set("view", "mine"); if (v.v === "iv") u.searchParams.set("iv", v.id); try { history.pushState(null, "", u); } catch {} render(); scrollTo(0, 0); }
+  addEventListener("popstate", () => { const p = new URLSearchParams(location.search); view = p.get("iv") ? { v: "iv", id: p.get("iv") } : p.get("job") ? { v: "job", id: p.get("job") } : p.get("view") === "mine" ? { v: session ? "mine" : "auth", mode: "in" } : { v: "jobs" }; render(); });
 
   const header = () => `<header class="top"><div class="in"><button class="brand" data-go="jobs" aria-label="All job openings">${LOGO ? `<img src="${LOGO}" alt="" width="40" height="40">` : ""}<span><b>${esc(cfg?.company || "GD Prime Property Management Corporation")}</b><span>Careers</span></span></button><span class="sp"></span>
     ${session ? `<button class="tbtn ${view.v === "mine" ? "solid" : ""}" data-go="mine">My applications</button><button class="tbtn" data-out>Sign out</button>` : `<button class="tbtn" data-auth="in">Sign in</button>`}</div></header>`;
@@ -208,6 +209,7 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
     return `<article class="card stack" id="app-${esc(a.id)}"><div class="row" style="justify-content:space-between;align-items:flex-start"><div><h2 style="font-size:24px">${esc(a.job || "Job opening")}</h2><p class="sub">${esc([a.site, a.location].filter(Boolean).join(", "))}${a.applied ? ` · Applied ${esc(fmtDate(a.applied))}` : ""}</p></div>${stageChip(a)}</div>
       ${out ? "" : `<div class="steps" aria-label="Application progress">${STAGES.map(([, l], i) => `<span class="step ${i < idx ? "done" : i === idx ? "cur" : ""}">${l}</span>`).join("")}</div>`}
       <p style="margin:0">${esc(STAGE_TXT[a.stage] || "")}</p>
+      ${ivBox(a)}
       ${ivs.map((i) => `<div class="iv"><span style="font-size:24px" aria-hidden="true">🗓️</span><span><b>${esc(i.kind || "Interview")}</b>${esc(fmtDay(i.d))}${i.t ? ` at ${esc(fmtTime(i.t))}` : ""}<br><small class="sub">Please come 15 minutes early and bring a valid ID and a copy of your resume.</small></span></div>`).join("")}
       ${open && (a.slots || []).length ? slotPicker(a) : ""}
       ${a.offer ? `<div class="iv" style="background:${a.offer.status === "DECLINED" ? "var(--badbg)" : "var(--okbg)"}"><span style="font-size:24px" aria-hidden="true">📄</span><span><b>Job offer ${a.offer.status === "ACCEPTED" ? "accepted" : a.offer.status === "DECLINED" ? "declined" : "sent to you"}</b>${a.offer.rate ? `Pay: ${esc(peso.format(a.offer.rate))} ${a.offer.payType === "DAILY" ? "a day" : "a month"}` : ""}${a.offer?.status === "SENT" && a.stage !== "HIRED" ? `<div class="row" style="gap:10px;flex-wrap:wrap"><button class="btn gold" data-offer="${esc(a.id)}:1">Accept the offer</button><button class="btn" data-offer="${esc(a.id)}:0">Decline</button></div>` : ""}${a.offer.start ? ` · Start date: ${esc(fmtDate(a.offer.start))}` : ""}</span></div>` : ""}
@@ -241,9 +243,9 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
   }
   function render() {
     const keep = document.activeElement?.id; const pos = document.activeElement?.selectionStart;
-    const v = view.v; const body = v === "job" ? jobView() : v === "apply" ? (session ? applyView() : authView()) : v === "auth" ? authView() : v === "mine" ? (session ? mineView() : authView()) : jobsView();
+    const v = view.v; const body = v === "job" ? jobView() : v === "apply" ? (session ? applyView() : authView()) : v === "auth" ? authView() : v === "mine" ? (session ? mineView() : authView()) : v === "iv" ? (session ? ivView() : authView()) : jobsView();
     root.innerHTML = header() + body + footer();
-    document.title = v === "job" && jobOf(view.id) ? `${jobOf(view.id).title} · Careers at GD Prime` : v === "mine" ? "My applications · GD Prime Careers" : "Careers · GD Prime";
+    document.title = v === "job" && jobOf(view.id) ? `${jobOf(view.id).title} · Careers at GD Prime` : v === "mine" ? "My applications · GD Prime Careers" : v === "iv" ? "Online interview · GD Prime Careers" : "Careers · GD Prime";
     if (keep === "q") { const i = $("#q"); i?.focus(); try { i?.setSelectionRange(pos, pos); } catch {} }
   }
 
@@ -382,6 +384,83 @@ input.i:focus,select.i:focus,textarea.i:focus{outline:0;border-color:var(--gold)
   cbHost.addEventListener("submit", (e) => { e.preventDefault(); e.stopPropagation(); const i = cbHost.querySelector("#cb-in"); const q = i?.value.trim(); if (q && !CB.busy) cbAsk(q); });
   cbHost.addEventListener("keydown", (e) => { if (e.target.id === "cb-in" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); e.target.form?.requestSubmit(); } if (e.key === "Escape" && CB.open) { CB.open = false; cbRender(); } });
   cbCall({ ping: true }).then((r) => { CB.on = !!r.ok; cbRender(); }).catch(() => {});
+
+  /* ---------- AI first-round interview (Glenn 2026-10-25): HR or a rule invites the applicant; the questions and follow-ups come
+     from hr-bot ?ch=iv, which keeps the transcript on the application. The score is never sent to this page. ---------- */
+  const IV = { by: {}, busy: false, draft: "", lang: "en-PH", rec: null };
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  { const x = document.createElement("style"); x.textContent = `.ivx{background:#F6F1E4;border:1px solid #E8DCBC;border-radius:14px;padding:14px 16px}.ivx h3{font-size:18px;margin-bottom:4px}
+.ivchat{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}.ivchat li{max-width:86%;padding:10px 14px;border-radius:14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ivchat li.ai{align-self:flex-start;background:var(--bluebg)}.ivchat li.me{align-self:flex-end;background:var(--navy);color:#fff}.ivchat li.wait{opacity:.7;font-style:italic}
+.ivbar{height:8px;border-radius:99px;background:#E6E1D6;overflow:hidden}.ivbar span{display:block;height:100%;background:var(--gold)}
+#iv-in{min-height:110px;resize:vertical}.mic.on{background:var(--badbg);border-color:var(--bad);color:var(--bad)}`; document.head.appendChild(x); }
+  async function ivCall(body) {
+    const tok = (await sb.auth.getSession()).data.session?.access_token || session?.access_token || "";
+    const r = await fetch(`${SB_URL}/functions/v1/hr-bot?ch=iv`, { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${tok}` }, body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({})); if (!r.ok) { const e = new Error(j.error || "failed"); e.data = j; throw e; } return j;
+  }
+  async function loadIv() { if (!session) { IV.by = {}; return; } try { const r = await ivCall({ op: "mine" }); IV.by = {}; for (const x of r.list || []) IV.by[x.app] = x; } catch { /* interviews off or offline: the rest of the page works */ } }
+  const ivErr = (e) => { const m = String(e?.message || e || ""); return /expired/.test(m) ? "The time for this online interview has passed. HR may contact you." : /already_done/.test(m) ? "You already finished this interview. Thank you!"
+    : /not_invited|not_found/.test(m) ? "This online interview is no longer open." : /application_closed/.test(m) ? "This application is closed." : /consent_required/.test(m) ? "Please tick the box to agree first."
+    : /too_many/.test(m) ? "Too many tries today. Please continue tomorrow." : /too_long/.test(m) ? "This interview is already long enough. HR will review it." : /out_of_date/.test(m) ? "Your interview was updated in another window. Here is the latest."
+    : /not_signed_in/.test(m) ? "Please sign in again." : /off/.test(m) ? "Online interviews aren't available right now. Please try again later." : "Couldn't send. Check your connection and try again."; };
+  function ivBox(a) {
+    const s = IV.by[a.id]; if (!s || !isOpen(a)) return ""; const id = esc(a.id);
+    if (s.status === "INVITED") return `<section class="ivx stack" style="gap:10px"><h3>Online interview</h3><p class="sub" style="color:var(--ink)">You're invited to a short first-round interview. An AI interviewer asks you ${s.n} questions about your work in a chat, and you answer by typing or speaking, in English or Filipino. It takes about 15 to 20 minutes, any time${s.until ? ` until ${esc(fmtDate(s.until))}` : ""}. A person in HR reads every interview and makes the decision.</p>
+      <label class="consent"><input type="checkbox" id="ivc-${id}"><span>I agree that my answers are recorded and reviewed by an AI tool and by GD Prime HR to assess my application, as the <button class="btn link" data-notice>Privacy Notice</button> explains.</span></label>
+      <div class="row"><button class="btn gold" data-iv-start="${id}">Start the interview</button><button class="btn sm" data-iv-decline="${id}">I prefer an interview with a person</button></div></section>`;
+    if (s.status === "STARTED") return `<section class="ivx stack" style="gap:10px"><h3>Online interview</h3><p class="sub" style="color:var(--ink)">You're on question ${Math.min(s.qi + 1, s.n)} of ${s.n}. Your answers so far are saved${s.until ? `. Please finish by ${esc(fmtDate(s.until))}` : ""}.</p><div class="row"><button class="btn gold" data-iv-open="${id}">Continue the interview</button></div></section>`;
+    const txt = { DONE: "Thank you! You finished your online interview. HR will review it and update you here and by email.", DECLINED: "You asked for an interview with a person. HR will contact you.", EXPIRED: "The time for your online interview has passed. HR may still contact you." }[s.status];
+    return txt ? `<div class="iv"><span style="font-size:24px" aria-hidden="true">💬</span><span><b>Online interview</b>${esc(txt)}${s.status === "DONE" ? ` <button class="btn link" data-iv-open="${id}">See my answers</button>` : ""}</span></div>` : "";
+  }
+  function ivView() {
+    const s = IV.by[view.id]; const back = `<button class="back" data-go="mine">← My applications</button>`;
+    if (!s) return `<main style="margin-top:24px"><div class="stack">${back}<div class="card empty">${apps === null ? "Loading…" : "This online interview isn't open."}</div></div></main>`;
+    const live = s.status === "STARTED"; const pct = Math.round((100 * (s.status === "DONE" ? s.n : s.qi)) / Math.max(1, s.n));
+    return `<main style="margin-top:24px"><div class="stack" style="max-width:760px;margin:0 auto">${back}<article class="card stack"><div><h1 style="font-size:28px">Online interview</h1><p class="sub">${esc(s.job || "")}${live ? ` · Question ${Math.min(s.qi + 1, s.n)} of ${s.n}` : s.status === "DONE" ? " · Finished" : ""}</p></div>
+      <div class="ivbar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}" aria-label="Interview progress"><span style="width:${pct}%"></span></div>
+      <ol class="ivchat" aria-live="polite">${s.turns.map((t) => `<li class="${t.role === "me" ? "me" : "ai"}">${esc(t.text)}</li>`).join("")}${IV.busy ? `<li class="ai wait">Reading your answer…</li>` : ""}</ol>
+      ${live ? `<form id="iv-f" class="stack" style="gap:8px"><label class="f" for="iv-in">Your answer <small>Type, or press the microphone and speak. You can fix the words before sending.</small></label>
+        <textarea class="i" id="iv-in" maxlength="2000" ${IV.busy ? "disabled" : ""}>${esc(IV.draft)}</textarea>
+        <div class="row" style="justify-content:space-between">${SR ? `<span class="row" style="gap:8px"><button type="button" class="btn sm mic ${IV.rec ? "on" : ""}" data-iv-mic aria-pressed="${IV.rec ? "true" : "false"}">${IV.rec ? "⏹ Stop" : "🎤 Speak"}</button>
+          <select class="i" id="iv-lang" style="width:auto;padding:6px 10px" aria-label="Language you speak"><option value="en-PH" ${IV.lang === "en-PH" ? "selected" : ""}>English</option><option value="fil-PH" ${IV.lang === "fil-PH" ? "selected" : ""}>Filipino</option></select></span>` : "<span></span>"}
+          <button class="btn primary" type="submit" ${IV.busy ? "disabled" : ""}>Send answer</button></div></form>
+        <p class="sub" style="font-size:13px">The interviewer is an AI. It doesn't decide; HR reads your answers. Please don't share ID numbers or bank details here.</p>`
+      : s.status === "DONE" ? `<div class="msg ok">Thank you! HR will review your interview and update you on the careers page and by email.</div>` : ""}</article></div></main>`;
+  }
+  function ivAfter() { const ol = $(".ivchat"); if (ol) ol.lastElementChild?.scrollIntoView({ block: "nearest" }); if (!IV.busy) $("#iv-in")?.focus(); }
+  function micStop() { try { IV.rec?.stop(); } catch {} IV.rec = null; }
+  function micStart() {
+    const r = new SR(); r.lang = IV.lang; r.continuous = true; r.interimResults = true; let base = $("#iv-in")?.value || "";
+    r.onresult = (ev) => { let fin = "", tmp = ""; for (let i = ev.resultIndex; i < ev.results.length; i++) (ev.results[i].isFinal ? (fin += ev.results[i][0].transcript) : (tmp += ev.results[i][0].transcript));
+      if (fin) base = (base ? base.replace(/\s*$/, " ") : "") + fin.trim(); const el = $("#iv-in"); if (el) { el.value = (base + (tmp ? (base ? " " : "") + tmp : "")).slice(0, 2000); IV.draft = el.value; } };
+    r.onerror = (ev) => { if (ev.error === "not-allowed" || ev.error === "service-not-allowed") toast("Allow the microphone for this site to speak your answer, or type it."); };
+    r.onend = () => { if (IV.rec === r) { IV.rec = null; render(); } };
+    try { r.start(); IV.rec = r; } catch { toast("The microphone couldn't start. Please type your answer."); }
+  }
+  document.addEventListener("input", (e) => { if (e.target.id === "iv-in") IV.draft = e.target.value; });
+  document.addEventListener("change", (e) => { if (e.target.id === "iv-lang") { IV.lang = e.target.value; if (IV.rec) { micStop(); micStart(); render(); } } });
+  document.addEventListener("click", async (e) => {
+    const t = e.target.closest("[data-iv-start],[data-iv-open],[data-iv-decline],[data-iv-mic]"); if (!t) return; const d = t.dataset;
+    if (d.ivMic !== undefined) { if (IV.rec) micStop(); else micStart(); render(); return; }
+    if (d.ivOpen) { go({ v: "iv", id: d.ivOpen }); return; }
+    if (d.ivDecline) { if (!await askConfirm("Skip the online interview and ask for an interview with a person instead? HR will contact you.", "Ask for a person")) return;
+      t.disabled = true; try { await ivCall({ op: "decline", app: d.ivDecline }); toast("Done. HR will contact you for an interview."); } catch (x) { toast(ivErr(x)); } await loadIv(); render(); return; }
+    if (d.ivStart) { if (!$(`#ivc-${CSS.escape(d.ivStart)}`)?.checked) { toast("Please tick the box to agree first."); $(`#ivc-${CSS.escape(d.ivStart)}`)?.closest(".consent")?.classList.add("bad"); return; }
+      t.disabled = true; toast("Getting your questions ready…");
+      try { const r = await ivCall({ op: "start", app: d.ivStart, consent: true }); IV.by[d.ivStart] = r; IV.draft = ""; $(".toast")?.remove(); go({ v: "iv", id: d.ivStart }); ivAfter(); }
+      catch (x) { t.disabled = false; toast(ivErr(x)); await loadIv(); render(); } }
+  });
+  // Runs before the page's own submit handler (capture), so the interview form never reaches it.
+  document.addEventListener("submit", async (e) => {
+    if (e.target.id !== "iv-f") return; e.preventDefault(); e.stopPropagation(); if (IV.busy) return;
+    const id = view.id, s = IV.by[id]; const text = ($("#iv-in")?.value || "").trim(); if (!s || !text) { toast("Type or speak your answer first."); return; }
+    micStop(); IV.busy = true; IV.draft = text; s.turns = [...s.turns, { role: "me", text }]; render(); ivAfter();
+    try { const r = await ivCall({ op: "answer", app: id, text, n: s.turns.length - 1 }); IV.by[id] = r; IV.draft = ""; }
+    catch (x) { s.turns = s.turns.slice(0, -1); const dt = x.data; if (dt?.turns) { const { error, ...rest } = dt; IV.by[id] = rest; } toast(ivErr(x)); if (/expired|not_invited|already_done|closed/.test(x.message)) await loadIv(); }
+    finally { IV.busy = false; render(); ivAfter(); }
+  }, true);
+  document.addEventListener("keydown", (e) => { if (e.target.id === "iv-in" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); e.target.form?.requestSubmit(); } });
 
   /* ---------- start ---------- */
   async function signedIn(s) {
