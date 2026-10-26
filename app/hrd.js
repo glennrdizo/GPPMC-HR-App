@@ -29,7 +29,7 @@ const HRD_AREAS = {
   7: ["Deployment & Mobilization", "project", null, "Talent", ["Employee Deployment Tracker", "Deployment Notice", "Employee Assignment Matrix", "Transfer Documentation", "Deployment Status Report"]],
   8: ["Timekeeping & Attendance", "clock", "tk", "Timekeeping", ["attflow", "dtr", "roster", "attreqs", "chsched", "obreq", "utreq", "suspend", "attrep", "attendance", "clockin", "geofence", "punches", "ot", "otrep", "otflow", "timeSettings", "Daily Attendance Monitoring=dtr", "DTR Reports=dtr", "Tardiness and Absenteeism Reports=attrep", "Overtime Monitoring=ot", "Payroll Attendance Summary=attendance"]],
   9: ["Leave Administration", "cal", "leave", "Timekeeping", ["lvye", "Leave Monitoring Report=leave", "Employee Leave Ledger=leave", "Leave Applications=leave", "Leave Utilization Dashboard=leave"]],
-  10: ["Payroll Administration", "pay", "payroll", "Payroll", ["payslips", "reimb", "tax", "Payroll Input Summary=payroll", "Payroll Adjustment Report", "Payroll Variance Report", "Salary Adjustment Register=salinc", "Payroll Reconciliation Report"]],
+  10: ["Payroll Administration", "pay", "payroll", "Payroll", ["payslips", "reimb", "tax", "payje", "Payroll Input Summary=payroll", "Payroll Adjustment Report", "Payroll Variance Report", "Salary Adjustment Register=salinc", "Payroll Reconciliation Report"]],
   11: ["Compensation & Salary", "wallet", "wageinc", "Payroll", ["salinc", "Salary Grade Matrix", "Compensation Structure", "Salary Benchmarking Report", "Salary Adjustment Recommendations=salinc", "Compensation Budget"]],
   12: ["Employee Benefits", "receipt", "contrib", "Payroll", ["t13", "flex", "loans", "loanposts", "Employee Benefits Register", "Government Contributions Monitoring=contrib", "HMO Enrollment Tracker", "Benefits Claims Tracker", "Benefits Utilization Report"]],
   13: ["Performance Management", "star", "perf", "People", ["evaluation", "Performance Evaluation Forms=evaluation", "Employee KPI Scorecards", "Probationary Evaluation Tracker", "Performance Improvement Plans", "Performance Rating Summary=perf"]],
@@ -51,7 +51,7 @@ const HRD_AREAS = {
   29: ["HR Budget & Cost", "pay", null, "Records", ["Annual HR Budget", "Recruitment Cost Report", "Training Budget", "HR Budget Utilization Report", "HR Cost Analysis"]],
   30: ["Data Privacy & HR Risk", "lock", null, "Records", ["HR Data Privacy Compliance Checklist", "HR Risk Register", "Confidentiality Acknowledgments", "Employee Records Access Register", "HR Risk Assessment Report"]],
 };
-const HRD_EXTRA = { hrd_kpi: ["HRD KPI scorecard", "report", "Records"], hrd_reports: ["Reports calendar", "cal", "Records"], hrd_div: ["HRD divisions", "org", "People"], hrd_matrix: ["Authority matrix", "shield", "People"] };
+const HRD_EXTRA = { hrd_kpi: ["HRD KPI scorecard", "report", "Records"], hrd_reports: ["Reports calendar", "cal", "Records"], hrd_div: ["HRD divisions", "org", "People"], hrd_matrix: ["Authority matrix", "shield", "People"], payje: ["Payroll journal entry", "sheet", "Payroll"] };
 const hrdSlug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40);
 const hrdAreaOf = (n) => HRD_DATA.areas.find((a) => a.n === n) || null;
 const hrdPropOf = (n) => HRD_DATA.prop.find((p) => p.n === n) || null;
