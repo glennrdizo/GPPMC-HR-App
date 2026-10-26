@@ -256,7 +256,7 @@
 .sb-card button.go:hover{transform:translateY(-1px);box-shadow:0 16px 30px -12px rgba(15,27,51,.9),inset 0 -2px 0 #E0BE7A}.sb-card button.go:disabled{opacity:.6;cursor:wait;transform:none}
 .sb-card .links{display:flex;justify-content:space-between;gap:10px;margin-top:18px;font-size:14px;flex-wrap:wrap}.sb-card .links a{color:#8A6A1F;font-weight:700;cursor:pointer;text-decoration:none;border-bottom:1px solid rgba(138,106,31,.35)}.sb-card .links a:hover{border-color:#8A6A1F}
 .sb-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;font-size:12px;color:#7A8090}
-.sb-card label small{font-weight:500;letter-spacing:0;color:#8A8F9C;text-transform:none}.sb-wait{background:#F6F1E6;border:1px solid #E4D3AC;border-radius:12px;padding:14px 16px;margin:4px 0 8px;font-size:14px;line-height:1.5;color:#2A3550}.sb-wait b{display:block;word-break:break-all}.sb-wait p{margin:8px 0 0}.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}.sb-idle{position:fixed;inset:0;z-index:2147483000;background:rgba(14,22,40,.55);display:flex;align-items:center;justify-content:center;padding:16px}.sb-idle-c{background:#fff;color:#1B2235;border-radius:16px;max-width:400px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.3);font:15px/1.5 system-ui,sans-serif}.sb-idle-c h2{margin:0 0 8px;font-size:19px}.sb-idle-c p{margin:0}.sb-idle-b{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}.sb-idle-b button{min-height:44px;padding:0 16px;border-radius:10px;font:600 15px system-ui,sans-serif;cursor:pointer;border:1px solid #CBD2DE;background:#fff;color:#1B2235}.sb-idle-b .sb-idle-stay{background:#1B2A4A;border-color:#1B2A4A;color:#fff}
+.sb-card label small{font-weight:500;letter-spacing:0;color:#8A8F9C;text-transform:none}.sb-wait{background:#F6F1E6;border:1px solid #E4D3AC;border-radius:12px;padding:14px 16px;margin:4px 0 8px;font-size:14px;line-height:1.5;color:#2A3550}.sb-wait b{display:block;word-break:break-all}.sb-wait p{margin:8px 0 0}.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}.sb-idle,.sb-ov{position:fixed;inset:0;z-index:2147483000;background:rgba(14,22,40,.55);display:flex;align-items:center;justify-content:center;padding:16px}.sb-idle-c,.sb-ov-c{background:#fff;color:#1B2235;border-radius:16px;max-width:400px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.3);font:15px/1.5 system-ui,sans-serif}.sb-idle-c h2,.sb-ov-c h2{margin:0 0 8px;font-size:19px}.sb-idle-c p,.sb-ov-c p{margin:0}.sb-idle-b,.sb-ov-b{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}.sb-idle-b button,.sb-ov-b button,.sb-pkl button{min-height:44px;padding:0 16px;border-radius:10px;font:600 15px system-ui,sans-serif;cursor:pointer;border:1px solid #CBD2DE;background:#fff;color:#1B2235}.sb-ov-b .pri,.sb-idle-b .sb-idle-stay{background:#1B2A4A;border-color:#1B2A4A;color:#fff}.sb-card button.sb-pk{width:100%;margin-top:10px;min-height:50px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #CBD2DE;border-radius:14px;background:#fff;color:#152B50;font:inherit;font-weight:700;font-size:15px;cursor:pointer}.sb-card button.sb-pk:hover,.sb-card button.sb-pk:focus-visible{border-color:#C9A45C;background:#FBF7EE;outline:none}.sb-card button.sb-pk:disabled{opacity:.6;cursor:progress}.sb-pkb{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;background:transparent;border:1px solid rgba(228,201,142,.7);color:#F3E3BF;border-radius:99px;cursor:pointer}.sb-pkb:hover,.sb-pkb:focus-visible{background:#E4C98E;color:#152B50;outline:none}.sb-pkl{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}.sb-pkl li{display:flex;align-items:center;gap:10px;border:1px solid #E3E7EE;border-radius:12px;padding:10px 12px}.sb-pkl li div{flex:1;min-width:0}.sb-pkl b{display:block;overflow-wrap:anywhere}.sb-pkl small{color:#5B6272}.sb-pkl button{min-height:40px!important;padding:0 12px!important;font-size:14px!important}.sb-pkl .warn{border-color:#C0392B!important;color:#9B1C1C!important}.sb-ov-m{margin-top:12px;font-size:14px;min-height:1em}.sb-ov-m.err{color:#9B1C1C}.sb-ov-m.ok{color:#1E6B3A}.sb-pko{position:fixed;right:16px;bottom:16px;z-index:2147482000;max-width:360px;width:calc(100% - 32px);background:#fff;color:#1B2235;border:1px solid #E3D3AC;border-radius:16px;padding:16px 16px 14px;box-shadow:0 18px 50px rgba(0,0,0,.25);font:15px/1.5 system-ui,sans-serif}.sb-pko h2{margin:0 0 4px;font-size:17px;display:flex;align-items:center;gap:8px}.sb-pko p{margin:0;color:#3D4555}
 .sb-gate.seen .sb-hero,.sb-gate.seen .sb-card{animation:none}
 .sb-dpa{display:flex;gap:10px;align-items:flex-start;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:#F6F1E4;border:1px solid #E8DCBC;font-size:13px;line-height:1.5;color:#3A4560;cursor:pointer}
 .sb-dpa input{width:20px;height:20px;flex:0 0 auto;margin:1px 0 0;padding:0;accent-color:#1B2B4B;cursor:pointer}.sb-dpa a,.sb-foot button,.sb-pnl{color:#8A6A1F;font-weight:700;text-decoration:underline;cursor:pointer}
@@ -326,13 +326,14 @@
       <div class="links">${mode === "verify" || mode === "wait" ? `${mode === "wait" && acc?.status !== "rejected" ? `<a data-sb-edit>Edit my details</a>` : ""}<a data-sb-out>Sign out</a>` : mode === "dpa" ? `<a data-sb-pn>Read the Privacy Notice</a><a data-sb-out>Sign out</a>` : mode === "in" ? `<a data-sb="up">Create an account</a><a data-sb="reset">Forgot password?</a>` : mode !== "newpw" ? `<a data-sb="in">Back to sign in</a>` : ""}</div>
       <p class="sb-secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Private and secure. Only you and HR see your records.</p></form>
       <div class="sb-foot">© ${new Date().getFullYear()} GD Prime Property Management Corporation · <a href="https://www.gd-prime.com" target="_blank" rel="noopener">www.gd-prime.com</a> · <button type="button" data-sb-pn>Privacy Notice</button> · <a href="/careers">Job openings</a></div></div>`;
-    g.querySelector("input")?.focus();
+    g.querySelector("input")?.focus(); if (mode === "in") pkProbe().then(pkGateBtn);
   }
   document.addEventListener("click", (ev) => {
     if (ev.target.closest("[data-sb-pn]")) { ev.preventDefault(); showNotice(); return; }
     if (ev.target.closest("[data-sb-pn-close]") || ev.target.classList?.contains("sb-pn")) { document.querySelector(".sb-pn")?.remove(); document.getElementById("sb-dpa")?.focus(); return; }
     if (ev.target.closest("[data-sb-edit]")) { ev.preventDefault(); mode = "verify"; gate(); return; }
-    if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); signOutNow(); return; } }, true);
+    if (ev.target.closest("[data-sb-out]")) { ev.preventDefault(); signOutNow(); return; }
+    if (ev.target.closest("[data-sb-pk]")) { ev.preventDefault(); pkSignIn(ev.target.closest("[data-sb-pk]")); return; } }, true);
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") document.querySelector(".sb-pn")?.remove(); });
   document.addEventListener("click", (ev) => { const a = ev.target.closest("[data-sb]"); if (!a) return; ev.preventDefault(); mode = a.dataset.sb; gate(); });
   document.addEventListener("submit", async (ev) => {
@@ -441,6 +442,111 @@
   setInterval(idleTick, 1000);
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") idleTick(); });
   window.addEventListener("storage", (ev) => { if (ev.key === ACT) idleTick(); });
+
+  // Sign in with fingerprint or Face ID (Glenn 2026-10-26): passkeys from Supabase Auth, switched on under Authentication ›
+  // Passkeys. The bundled supabase-js 2.45 has no passkey methods, so this calls the same /auth/v1/passkeys endpoints the newer
+  // library uses and hands the session to the client. The phone or computer keeps the key and checks the fingerprint, face or
+  // screen PIN itself; the portal never sees them. Passwords keep working.
+  const PK = { on: null, uv: false, used: false, probe: null };
+  const pkB64 = (s) => Uint8Array.from(atob(String(s).replace(/-/g, "+").replace(/_/g, "/") + "===".slice((String(s).length + 3) % 4)), (c) => c.charCodeAt(0)).buffer;
+  const pkEnc = (b) => b ? btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "") : undefined;
+  const pkIcon = (n) => `<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 10a2 2 0 0 0-2 2c0 1.6-.3 3.2-.9 4.6"/><path d="M14 13.1c0 2.5-.5 4.8-1.5 6.9"/><path d="M17.3 15.5c-.1 1.4-.4 2.8-.8 4.1"/><path d="M6.4 18.4c.7-1.9 1.1-4 1.1-6.4a4.5 4.5 0 0 1 9 0v.6"/><path d="M4.3 15.3c.3-1 .5-2.1.5-3.3a7.2 7.2 0 0 1 12-5.4"/><path d="M19.4 9.3c.4 1 .6 2 .6 2.7"/></svg>`;
+  async function pkApi(path, { body, jwt, method = "POST" } = {}) {
+    const r = await tfetch(`${SB_URL}/auth/v1/${path}`, { method, headers: { apikey: SB_KEY, "content-type": "application/json", ...(jwt ? { authorization: "Bearer " + jwt } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const t = await r.text(); let d = null; try { d = t ? JSON.parse(t) : null; } catch {}
+    if (!r.ok) { const e = new Error(d?.msg || d?.message || d?.error_description || `HTTP ${r.status}`); e.code = d?.error_code || d?.code || ""; throw e; }
+    return d;
+  }
+  const pkJwt = async () => { const { data } = await sb.auth.getSession(); if (!data.session) throw new Error("Sign in first."); return data.session.access_token; };
+  function pkReq(o) {
+    if (typeof PublicKeyCredential.parseRequestOptionsFromJSON === "function") return PublicKeyCredential.parseRequestOptionsFromJSON(o);
+    return { ...o, challenge: pkB64(o.challenge), ...(o.allowCredentials?.length ? { allowCredentials: o.allowCredentials.map((c) => ({ ...c, type: c.type || "public-key", id: pkB64(c.id) })) } : { allowCredentials: undefined }) };
+  }
+  function pkCreate(o) {
+    if (typeof PublicKeyCredential.parseCreationOptionsFromJSON === "function") return PublicKeyCredential.parseCreationOptionsFromJSON(o);
+    return { ...o, challenge: pkB64(o.challenge), user: { ...o.user, id: pkB64(o.user.id) }, ...(o.excludeCredentials?.length ? { excludeCredentials: o.excludeCredentials.map((c) => ({ ...c, type: c.type || "public-key", id: pkB64(c.id) })) } : { excludeCredentials: undefined }) };
+  }
+  function pkJson(c) {
+    if (typeof c.toJSON === "function") { try { return c.toJSON(); } catch {} }
+    const r = c.response, base = { id: c.id, rawId: c.id, type: "public-key", clientExtensionResults: c.getClientExtensionResults?.() || {}, authenticatorAttachment: c.authenticatorAttachment || undefined };
+    return r.attestationObject ? { ...base, response: { attestationObject: pkEnc(r.attestationObject), clientDataJSON: pkEnc(r.clientDataJSON), transports: r.getTransports?.() } }
+      : { ...base, response: { authenticatorData: pkEnc(r.authenticatorData), clientDataJSON: pkEnc(r.clientDataJSON), signature: pkEnc(r.signature), userHandle: pkEnc(r.userHandle) } };
+  }
+  // Is it switched on, and does this device have a fingerprint reader, face unlock or screen lock? Asked once per page load.
+  function pkProbe() {
+    return PK.probe ||= (async () => {
+      if (!window.PublicKeyCredential || !navigator.credentials || !window.isSecureContext) { PK.on = false; return; }
+      try { PK.uv = !!(await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable?.()); } catch {}
+      try { await pkApi("passkeys/authentication/options", { body: {} }); PK.on = true; } catch { PK.on = false; }
+    })();
+  }
+  function pkGateBtn() {
+    const go = document.querySelector(".sb-gate .sb-card button.go"); if (!PK.on || mode !== "in" || !go || document.querySelector("[data-sb-pk]")) return;
+    go.insertAdjacentHTML("afterend", `<button type="button" class="sb-pk" data-sb-pk>${pkIcon(22)}Sign in with fingerprint or Face ID</button>`);
+  }
+  const pkCancelled = (e) => /NotAllowedError|AbortError/.test(e?.name || "") || /cancel|abort|not allowed/i.test(e?.message || "");
+  async function pkSignIn(btn) {
+    if (btn?.disabled) return; if (btn) btn.disabled = true; idleFresh();
+    try {
+      const o = await pkApi("passkeys/authentication/options", { body: {} });
+      const cred = await navigator.credentials.get({ publicKey: pkReq(o.options) }); if (!cred) throw Object.assign(new Error("cancelled"), { name: "AbortError" });
+      const s = await pkApi("passkeys/authentication/verify", { body: { challenge_id: o.challenge_id, credential: pkJson(cred) } });
+      if (!s?.access_token) throw new Error("No session");
+      PK.used = true; const { error } = await sb.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token }); if (error) throw error;
+    } catch (e) {
+      if (btn) btn.disabled = false; if (pkCancelled(e)) return;
+      gate(/credential_not_found/.test(e.code) ? "This fingerprint or Face ID isn't set up for the portal yet. Sign in with your password, then turn it on."
+        : /email_not_confirmed/.test(e.code) ? "Confirm your email first: open the link we sent you."
+        : /passkey_disabled/.test(e.code) ? "Fingerprint and Face ID sign-in is switched off. Use your password." : "Couldn't sign in with fingerprint or Face ID. Try again or use your password.", "err");
+    }
+  }
+  async function pkRegister() {
+    const jwt = await pkJwt();
+    const o = await pkApi("passkeys/registration/options", { body: {}, jwt });
+    const cred = await navigator.credentials.create({ publicKey: pkCreate(o.options) }); if (!cred) throw Object.assign(new Error("cancelled"), { name: "AbortError" });
+    await pkApi("passkeys/registration/verify", { body: { challenge_id: o.challenge_id, credential: pkJson(cred) }, jwt });
+    if (me) lsSet("hr-pk-" + me.id, Date.now());
+  }
+  const pkErr = (e) => /credential_exists|InvalidStateError/.test(`${e?.code} ${e?.name}`) ? "This device is already set up." : /too_many/.test(e?.code) ? "You have the most devices allowed. Remove one first." : "Couldn't turn it on. Try again.";
+  const pkDate = (t) => t ? new Date(t).toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" }) : "";
+  // After signing in with a password on a device that can do it: offer it once (Not now is remembered on this device).
+  async function pkOffer() {
+    await pkProbe(); if (!me) return;
+    if (PK.used) { lsSet("hr-pk-" + me.id, Date.now()); return; }
+    if (!PK.on || !PK.uv || (idleBot) || lsNum("hr-pk-" + me.id) || lsNum("hr-pk-no-" + me.id) || document.querySelector(".sb-pko")) return;
+    cssOnce(); const d = document.createElement("div"); d.className = "sb-pko no-tl"; d.setAttribute("role", "dialog"); d.setAttribute("aria-labelledby", "sb-pko-t");
+    d.innerHTML = `<h2 id="sb-pko-t">${pkIcon(20)}Sign in faster next time</h2><p>Use your fingerprint or Face ID on this device instead of typing your password.</p><div class="sb-ov-b"><button type="button" data-pko="no">Not now</button><button type="button" class="pri" data-pko="yes">Turn on</button></div><div class="sb-ov-m" role="status"></div>`;
+    d.addEventListener("click", async (ev) => { const b = ev.target.closest("[data-pko]"); if (!b) return;
+      if (b.dataset.pko === "no") { lsSet("hr-pk-no-" + me.id, Date.now()); d.remove(); return; }
+      b.disabled = true; const m = d.querySelector(".sb-ov-m");
+      try { await pkRegister(); d.querySelector(".sb-ov-b")?.remove(); m.className = "sb-ov-m ok"; m.textContent = "Done. Next time, tap Sign in with fingerprint or Face ID."; setTimeout(() => d.remove(), 4000); }
+      catch (e) { b.disabled = false; if (pkCancelled(e)) return; m.className = "sb-ov-m err"; m.textContent = pkErr(e); } });
+    document.body.appendChild(d);
+  }
+  // Account bar: manage the devices that can sign in with a fingerprint or Face ID.
+  function pkBarBtn() {
+    const bar = document.querySelector(".sb-acct"); if (!bar || !PK.on || bar.querySelector(".sb-pkb")) return;
+    const b = document.createElement("button"); b.type = "button"; b.className = "sb-pkb"; b.title = "Fingerprint and Face ID sign-in"; b.setAttribute("aria-label", "Fingerprint and Face ID sign-in"); b.innerHTML = pkIcon(18);
+    b.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); pkManage(); }); bar.querySelector(".sb-out")?.before(b);
+  }
+  async function pkManage(msg, kind) {
+    cssOnce(); let d = document.querySelector(".sb-pkd");
+    if (!d) { d = document.createElement("div"); d.className = "sb-ov sb-pkd no-tl"; d.setAttribute("role", "dialog"); d.setAttribute("aria-modal", "true"); d.setAttribute("aria-labelledby", "sb-pkd-t"); document.body.appendChild(d);
+      d.addEventListener("keydown", (ev) => { if (ev.key === "Escape") d.remove(); });
+      d.addEventListener("click", async (ev) => { if (ev.target === d || ev.target.closest("[data-pkd=close]")) { d.remove(); return; }
+        const add = ev.target.closest("[data-pkd=add]"), rm = ev.target.closest("[data-pkd-rm]"); if (!add && !rm) return;
+        if (rm && !rm.classList.contains("warn")) { rm.classList.add("warn"); rm.textContent = "Tap again to remove"; return; }
+        (add || rm).disabled = true;
+        try { if (add) { await pkRegister(); await pkManage("This device can now sign in with your fingerprint or Face ID.", "ok"); }
+          else { await pkApi(`passkeys/${encodeURIComponent(rm.dataset.pkdRm)}`, { method: "DELETE", jwt: await pkJwt() }); if (me) { try { localStorage.removeItem("hr-pk-" + me.id); } catch {} } await pkManage("Removed. That device now signs in with the password.", "ok"); } }
+        catch (e) { (add || rm).disabled = false; if (pkCancelled(e)) return; const m = d.querySelector(".sb-ov-m"); m.className = "sb-ov-m err"; m.textContent = add ? pkErr(e) : "Couldn't remove it. Try again."; } }); }
+    d.innerHTML = `<div class="sb-ov-c"><h2 id="sb-pkd-t">Fingerprint and Face ID</h2><p>Devices that can sign in to your account without a password.</p><ul class="sb-pkl"><li><div><small>Loading…</small></div></li></ul><div class="sb-ov-m ${kind || ""}" role="status">${esc(msg || "")}</div><div class="sb-ov-b"><button type="button" data-pkd="close">Close</button><button type="button" class="pri" data-pkd="add">Add this device</button></div></div>`;
+    d.querySelector("[data-pkd=add]").focus();
+    let list = []; try { list = (await pkApi("passkeys", { method: "GET", jwt: await pkJwt() })) || []; } catch { const ul = d.querySelector(".sb-pkl"); if (ul) ul.innerHTML = '<li><div><small>Couldn\'t load your devices.</small></div></li>'; return; }
+    const ul = d.querySelector(".sb-pkl"); if (!ul) return;
+    ul.innerHTML = list.length ? list.map((k) => `<li><div><b>${esc(k.friendly_name || "Passkey")}</b><small>Added ${esc(pkDate(k.created_at))}${k.last_used_at ? ` · last used ${esc(pkDate(k.last_used_at))}` : ""}</small></div><button type="button" data-pkd-rm="${esc(k.id)}">Remove</button></li>`).join("") : '<li><div><small>None yet. Tap Add this device to use your fingerprint or Face ID here.</small></div></li>';
+  }
+  { const b = readyOk; readyOk = (...a) => { b(...a); pkProbe().then(() => { pkBarBtn(); setTimeout(() => pkOffer().catch(() => {}), 2500); }); }; }
   new MutationObserver(() => {
     const nav = document.getElementById("nav"); if (!nav || !me || document.querySelector(".sb-acct")) return;
     const ini = String(me.name || me.email || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
@@ -448,6 +554,6 @@
     d.innerHTML = `<span class="sb-ini" aria-hidden="true">${esc(ini)}</span><span class="sb-who">${me.name && me.name !== me.email ? `<b>${esc(me.name)}</b><small>${esc(me.email || "")}</small>` : `<b>${esc(me.email || "Signed in")}</b>`}</span>
       <button type="button" class="sb-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg><b>Sign out</b></button>`;
     d.querySelector(".sb-out").addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); signOutNow(ev.currentTarget); });
-    nav.after(d);
+    nav.after(d); pkBarBtn();
   }).observe(document.documentElement, { childList: true, subtree: true });
 })();
