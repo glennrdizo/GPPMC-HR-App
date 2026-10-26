@@ -196,7 +196,7 @@ function clockSitesTab() {
         <div class="field"><label for="sg-site">Site</label><select class="input" id="sg-site">${opts(sites.map((s) => [s.id, s.name]), sites.find((s) => !siteGeo(s.id))?.id || "office")}</select></div>
         <div class="field"><label for="sg-lat">Latitude</label><input class="input" id="sg-lat" type="number" step="0.000001" min="-90" max="90" required placeholder="14.5869"></div>
         <div class="field"><label for="sg-lng">Longitude</label><input class="input" id="sg-lng" type="number" step="0.000001" min="-180" max="180" required placeholder="121.0614"></div>
-        <div class="field"><label for="sg-rad">Radius (meters)</label><input class="input" id="sg-rad" type="number" min="30" step="10" value="150"></div>
+        <div class="field"><label for="sg-rad">Radius (meters)</label><input class="input" id="sg-rad" type="number" min="5" step="1" value="5"></div>
         <button type="button" class="btn btn-ghost" data-geo-here>${icon("pin", 16)} Use this phone's location</button><button class="btn btn-primary">Save site area</button></form>
       <p class="t-muted" style="margin:10px 0 0;font-size:13px">To get the pin from Google Maps, long-press the spot and copy the two numbers shown.</p>` : ""}</section>`;
 }
@@ -535,7 +535,7 @@ document.addEventListener("submit", async (ev) => {
       S.punchPreview = { pid, count, unmatched, bad: 0, people: Object.keys(r).length, patch: r, source: "phone" }; go("punches"); return;
     }
     if (f.id === "site-form") {
-      const site = $("#sg-site").value; const lat = Number($("#sg-lat").value), lng = Number($("#sg-lng").value); const radius = Math.max(30, Number($("#sg-rad").value) || 150);
+      const site = $("#sg-site").value; const lat = Number($("#sg-lat").value), lng = Number($("#sg-lng").value); const radius = Math.max(5, Number($("#sg-rad").value) || 5); // Glenn 2026-10-26: 5 m by default; the phone's GPS accuracy is still added
       if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180) || (!lat && !lng)) { toast("Enter the latitude and longitude."); return; }
       const geo = { lat, lng, radius };
       if (site === "office") await saveSettings({ officeGeo: geo }, "Set the head office area for phone clock-in");
