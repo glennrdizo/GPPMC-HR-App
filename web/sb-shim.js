@@ -256,7 +256,7 @@
 .sb-card button.go:hover{transform:translateY(-1px);box-shadow:0 16px 30px -12px rgba(15,27,51,.9),inset 0 -2px 0 #E0BE7A}.sb-card button.go:disabled{opacity:.6;cursor:wait;transform:none}
 .sb-card .links{display:flex;justify-content:space-between;gap:10px;margin-top:18px;font-size:14px;flex-wrap:wrap}.sb-card .links a{color:#8A6A1F;font-weight:700;cursor:pointer;text-decoration:none;border-bottom:1px solid rgba(138,106,31,.35)}.sb-card .links a:hover{border-color:#8A6A1F}
 .sb-secure{display:flex;align-items:center;justify-content:center;gap:6px;margin:18px 0 0;font-size:12px;color:#7A8090}
-.sb-card label small{font-weight:500;letter-spacing:0;color:#8A8F9C;text-transform:none}.sb-wait{background:#F6F1E6;border:1px solid #E4D3AC;border-radius:12px;padding:14px 16px;margin:4px 0 8px;font-size:14px;line-height:1.5;color:#2A3550}.sb-wait b{display:block;word-break:break-all}.sb-wait p{margin:8px 0 0}.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}
+.sb-card label small{font-weight:500;letter-spacing:0;color:#8A8F9C;text-transform:none}.sb-wait{background:#F6F1E6;border:1px solid #E4D3AC;border-radius:12px;padding:14px 16px;margin:4px 0 8px;font-size:14px;line-height:1.5;color:#2A3550}.sb-wait b{display:block;word-break:break-all}.sb-wait p{margin:8px 0 0}.sb-msg{margin-top:12px;font-size:14px;padding:10px 12px;border-radius:10px;display:none}.sb-msg.err{display:block;background:#FDECEC;color:#9B1C1C}.sb-msg.ok{display:block;background:#EAF6EE;color:#1E6B3A}.sb-idle{position:fixed;inset:0;z-index:2147483000;background:rgba(14,22,40,.55);display:flex;align-items:center;justify-content:center;padding:16px}.sb-idle-c{background:#fff;color:#1B2235;border-radius:16px;max-width:400px;width:100%;padding:22px 22px 18px;box-shadow:0 20px 60px rgba(0,0,0,.3);font:15px/1.5 system-ui,sans-serif}.sb-idle-c h2{margin:0 0 8px;font-size:19px}.sb-idle-c p{margin:0}.sb-idle-b{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px}.sb-idle-b button{min-height:44px;padding:0 16px;border-radius:10px;font:600 15px system-ui,sans-serif;cursor:pointer;border:1px solid #CBD2DE;background:#fff;color:#1B2235}.sb-idle-b .sb-idle-stay{background:#1B2A4A;border-color:#1B2A4A;color:#fff}
 .sb-gate.seen .sb-hero,.sb-gate.seen .sb-card{animation:none}
 .sb-dpa{display:flex;gap:10px;align-items:flex-start;margin:18px 0 0;padding:12px 14px;border-radius:12px;background:#F6F1E4;border:1px solid #E8DCBC;font-size:13px;line-height:1.5;color:#3A4560;cursor:pointer}
 .sb-dpa input{width:20px;height:20px;flex:0 0 auto;margin:1px 0 0;padding:0;accent-color:#1B2B4B;cursor:pointer}.sb-dpa a,.sb-foot button,.sb-pnl{color:#8A6A1F;font-weight:700;text-decoration:underline;cursor:pointer}
@@ -339,7 +339,7 @@
     const f = ev.target.closest(".sb-card"); if (!f) return; ev.preventDefault();
     const v = (id) => f.querySelector(id)?.value.trim() || ""; const btn = f.querySelector("button.go");
     const ck = f.querySelector("#sb-dpa"); if (ck && !ck.checked) { ck.closest(".sb-dpa").classList.add("bad"); const m = f.querySelector(".sb-msg"); m.className = "sb-msg err"; m.textContent = "Please read the Privacy Notice and tick the box to continue."; ck.focus(); return; }
-    if (ck) dpaNow = true; btn.disabled = true;
+    if (ck) dpaNow = true; btn.disabled = true; idleFresh();
     try {
       if (mode === "verify") {
         if (!v("#sb-vname") || !v("#sb-vpos") || !v("#sb-vmob")) throw new Error("Fill in your name, position and mobile number.");
@@ -383,10 +383,10 @@
   let started = false;
   sb.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { mode = "newpw"; gate(); return; }
-    if (session && !started && ev !== "PASSWORD_RECOVERY") { started = true; start(session); }
+    if (session && !started && ev !== "PASSWORD_RECOVERY") { const why = idleStale(); if (why) { idleOut(why); return; } started = true; idleFresh(); start(session); }
     if (ev === "SIGNED_OUT" && !leaving) location.reload();
   });
-  const boot = async () => { const { data } = await sb.auth.getSession(); if (!data.session && !started && mode !== "newpw") gate(); };
+  const boot = async () => { const { data } = await sb.auth.getSession(); if (!data.session && !started && mode !== "newpw") { let m = ""; try { m = sessionStorage.getItem("hr-idle-msg") || ""; sessionStorage.removeItem("hr-idle-msg"); } catch {} gate(m, m ? "ok" : ""); } };
   if (document.body) boot(); else document.addEventListener("DOMContentLoaded", boot);
 
   // Sign out: an account bar pinned to the bottom of the menu (Glenn 2026-10-12).
@@ -400,6 +400,47 @@
     location.reload();
   }
   window.hrSignOut = signOutNow;
+
+  // Automatic sign-out (Glenn 2026-10-26): after 5 minutes with no tap, key, scroll or mouse movement in any tab of the app,
+  // and when the browser was closed. Tabs share the last activity time; each open tab also writes a heartbeat, so a tab that
+  // opens with no other tab alive and no record of this browser session (the browser was closed) signs out before the app
+  // loads. A warning one minute before lets the person stay signed in. The scheduled runner (a headless browser, nobody at
+  // the keyboard) is left signed in for its run.
+  const IDLE_MS = 5 * 60000, IDLE_WARN = 60000, ACT = "hr-last-active", ALIVE = "hr-tab-alive", TABK = "hr-tab";
+  const idleBot = navigator.webdriver === true && !window.__idleTest;
+  const lsNum = (k) => { try { return Number(localStorage.getItem(k)) || 0; } catch { return 0; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, String(v)); } catch {} };
+  function idleFresh() { const t = Date.now(); lsSet(ACT, t); lsSet(ALIVE, t); try { sessionStorage.setItem(TABK, "1"); } catch {} }
+  function idleStale() {
+    if (idleBot || /access_token=|[?&]code=|type=(signup|recovery|magiclink|invite)/.test(location.hash + location.search)) return ""; // just signed in from an email link
+    const t = Date.now(), last = lsNum(ACT); if (!last) return "";
+    if (t - last > IDLE_MS) return "idle";
+    let tab = false; try { tab = !!sessionStorage.getItem(TABK); } catch {}
+    return !tab && t - lsNum(ALIVE) > 90000 ? "closed" : "";
+  }
+  function idleOut(why) {
+    try { sessionStorage.setItem("hr-idle-msg", why === "closed" ? "You were signed out because the browser was closed. Please sign in again." : "You were signed out after 5 minutes without activity. Please sign in again."); sessionStorage.removeItem(TABK); } catch {}
+    try { localStorage.removeItem(ACT); } catch {}
+    signOutNow();
+  }
+  let idleW = 0;
+  const idleSeen = () => { const t = Date.now(); if (t - idleW > 5000) { idleW = t; lsSet(ACT, t); } if (document.querySelector(".sb-idle") && t - lsNum(ACT) < IDLE_MS - IDLE_WARN) document.querySelector(".sb-idle").remove(); };
+  for (const e of ["pointerdown", "keydown", "wheel", "touchstart", "mousemove", "scroll"]) document.addEventListener(e, () => { if (!document.querySelector(".sb-idle")) idleSeen(); }, { capture: true, passive: true });
+  function idleTick() {
+    if (!started || leaving || idleBot) return; const t = Date.now(); lsSet(ALIVE, t);
+    const left = IDLE_MS - (t - lsNum(ACT)); let w = document.querySelector(".sb-idle");
+    if (left <= 0) { idleOut("idle"); return; }
+    if (left > IDLE_WARN) { w?.remove(); return; }
+    if (!w) { cssOnce(); w = document.createElement("div"); w.className = "sb-idle no-tl"; w.setAttribute("role", "alertdialog"); w.setAttribute("aria-modal", "true"); w.setAttribute("aria-labelledby", "sb-idle-t");
+      w.innerHTML = '<div class="sb-idle-c"><h2 id="sb-idle-t">Still there?</h2><p>For your security you will be signed out in <b class="sb-idle-n"></b> seconds because there has been no activity.</p><div class="sb-idle-b"><button type="button" class="sb-idle-out">Sign out now</button><button type="button" class="sb-idle-stay">Stay signed in</button></div></div>';
+      w.querySelector(".sb-idle-stay").addEventListener("click", () => { idleW = 0; idleSeen(); w.remove(); });
+      w.querySelector(".sb-idle-out").addEventListener("click", () => signOutNow());
+      document.body.appendChild(w); w.querySelector(".sb-idle-stay").focus(); }
+    w.querySelector(".sb-idle-n").textContent = Math.ceil(left / 1000);
+  }
+  setInterval(idleTick, 1000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") idleTick(); });
+  window.addEventListener("storage", (ev) => { if (ev.key === ACT) idleTick(); });
   new MutationObserver(() => {
     const nav = document.getElementById("nav"); if (!nav || !me || document.querySelector(".sb-acct")) return;
     const ini = String(me.name || me.email || "?").replace(/@.*/, "").split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join("") || "?";
