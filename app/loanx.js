@@ -140,7 +140,7 @@ async function loadPages(base, id, chunks) { const out = []; for (let p = 0; p <
 async function loadLoanPosts(force) {
   if ((S.lpLoaded && !force) || S.lpLoading) return; S.lpLoading = true;
   try { const devs = [...S.clockDevs.values()].filter((d) => !d.kiosk && !d.bio); const m = new Map();
-    await Promise.all(devs.map(async (d) => { const snap = await S.db.collection(`clockins/${d.id}/loans`).limit(100).get().catch(() => ({ docs: [] })); for (const x of snap.docs) m.set(`${d.id}:${x.id}`, { id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d, ...x.data() }); }));
+    await Promise.all(devs.map(async (d) => { const snap = await S.db.collection(`clockins/${d.id}/loans`).limit(100).get().catch(() => ({ docs: [] })); for (const x of snap.docs) m.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d }); }));
     S.selfAll = m; S.lpLoaded = true; } finally { S.lpLoading = false; render(); }
 }
 const lpEmp = (p) => S.emps.get(p.src === "self" ? p.dev && S.clockLinks[p.dev] : p.empId) || null; // phone posts count only through a phone link HR confirmed

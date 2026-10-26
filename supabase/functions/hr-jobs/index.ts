@@ -22,7 +22,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /* ---------- database (service role; RLS does not apply) ---------- */
 async function rest(path: string, init: RequestInit = {}, extra: Record<string, string> = {}) {
-  const r = await fetch(`${BASE}/rest/v1/${path}`, { ...init, headers: { apikey: SVC, authorization: `Bearer ${SVC}`, "content-type": "application/json", ...extra } });
+  // A slow database call gives up after 20 s instead of holding the whole run.
+  const r = await fetch(`${BASE}/rest/v1/${path}`, { signal: AbortSignal.timeout(20_000), ...init, headers: { apikey: SVC, authorization: `Bearer ${SVC}`, "content-type": "application/json", ...extra } });
   if (!r.ok) throw new Error(`${init.method || "GET"} ${path.split("?")[0]}: ${r.status} ${(await r.text()).slice(0, 200)}`);
   return r.status === 204 ? null : r.json().catch(() => null);
 }
@@ -43,7 +44,8 @@ function screenDeps() {
   const key = env("ANTHROPIC_API_KEY");
   return { key, docsOf, getDoc,
     patch: (p: string, patch: Doc) => rest("rpc/hr_update", { method: "POST", body: JSON.stringify({ p, patch }) }),
-    fetchFile: async (id: string) => { const r = await fetch(`${BASE}/storage/v1/object/hr-files/${id.split("/").map(encodeURIComponent).join("/")}`, { headers: { apikey: SVC, authorization: `Bearer ${SVC}` }, signal: AbortSignal.timeout(20_000) });
+    // Only plain stored-file names: no "..", so a resume id can't point at another file.
+    fetchFile: async (id: string) => { if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/.test(id) || /(^|\/)\.\.?(\/|$)/.test(id)) return null; const r = await fetch(`${BASE}/storage/v1/object/hr-files/${id.split("/").map(encodeURIComponent).join("/")}`, { headers: { apikey: SVC, authorization: `Bearer ${SVC}` }, signal: AbortSignal.timeout(20_000) });
       return r.ok ? { type: r.headers.get("content-type") || "", buf: await r.arrayBuffer() } : null; },
     claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
       const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; } };
@@ -72,11 +74,11 @@ async function recruitRules(today: string) {
 // A provider that hangs must not stall the whole run: each call gives up after 10 s and the message is tried again later.
 const fetchT = (u: string, i: RequestInit) => fetch(u, { ...i, signal: AbortSignal.timeout(10_000) });
 const sender = () => (env("RESEND_API_KEY") ? "resend" : env("BREVO_API_KEY") ? "brevo" : null);
-async function sendEmail(to: string, subject: string, text: string): Promise<{ ok: boolean; via: string | null; err?: string }> {
+async function sendEmail(to: string, subject: string, text: string, key?: string): Promise<{ ok: boolean; via: string | null; err?: string }> {
   const via = sender(); const from = env("MAIL_FROM");
   if (!via || !from) return { ok: false, via, err: !via ? "No email sender set up" : "MAIL_FROM is not set" };
   let r: Response;
-  if (via === "resend") r = await fetchT("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json" }, body: JSON.stringify({ from, to: [to], subject, text, html: toHtml(text) }) });
+  if (via === "resend") r = await fetchT("https://api.resend.com/emails", { method: "POST", headers: { authorization: `Bearer ${env("RESEND_API_KEY")}`, "content-type": "application/json", ...(key ? { "idempotency-key": `hr-${key}`.slice(0, 256) } : {}) }, body: JSON.stringify({ from, to: [to], subject, text, html: toHtml(text) }) });
   else { const m = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/); r = await fetchT("https://api.brevo.com/v3/smtp/email", { method: "POST", headers: { "api-key": env("BREVO_API_KEY"), "content-type": "application/json" },
     body: JSON.stringify({ sender: m ? { name: m[1] || "HR", email: m[2] } : { email: from }, to: [{ email: to }], subject, textContent: text, htmlContent: toHtml(text) }) }); }
   return r.ok ? { ok: true, via } : { ok: false, via, err: `${r.status} ${(await r.text()).slice(0, 160)}` };
@@ -170,7 +172,7 @@ async function run(force = false) {
     const due = ((await rpc("hr_outbox_claim", { n: 80 })) as Doc[]) || [];
     for (const m of due) { const upd: Doc = { updated_at: new Date().toISOString(), claim_at: null };
       const safe = async <T>(f: () => Promise<T>, err: (e: unknown) => T) => { try { return await f(); } catch (e) { return err(e); } };
-      if (m.status === "QUEUED") { const r = await safe(() => sendEmail(m.to_email, m.subject, m.body), (e) => ({ ok: false, via: sender(), err: String(e).slice(0, 160) })); upd.tries = (m.tries || 0) + 1; upd.via = r.via;
+      if (m.status === "QUEUED") { const r = await safe(() => sendEmail(m.to_email, m.subject, m.body, String(m.id)), (e) => ({ ok: false, via: sender(), err: String(e).slice(0, 160) })); upd.tries = (m.tries || 0) + 1; upd.via = r.via;
         if (r.ok) { upd.status = "SENT"; upd.sent_at = new Date().toISOString(); upd.err = null; sent++; } else { upd.err = r.err; upd.status = upd.tries >= 3 || !r.via ? "FAILED" : "QUEUED"; failed++; } }
       if (m.chat_status === "QUEUED") { const to: Target[] = Array.isArray(m.chat?.to) ? m.chat.to : [];
         const res = await Promise.all(to.map((t) => safe(() => sendChat(t, String(m.chat?.text || m.subject), [], true), (e) => ({ ok: false, err: String(e).slice(0, 160) })))); const bad = res.filter((r) => !r.ok);

@@ -52,7 +52,7 @@ function syncStaff() {
 function watchPhones() {
   for (const d of S.clockDevs.values()) { if (d.kiosk || d.bio || S.akSubs.has(d.id)) continue; S.akSubs.add(d.id);
     S.db.collection(`clockins/${d.id}/tickets`).limit(200).onSnapshot((snap) => { for (const [k, t] of S.tixPhone) if (t.dev === d.id) S.tixPhone.delete(k);
-      for (const x of snap.docs) S.tixPhone.set(`${d.id}:${x.id}`, { id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d, ...x.data() }); akNotify(); refresh(); }, () => {}); }
+      for (const x of snap.docs) S.tixPhone.set(`${d.id}:${x.id}`, { ...x.data(), id: x.id, key: `${d.id}:${x.id}`, src: "self", dev: d.id, claim: d }); akNotify(); refresh(); }, () => {}); }
 }
 { const b = bootIO; bootIO = (db) => { b(db);
   db.collection("tickets").limit(1000).onSnapshot((snap) => { S.tixHr = new Map(snap.docs.map((d) => [d.id, { id: d.id, key: `hr:${d.id}`, src: "hr", ...d.data() }])); akNotify(); refresh(); }, () => {});

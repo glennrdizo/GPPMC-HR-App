@@ -5,14 +5,16 @@
     await b(patch, msg); const a1 = S.access || {}; const after = a1.users || {}; const seen1 = a1.seen || {}; const inv1 = a1.invites || {};
     // "No access" keeps someone off the records in the database too, not just off the menu.
     const has = (u) => !!u?.role && u.role !== "none"; const off = new Set();
-    for (const id of Object.keys(after)) if (has(after[id]) !== has(before[id])) { if (has(after[id])) window.__sb?.rpc("hr_set_editor", { target: id, allow: true }); else off.add(id); }
+    // The database call only runs when awaited (supabase-js builders are lazy), so each one is awaited and a failure is shown.
+    const setEd = (id, allow) => window.__sb?.rpc("hr_set_editor", { target: id, allow }).then(({ error }) => { if (error) toast("Couldn't update this person's access to the records. Try again."); }, () => toast("Couldn't update this person's access to the records. Try again."));
+    for (const id of Object.keys(after)) if (has(after[id]) !== has(before[id])) { if (has(after[id])) setEd(id, true); else off.add(id); }
     // Deleting someone from the Users list (with or without a saved role) takes their record access away (Glenn 2026-10-17:
     // a deleted person still saw everything as View only, since an account without a role gets the default role).
     for (const id of new Set([...Object.keys(before), ...Object.keys(seen0)])) if (!after[id] && !seen1[id] && id !== S.myId) off.add(id);
     // So does deleting an invitation that the person already took up by signing in.
     const P = S.profiles || {};
     for (const [k, v] of Object.entries(inv0)) if (!inv1[k] && v?.email) for (const [id, p] of Object.entries(P)) if (String(p?.email || "").toLowerCase() === String(v.email).toLowerCase() && !has(after[id]) && id !== S.myId) off.add(id);
-    for (const id of off) window.__sb?.rpc("hr_set_editor", { target: id, allow: false });
+    for (const id of off) setEd(id, false);
   }; }
 // Invitations are claimed by the email the person signed up with (or, as before, by name).
 claimInvite = async () => {

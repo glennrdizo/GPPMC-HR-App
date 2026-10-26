@@ -101,14 +101,15 @@
   }
   let flushing = false;
   async function flush() {
-    if (flushing || !key || navigator.onLine === false) return; let box = store.get(K_BOX, []); if (!box.length) return; flushing = true; let sent = 0;
+    if (flushing || !key || navigator.onLine === false) return; let box = store.get(K_BOX, []); if (!box.length) return; flushing = true; let sent = 0; const done = new Set();
+    const bk = (x) => `${x.t}|${x.emp}|${x.type}`; // punches queued while this runs are kept (audit 2026-10-25)
     try {
       for (const it of [...box]) {
         const { error } = await sb.rpc("hr_kiosk_punch", args({ ...it, why: it.why || null }));
         if (error && netErr(error)) break;
-        box = box.filter((x) => x !== it); if (!error) { sent++; store.set(K_RECENT, store.get(K_RECENT, []).map((x) => (x.t === it.t ? { ...x, off: false } : x))); } // a refused one (e.g. too old) can't be fixed here: HR is told by the person
+        box = box.filter((x) => x !== it); done.add(bk(it)); if (!error) { sent++; store.set(K_RECENT, store.get(K_RECENT, []).map((x) => (x.t === it.t ? { ...x, off: false } : x))); } // a refused one (e.g. too old) can't be fixed here: HR is told by the person
       }
-    } catch { /* still offline */ } finally { store.set(K_BOX, box); flushing = false; }
+    } catch { /* still offline */ } finally { store.set(K_BOX, store.get(K_BOX, []).filter((x) => !done.has(bk(x)))); flushing = false; }
     if (sent && !pick) { msg = [`${sent} ${sent === 1 ? "punch" : "punches"} made with no signal ${sent === 1 ? "was" : "were"} sent.`, "ok"]; render(); }
   }
 
