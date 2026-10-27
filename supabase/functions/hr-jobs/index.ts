@@ -8,11 +8,13 @@
 // HR helper bot (2026-10-24): messages for someone who linked Viber or Messenger (hr-bot) also go to that chat when the bots
 // are on (org/bot.on); every morning approvers get one reminder of what waits past target for them, linked HR staff get the
 // day's summary and employees get what to fix before payroll; org/helper keeps the latest summary for the app and the bot.
+// Online meetings (2026-10-27, meetsync.ts): Zoom, Teams and Google Meet transcripts become Meeting notes, with minutes by Claude.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { aiScreen, genQuestions } from "./screen.ts";
 import { type Doc, type Notice, type Ctx, type All, WATCHED, REQ, readSettings, readRules, ruleActions, manila, eventNotices, digestNotices, digestSections, escalationNotices, chaseNotices, fixReminder, toHtml, phMobile, outId, isEmail } from "./logic.ts";
 import { type Target, chatKeys, sendChat } from "./chat.ts";
 import { type IvState, IV_MODEL_SCORE, scorePrompt, parseScore, jobText as ivJobText } from "./iv.ts";
+import { meetSync } from "./meetsync.ts";
 
 const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
@@ -125,10 +127,22 @@ async function putHelper(sections: { title: string; lines: string[] }[], at: str
   await rest("hr_docs?on_conflict=path", { method: "POST", body: JSON.stringify([{ path: "org/helper", col: "org", data: { at, sections } }]) }, { prefer: "resolution=merge-duplicates,return=minimal" });
 }
 
+/* ---------- Zoom, Teams and Google Meet transcripts into Meeting notes (meetsync.ts) ---------- */
+function meetDeps() {
+  const ai = screenDeps();
+  return { env, fetch, getDoc, patch: ai.patch,
+    claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(80_000) });
+      const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; },
+    imported: async () => (((await rest("hr_docs?select=path,mat:data->minutes->>at,tries:data->>minTries&col=eq.meetings&data->src=not.is.null")) as Doc[]) || [])
+      .map((r) => ({ id: String(r.path).split("/")[1], mat: r.mat || null, tries: Number(r.tries) || 0 })),
+    insert: async (id: string, data: Doc) => { await rest("hr_docs?on_conflict=path", { method: "POST", body: JSON.stringify([{ path: `meetings/${id}`, col: "meetings", data }]) }, { prefer: "resolution=ignore-duplicates,return=minimal" }); },
+    putStat: async (stat: Doc) => { await rest("hr_docs?on_conflict=path", { method: "POST", body: JSON.stringify([{ path: "org/meetstat", col: "org", data: stat }]) }, { prefer: "resolution=merge-duplicates,return=minimal" }); } };
+}
+
 /* ---------- one run ---------- */
 const putOut = (rows: Doc[]) => rows.length ? rest("hr_outbox?on_conflict=id", { method: "POST", body: JSON.stringify(rows) }, { prefer: "resolution=ignore-duplicates,return=minimal" }) : null;
 async function run(force = false) {
-  const now = new Date(), { date: today, hour } = manila(now); const at = now.toISOString();
+  const t0 = Date.now(); const now = new Date(), { date: today, hour } = manila(now); const at = now.toISOString();
   const settings = readSettings(await getDoc("org/notify"));
   const log: Doc = (((await rest(`hr_job_runs?select=data&day=eq.${today}`)) as Doc[]) || [])[0]?.data || {};
   const events = ((await rest("hr_events?select=id,path,col,old,new&order=id&limit=300")) as Doc[]) || [];
@@ -187,10 +201,11 @@ async function run(force = false) {
   let screen: Doc | null = null;
   if (env("ANTHROPIC_API_KEY")) { try { const deps = screenDeps(); const q = await genQuestions(deps); screen = { ...(await aiScreen(deps, 60_000)), questions: q }; } catch (e) { console.error("screen", e); screen = { error: String((e as Error)?.message || e).slice(0, 160) }; } }
   let rules: Doc | null = null; try { rules = await recruitRules(today); } catch (e) { console.error("rules", e); rules = { error: String((e as Error)?.message || e).slice(0, 160) }; }
+  let meet: Doc | null = null; try { meet = await meetSync(meetDeps(), t0 + 100_000, t0 + 60_000); } catch (e) { console.error("meet", e); meet = { error: String((e as Error)?.message || e).slice(0, 160) }; }
   const entry = { date: today, runs: (log.runs || 0) + 1, lastAt: at, events: (log.events || 0) + events.length, queued: (log.queued || 0) + queued, sent: (log.sent || 0) + sent, failed: (log.failed || 0) + failed,
     digestAt: log.digestAt || (digestCount != null ? at : null), digestItems: digestCount ?? log.digestItems ?? null, on: settings.on, sender: sender(),
     helperAt: helperAt || log.helperAt || null, botDayAt: log.botDayAt || botDayAt, chat: chatOn,
-    screened: (log.screened || 0) + (screen?.done || 0), ...(screen ? { screen } : {}), ...(rules ? { rules } : {}) };
+    screened: (log.screened || 0) + (screen?.done || 0), ...(screen ? { screen } : {}), ...(rules ? { rules } : {}), ...(meet?.on || meet?.error ? { meet } : {}) };
   await rest("hr_job_runs?on_conflict=day", { method: "POST", body: JSON.stringify([{ day: today, data: entry, updated_at: at }]) }, { prefer: "resolution=merge-duplicates,return=minimal" });
   return entry;
 }
