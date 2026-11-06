@@ -32,11 +32,26 @@ function usLoad(from, to, force) {
   return null;
 }
 const usLive = (r) => !!(r && !r.err && Array.isArray(r.users));
+let usRegion = null; try { usRegion = new Intl.DisplayNames(["en"], { type: "region" }); } catch {}
+// "Makati City, Philippines" from the city, region and country Vercel reports for the network (not the exact position)
+const usPlace = (x) => { if (!x) return ""; const c = String(x.country || "").toUpperCase(); let cn = c; try { cn = (c && usRegion?.of(c)) || c; } catch {} const rg = /^[A-Za-z][A-Za-z .'-]+$/.test(x.region || "") && x.region !== x.city && x.region.length > 3 ? x.region : ""; return [x.city, rg, cn].filter(Boolean).join(", "); };
+// pages opened and buttons pressed for a date range (website), and one person's visits
+const UU = { cache: new Map(), busy: new Set() };
+function usUse(from, to, uid) {
+  const k = `${from}|${to}|${uid || ""}`; if (!window.__sb || !usAdmin()) return null; if (UU.cache.has(k)) return UU.cache.get(k); if (UU.busy.has(k)) return null;
+  const days = (Date.parse(to) - Date.parse(from)) / 864e5; if (!(days >= 0) || days > 120) { UU.cache.set(k, { err: "range" }); return UU.cache.get(k); }
+  UU.busy.add(k);
+  window.__sb.rpc("hr_user_usage", { p_from: from, p_to: to, p_uid: uid || null }).then(({ data, error }) => { UU.busy.delete(k); UU.cache.set(k, error ? { err: "off" } : data || {}); if (US_VIEWS.has(S.view?.name)) render(); })
+    .catch(() => { UU.busy.delete(k); UU.cache.set(k, { err: "off" }); if (US_VIEWS.has(S.view?.name)) render(); });
+  return null;
+}
+const usUseLive = (u) => !!(u && !u.err && Array.isArray(u.byUser));
+const usDur = (sec) => { sec = Math.round(sec || 0); if (!sec) return "—"; if (sec < 60) return `${sec}s`; const m = Math.round(sec / 60); if (m < 60) return `${m} min`; const h = Math.floor(m / 60); return `${h} h ${m % 60} min`; };
 
 /* every account: from the server when it can, else HR staff from Users & permissions and the account requests */
 function usUsers(r) {
   const A = S.access || {}; const out = new Map();
-  if (usLive(r)) for (const u of r.users) out.set(u.uid, { uid: u.uid, name: A.users?.[u.uid]?.name || u.name || u.email || "Someone", email: u.email || "", staff: !!u.staff, owner: !!u.owner, status: u.status, empNo: u.empNo || "", position: u.position || "", lastSignIn: u.lastSignIn || "", lastSeen: u.lastSeen || "", requested: u.requested || "", created: u.created || "" });
+  if (usLive(r)) for (const u of r.users) out.set(u.uid, { uid: u.uid, name: A.users?.[u.uid]?.name || u.name || u.email || "Someone", email: u.email || "", staff: !!u.staff, owner: !!u.owner, status: u.status, empNo: u.empNo || "", position: u.position || "", lastSignIn: u.lastSignIn || "", lastSeen: u.lastSeen || "", requested: u.requested || "", created: u.created || "", place: usPlace(u.lastPlace), device: u.lastPlace?.ua ? usDev(u.lastPlace.ua) : "" });
   else {
     const ids = new Set([...Object.keys(A.users || {}), ...Object.keys(A.seen || {})]);
     for (const id of ids) { if (String(id).startsWith("inv:")) continue; out.set(id, { uid: id, name: A.users?.[id]?.name || S.profiles?.[id]?.name || A.names?.[id] || (id === S.myId ? S.meName || "You" : "Someone"), email: A.users?.[id]?.email || S.profiles?.[id]?.email || "", staff: true, owner: id === A.ownerId, status: "approved", lastSeen: A.seenAt?.[id] || "", lastSignIn: "" }); }
@@ -85,7 +100,7 @@ const US_PCOLS = () => [
   { l: "Person", v: (r) => r.name, h: (r) => `<button type="button" class="link" data-ua-who="${esc(r.uid)}"><b>${esc(r.name)}</b></button>${r.email ? `<div class="t-muted" style="font-size:12px">${esc(r.email)}</div>` : ""}` },
   { l: "Account type", v: (r) => r.type }, { l: "Role or employee no.", v: (r) => r.role },
   { l: "Signed in today", v: (r) => (r.today ? "Yes" : "—") }, { l: "Days this month", num: true, v: (r) => r.mDays, h: (r) => usN(r.mDays) },
-  { l: "Last sign-in", nw: true, v: (r) => usDT(r.last) || "—" }];
+  { l: "Last sign-in", nw: true, v: (r) => usDT(r.last) || "—" }, { l: "Place", v: (r) => r.place || "—" }, { l: "Device", v: (r) => r.device || "—" }];
 VIEWS.usrsign = () => {
   if (!usAdmin()) return noAccess();
   const cur = usYmNow(); const ym = /^\d{4}-\d{2}$/.test(S.usYm) && S.usYm <= cur ? S.usYm : cur; S.usYm = ym;
@@ -137,7 +152,7 @@ VIEWS.usrsign = () => {
       <div class="table-wrap"><table class="us-t"><thead><tr><th>Day</th><th class="num">HR staff</th><th class="num">Employees</th><th class="num">Total</th><th class="us-bar-h"><span class="sr-only">Chart</span></th></tr></thead><tbody>
       ${dayRows.map((x) => `<tr class="us-row" data-us-box="day:${x.d}" tabindex="0"><td style="white-space:nowrap">${fmtDate(x.d)}</td><td class="num">${usN(x.s)}</td><td class="num">${usN(x.e)}</td><td class="num"><b>${x.s + x.e}</b></td><td>${bar(x, maxD)}</td></tr>`).join("")}</tbody></table></div></section>
     <section class="card"><div class="card-head"><h2>Who signed in · ${esc(usYmLab(ym))}</h2><span class="t-muted" style="font-size:13px">Most recent first · select a person to open their activity log</span></div>
-      <div class="table-wrap">${usTable([...P.slice(0, 4), { l: "Days that month", num: true, v: (u) => u.selDays, h: (u) => usN(u.selDays) }, P[5]], sortLast(reg.filter((u) => u.selDays > 0)), { max: 150, rowAttr, empty: live ? "Nobody signed in this month yet." : "No sign-in record yet for this month." })}</div></section>
+      <div class="table-wrap">${usTable([...P.slice(0, 4), { l: "Days that month", num: true, v: (u) => u.selDays, h: (u) => usN(u.selDays) }, ...P.slice(5)], sortLast(reg.filter((u) => u.selDays > 0)), { max: 150, rowAttr, empty: live ? "Nobody signed in this month yet." : "No sign-in record yet for this month." })}</div></section>
     ${live ? `<section class="card"><div class="card-head"><h2>Online per month</h2><span class="t-muted" style="font-size:13px">Different people who opened the HR system at least once that month (last 12 months)</span></div>
       <div class="table-wrap"><table class="us-t"><thead><tr><th>Month</th><th class="num">HR staff</th><th class="num">Employees</th><th class="num">Total</th></tr></thead><tbody>
       ${months.map((x) => `<tr class="us-row" data-us-box="mon:${x.ym}" tabindex="0"><td>${esc(usYmLab(x.ym))}</td><td class="num">${usN(x.s)}</td><td class="num">${usN(x.e)}</td><td class="num"><b>${x.s + x.e}</b></td></tr>`).join("")}</tbody></table></div></section>` : ""}
@@ -154,19 +169,21 @@ VIEWS.usract = () => {
   const F = S.auF; if (typeof AU !== "undefined" && AU.key !== `${F.from}|${F.to}` && !AU.loading) setTimeout(() => auLoad().then(() => { if (S.view?.name === "usract") render(); }), 0);
   const r = usAdmin() ? usLoad(F.from, F.to) : null; const live = usLive(r);
   const users = usUsers(r); const byId = new Map(users.map((u) => [u.uid, u]));
+  const use = usAdmin() ? usUse(F.from, F.to) : null; const uLive = usUseLive(use);
   const rows = typeof auRowsAll === "function" ? auRowsAll() : [];
   const D = new Map(); if (live) for (const x of r.days || []) { const o = D.get(x.uid) || { days: 0, sin: 0, opens: 0, last: "" }; o.days++; o.sin += x.signins || 0; o.opens += x.opens || 0; if (x.last > o.last) o.last = x.last; D.set(x.uid, o); }
   const P = new Map(); const per = (uid) => { if (!P.has(uid)) { const u = byId.get(uid); P.set(uid, { uid, name: u?.name || rows.find((x) => x.uid === uid)?.who || "Someone", type: u?.type || "HR staff", role: u?.role || "", days: 0, sin: 0, open: 0, create: 0, update: 0, delete: 0, download: 0, last: "" }); } return P.get(uid); };
   for (const [uid, o] of D) { const p = per(uid); p.days = o.days; p.sin = o.sin; if (o.last > p.last) p.last = o.last; }
   const dayOpen = new Map(); for (const x of rows) { if (!x.uid) continue; const p = per(x.uid); p[x.act] = (p[x.act] || 0) + 1; if (x.at > p.last) p.last = x.at; if (x.act === "open") { const k = x.uid; if (!dayOpen.has(k)) dayOpen.set(k, new Set()); dayOpen.get(k).add(manilaDay(x.at)); } }
   if (!live) for (const [uid, s] of dayOpen) per(uid).days = s.size;
+  if (uLive) for (const x of use.byUser) { const p = per(x.uid); p.pages = x.pages || 0; p.clicks = x.clicks || 0; p.secs = x.secs || 0; p.mods = x.modules || 0; if (x.last > p.last) p.last = x.last; }
   const people = [...P.values()].sort((a, b) => (b.create + b.update + b.delete + b.days + b.open) - (a.create + a.update + a.delete + a.days + a.open) || a.name.localeCompare(b.name));
   const reg = users.filter((u) => u.status === "approved");
   const sum = (k) => people.reduce((a, p) => a + (p[k] || 0), 0);
   const signed = people.filter((p) => p.days > 0);
-  const sRows = live ? (r.list || []).map((x) => ({ uid: x.uid, name: byId.get(x.uid)?.name || "Someone", type: byId.get(x.uid)?.type || "", at: x.at, ip: x.ip || "", dev: usDev(x.ua), kind: x.kind === "signin" ? "Signed in" : "Opened the app" })) : [];
-  const PC = [{ l: "Person", v: (p) => p.name, h: (p) => `<button type="button" class="link" data-ua-who="${esc(p.uid)}"><b>${esc(p.name)}</b></button>` }, { l: "Account type", v: (p) => p.type }, { l: "Days signed in", num: true, v: (p) => p.days, h: (p) => usN(p.days) }, ...(live ? [{ l: "Sign-ins", num: true, v: (p) => p.sin, h: (p) => usN(p.sin) }] : []), { l: "Added", num: true, v: (p) => p.create, h: (p) => usN(p.create) }, { l: "Changed", num: true, v: (p) => p.update, h: (p) => usN(p.update) }, { l: "Deleted", num: true, v: (p) => p.delete, h: (p) => usN(p.delete) }, { l: "Downloads", num: true, v: (p) => p.download, h: (p) => usN(p.download) }, { l: "Last activity", nw: true, v: (p) => usDT(p.last) || "—" }];
-  const SC = [{ l: "When", nw: true, v: (s) => usDT(s.at) }, { l: "Person", v: (s) => s.name, h: (s) => `<button type="button" class="link" data-ua-who="${esc(s.uid)}"><b>${esc(s.name)}</b></button>` }, { l: "Account type", v: (s) => s.type }, { l: "What", v: (s) => s.kind }, { l: "Device", v: (s) => s.dev }, { l: "Network address", v: (s) => s.ip || "—" }];
+  const sRows = live ? (r.list || []).map((x) => ({ uid: x.uid, name: byId.get(x.uid)?.name || "Someone", type: byId.get(x.uid)?.type || "", at: x.at, ip: x.ip || "", dev: usDev(x.ua), place: usPlace(x), kind: x.kind === "signin" ? "Signed in" : "Opened the app" })) : [];
+  const PC = [{ l: "Person", v: (p) => p.name, h: (p) => `<button type="button" class="link" data-ua-who="${esc(p.uid)}"><b>${esc(p.name)}</b></button>` }, { l: "Account type", v: (p) => p.type }, { l: "Days signed in", num: true, v: (p) => p.days, h: (p) => usN(p.days) }, ...(live ? [{ l: "Sign-ins", num: true, v: (p) => p.sin, h: (p) => usN(p.sin) }] : []), { l: "Added", num: true, v: (p) => p.create, h: (p) => usN(p.create) }, { l: "Changed", num: true, v: (p) => p.update, h: (p) => usN(p.update) }, { l: "Deleted", num: true, v: (p) => p.delete, h: (p) => usN(p.delete) }, { l: "Downloads", num: true, v: (p) => p.download, h: (p) => usN(p.download) }, ...(uLive ? [{ l: "Pages opened", num: true, v: (p) => p.pages || 0, h: (p) => usN(p.pages) }, { l: "Clicks", num: true, v: (p) => p.clicks || 0, h: (p) => usN(p.clicks) }, { l: "Time in the app", nw: true, v: (p) => usDur(p.secs) }] : []), { l: "Last activity", nw: true, v: (p) => usDT(p.last) || "—" }];
+  const SC = [{ l: "When", nw: true, v: (s) => usDT(s.at) }, { l: "Person", v: (s) => s.name, h: (s) => `<button type="button" class="link" data-ua-who="${esc(s.uid)}"><b>${esc(s.name)}</b></button>` }, { l: "Account type", v: (s) => s.type }, { l: "What", v: (s) => s.kind }, { l: "Place", v: (s) => s.place || "—" }, { l: "Device", v: (s) => s.dev }, { l: "Network address", v: (s) => s.ip || "—" }];
   const rowAttr = (p) => `data-ua-who-row="${esc(p.uid)}"`;
   const LP = (title, list, where, go) => ({ title, rows: list, cols: PC, where, go, rowAttr });
   const byAct = (a) => people.filter((p) => p[a] > 0).sort((x, y) => y[a] - x[a]);
@@ -189,16 +206,20 @@ VIEWS.usract = () => {
       ${usBox("ua-c", "Records added", sum("create"), "new records saved", LP("Added records", byAct("create"), "Audit Trail › Audit log", "audtrail"), { ...audit, act: "create" })}
       ${usBox("ua-u", "Records changed", sum("update"), "edits and approvals", LP("Changed records", byAct("update"), "Audit Trail › Audit log", "audtrail"), { ...audit, act: "update" })}
       ${usBox("ua-d", "Records deleted", sum("delete"), sum("delete") ? "worth a look" : "none", LP("Deleted records", byAct("delete"), "Audit Trail › Audit log", "audtrail"), { ...audit, act: "delete" })}
+      ${uLive ? usBox("ua-pg", "Pages opened", sum("pages"), `${(use.byModule || []).filter((m) => m.module).length} modules · ${usDur(sum("secs"))} in the app`, LP("Pages opened", people.filter((p) => p.pages).sort((a, b) => b.pages - a.pages), "the page log"), { label: "By module below", scroll: "ua-mods" }) : ""}
+      ${uLive ? usBox("ua-ck", "Clicks", sum("clicks"), "buttons and links pressed", LP("Clicks", people.filter((p) => p.clicks).sort((a, b) => b.clicks - a.clicks), "the page log"), { label: "By person below", scroll: "ua-by" }) : ""}
       ${usBox("ua-dl", "Downloads", sum("download"), "files and reports saved", LP("Downloads", byAct("download"), "Audit Trail › Audit log", "audtrail"), { ...audit, act: "download" })}
     </section>
     <div style="display:flex;justify-content:flex-end;margin:-4px 0 12px"><button type="button" class="btn btn-ghost btn-sm" data-us-csv="ua-people">${icon("file", 14)}Download by person (Excel)</button></div>
     ${live ? `<section class="card" id="ua-signs"><div class="card-head"><h2>Sign-ins</h2><span class="t-muted" style="font-size:13px">Every sign-in and opening for the dates chosen, newest first · select a row for the person's log</span></div>
       <div class="table-wrap">${usTable(SC, sRows, { max: S.uaShow, rowAttr: (s) => `data-ua-who-row="${esc(s.uid)}"`, empty: "Nobody signed in during these dates." })}</div>
       ${sRows.length > S.uaShow ? `<p style="margin:10px 0 0"><button class="btn btn-ghost btn-sm" data-ua-more>Show 100 more</button></p>` : ""}</section>` : ""}
-    <section class="card"><div class="card-head"><h2>By person</h2><span class="t-muted" style="font-size:13px">Most active first · select a name to see everything the person did and when</span></div>
+    ${uLive ? `<section class="card" id="ua-mods"><div class="card-head"><h2>By module</h2><span class="t-muted" style="font-size:13px">Pages opened in each module for the dates chosen, by everyone</span></div>
+      <div class="table-wrap">${usTable([{ l: "Module", v: (m) => m.module || "Other", h: (m) => `<b>${esc(GL(m.module || "Other"))}</b>` }, { l: "Pages opened", num: true, v: (m) => m.pages, h: (m) => usN(m.pages) }, { l: "People", num: true, v: (m) => m.people, h: (m) => usN(m.people) }, { l: "Clicks", num: true, v: (m) => m.clicks, h: (m) => usN(m.clicks) }, { l: "Time spent", nw: true, v: (m) => usDur(m.secs) }], use.byModule || [], { empty: "No pages opened on these dates." })}</div></section>` : use?.err === "off" ? `<div class="notice"><span>Pages opened and clicks show once the website's database update for this page is applied.</span></div>` : ""}
+    <section class="card" id="ua-by"><div class="card-head"><h2>By person</h2><span class="t-muted" style="font-size:13px">Most active first · select a name to see everything the person did and when</span></div>
       <div class="table-wrap">${usTable(PC, people, { rowAttr, empty: "No one used the HR system on these dates." })}</div></section>
-    <div id="ua-detail">${S.uaWho ? usDetail(S.uaWho, { users: byId, rows, live, r, per: P.get(S.uaWho) }) : ""}</div>
-    <p class="t-muted us-note">Records added, changed and deleted and downloads come from the Audit Trail, which records the work of HR staff from 14 Oct 2026; employees' own requests are filed by HR and show under the HR person who filed them. Pay, bank and government numbers are never copied into the log. Sign-ins are recorded on the website from the day its database update for this page was applied.</p>`;
+    <div id="ua-detail">${S.uaWho ? usDetail(S.uaWho, { users: byId, rows, live, r, per: P.get(S.uaWho), use: usAdmin() && uLive ? usUse(F.from, F.to, S.uaWho) : null }) : ""}</div>
+    <p class="t-muted us-note">Records added, changed and deleted and downloads come from the Audit Trail, which records the work of HR staff from 14 Oct 2026; employees' own requests are filed by HR and show under the HR person who filed them. Pay, bank and government numbers are never copied into the log. Sign-ins (with the city of the network, not the exact position), pages opened and buttons pressed are recorded on the website from the day its database update for this page was applied; pages are kept 90 days, and what people type is never recorded.</p>`;
 };
 function usDetail(uid, X) {
   const u = X.users.get(uid); const p = X.per || {}; const name = u?.name || p.name || X.rows.find((x) => x.uid === uid)?.who || "Someone";
@@ -210,8 +231,10 @@ function usDetail(uid, X) {
       <div class="card stat"><span class="label">Days signed in</span><span class="value">${p.days || 0}</span></div>
       ${X.live ? `<div class="card stat"><span class="label">Sign-ins</span><span class="value">${p.sin || 0}</span><span class="sub">${devs.size} device${devs.size === 1 ? "" : "s"} · ${ips.size} address${ips.size === 1 ? "" : "es"}</span></div>` : ""}
       <div class="card stat"><span class="label">Added</span><span class="value">${p.create || 0}</span></div><div class="card stat"><span class="label">Changed</span><span class="value">${p.update || 0}</span></div>
-      <div class="card stat"><span class="label">Deleted</span><span class="value">${p.delete || 0}</span></div><div class="card stat"><span class="label">Downloads</span><span class="value">${p.download || 0}</span></div></section>
-    ${X.live ? `<h3 class="us-h3">Sign-ins</h3><div class="table-wrap">${usTable([{ l: "When", nw: true, v: (s) => usDT(s.at) }, { l: "What", v: (s) => (s.kind === "signin" ? "Signed in" : "Opened the app") }, { l: "Device", v: (s) => usDev(s.ua) }, { l: "Network address", v: (s) => s.ip || "—" }], signs, { empty: "No sign-ins on these dates." })}</div>` : ""}
+      <div class="card stat"><span class="label">Deleted</span><span class="value">${p.delete || 0}</span></div><div class="card stat"><span class="label">Downloads</span><span class="value">${p.download || 0}</span></div>
+      ${usUseLive(X.use) ? `<div class="card stat"><span class="label">Pages opened</span><span class="value">${p.pages || 0}</span><span class="sub">${p.mods || 0} modules · ${usDur(p.secs)}</span></div><div class="card stat"><span class="label">Clicks</span><span class="value">${p.clicks || 0}</span></div>` : ""}</section>
+    ${X.live ? `<h3 class="us-h3">Sign-ins</h3><div class="table-wrap">${usTable([{ l: "When", nw: true, v: (s) => usDT(s.at) }, { l: "What", v: (s) => (s.kind === "signin" ? "Signed in" : "Opened the app") }, { l: "Place", v: (s) => usPlace(s) || "—" }, { l: "Device", v: (s) => usDev(s.ua) }, { l: "Network address", v: (s) => s.ip || "—" }], signs, { empty: "No sign-ins on these dates." })}</div>` : ""}
+    ${usUseLive(X.use) ? `<h3 class="us-h3">Modules and pages opened</h3><div class="table-wrap">${usTable([{ l: "When", nw: true, v: (v) => usDT(v.at) }, { l: "Module", v: (v) => GL(v.module || "") || "—" }, { l: "Page", v: (v) => v.label || v.page }, { l: "Time there", nw: true, v: (v) => usDur(v.secs) }, { l: "Clicks", num: true, v: (v) => v.clicks, h: (v) => usN(v.clicks) }, { l: "Buttons pressed", v: (v) => (v.taps || []).join(", "), h: (v) => (v.taps?.length ? `<span class="us-taps">${v.taps.map((t) => `<span class="chip c-gray">${esc(t)}</span>`).join(" ")}</span>` : '<span class="t-muted">—</span>') }], X.use.items || [], { max: 300, empty: "No pages opened on these dates." })}</div>` : X.use === null && usAdmin() && window.__sb ? '<p class="t-muted">Reading the pages opened…</p>' : ""}
     <h3 class="us-h3">What they did</h3>
     ${mine.length ? `<div class="table-wrap"><table class="us-t"><thead><tr><th>When</th><th>Action</th><th>Record</th><th>Page</th><th>What changed</th></tr></thead><tbody>
       ${mine.map((x) => `<tr><td style="white-space:nowrap">${auWhen(x.at)}</td><td>${auChip(x.act)}</td><td>${esc(x.label || "")}${x.col ? `<div class="t-muted" style="font-size:12px">${esc(AU_COL[x.col] || x.col)}</div>` : ""}</td><td>${esc(x.pageL || "")}</td><td>${auChanges(x)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="t-muted" style="margin:0">Nothing recorded for this person on these dates.</p>'}</section>`;
@@ -232,7 +255,7 @@ document.addEventListener("click", (ev) => {
   if (d.usClose != null) { closeModal(); return; }
   if (d.usGoto != null) { closeModal(); go(d.usGoto); return; }
   if (d.usCsv != null) { const L = US_LISTS.get(d.usCsv); if (!L) return; offer(`${L.title}.csv`, toCSV([L.cols.map((c) => c.l), ...L.rows.map((r) => L.cols.map((c) => usTxt(c, r)))])); return; }
-  if (d.usReload != null) { US.cache.clear(); if (typeof auLoad === "function" && S.view?.name === "usract") auLoad(true).then(() => { if (S.view?.name === "usract") render(); }); render(); return; }
+  if (d.usReload != null) { US.cache.clear(); UU.cache.clear(); if (typeof auLoad === "function" && S.view?.name === "usract") auLoad(true).then(() => { if (S.view?.name === "usract") render(); }); render(); return; }
   if (d.usT != null) { S.usT = d.usT; render(); return; }
   if (d.usScroll != null) { document.getElementById(d.usScroll)?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
   if (d.uaRange != null) { const F = S.auF; F.to = todayISO(); F.from = addDays(F.to, -Number(d.uaRange)); render(); return; }
@@ -269,6 +292,30 @@ let usrsignQ = 0;
 .us-note{font-size:13px;margin:12px 0 0;max-width:900px}
 .us-detail{scroll-margin-top:16px}.us-mini{margin-bottom:6px}
 .us-dlg-t{max-height:min(60vh,520px);overflow:auto}
+.us-taps{display:flex;flex-wrap:wrap;gap:4px;max-width:420px}.us-taps .chip{font-size:11px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 @media (max-width:600px){.us-bar{min-width:70px}.us-range .au-f{min-width:0;flex:1 1 140px}.us-range .au-f .input{width:100%;min-width:0}.us-range .au-quick{width:100%}}
 `; document.head.appendChild(st); }
+
+/* ---------- the page log (website): each page a signed-in person opens, its module, the time there and the buttons pressed ----------
+   One row per page visit, sent in batches every 20 seconds and when the tab is hidden. Only names of buttons and links are
+   kept, never what is typed; fields, passwords and file boxes are skipped. Employees' phone pages count too. */
+const UT = { cur: null, q: [], busy: false };
+const utOn = () => !!(window.__sb && window.__hosted && S.myId && S.db);
+const utPage = () => (S.selfMode ? `me:${S.selfView || S.essView || "home"}` : S.viewAs === "emp" && S.realEdit ? `ess:${S.essView || "esshome"}` : S.view?.name || "");
+const utModule = () => { if (S.selfMode || S.viewAs === "emp") return "Employee pages"; try { const v = S.view?.name; if (v === "perms") return "Users & Permissions"; const k = navKeys().find((x) => x.v === v) || navKeys().find((x) => x.v === SECTION_OF[v]); const g = k?.g || viewGroup(v); return g ? GL(g) : "Overview"; } catch { return ""; } };
+function utClose() { const c = UT.cur; if (!c) return; UT.cur = null; c.secs = Math.min(3600, Math.round((Date.now() - c.t0) / 1000)); delete c.t0; UT.q.push(c); if (UT.q.length > 200) UT.q.splice(0, UT.q.length - 200); }
+function utFlush() {
+  if (!utOn() || UT.busy || !UT.q.length) return; UT.busy = true; const batch = UT.q.splice(0, 50);
+  window.__sb.rpc("hr_usage_note", { p_items: batch }).then(({ error }) => { UT.busy = false; if (error && !/PGRST202|does not exist|not find/i.test(error.message || "")) UT.q.unshift(...batch.slice(0, 50)); }, () => { UT.busy = false; });
+}
+{ const b = render; render = (...a) => { const r = b(...a); try { if (utOn() && !document.hidden) { const pg = utPage(); if (pg && UT.cur?.page !== pg) { utClose(); UT.cur = { at: new Date().toISOString(), page: pg, label: "", module: utModule(), clicks: 0, taps: [], t0: Date.now() }; }
+  if (UT.cur && !UT.cur.label) UT.cur.label = (document.querySelector("#main h1")?.textContent || "").trim().replace(/\s+/g, " ").slice(0, 120); } } catch {} return r; }; }
+document.addEventListener("click", (ev) => {
+  if (!UT.cur || !ev.isTrusted) return; const el = ev.target.closest?.("button,a,[role=button],[role=tab],[data-go],summary,[data-emp]"); if (!el || el.closest("input,textarea,select,[type=password],[type=file]")) return;
+  UT.cur.clicks++; const t = String(el.getAttribute("aria-label") || el.textContent || el.getAttribute("title") || "").trim().replace(/\s+/g, " ").slice(0, 60);
+  if (t && UT.cur.taps.length < 30 && UT.cur.taps[UT.cur.taps.length - 1] !== t) UT.cur.taps.push(t);
+}, true);
+document.addEventListener("visibilitychange", () => { if (document.hidden) { utClose(); utFlush(); } else if (utOn()) render(); });
+window.addEventListener("pagehide", () => { utClose(); utFlush(); });
+setInterval(() => { if (UT.cur && Date.now() - UT.cur.t0 > 600000) { const pg = UT.cur.page, lb = UT.cur.label, md = UT.cur.module; utClose(); UT.cur = { at: new Date().toISOString(), page: pg, label: lb, module: md, clicks: 0, taps: [], t0: Date.now() }; } utFlush(); }, 20000);
