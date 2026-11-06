@@ -150,27 +150,31 @@ create table if not exists public.hr_signin_log (
   ua text not null default '',
   kind text not null default 'open' check (kind in ('signin', 'open'))
 );
+alter table public.hr_signin_log add column if not exists city text not null default '', add column if not exists region text not null default '', add column if not exists country text not null default '';
 create index if not exists hr_signin_log_uid_at on public.hr_signin_log (uid, at);
 create index if not exists hr_signin_log_at on public.hr_signin_log (at);
 alter table public.hr_signin_log enable row level security;
 revoke all on public.hr_signin_log from anon, authenticated;
 
 -- the signed-in person notes a sign-in or an app opening; the address comes from the request, not the browser
-create or replace function public.hr_signin_note(p_kind text default 'open', p_ua text default '') returns void
+-- The website calls this through its own /api/signin (Vercel), which adds the network address and the city, region and
+-- country Vercel reports for it; called directly, the address comes from the request and the place stays blank.
+create or replace function public.hr_signin_note(p_kind text default 'open', p_ua text default '', p_ip text default null,
+  p_city text default null, p_region text default null, p_country text default null) returns void
 language plpgsql security definer set search_path = public as $$
 declare h jsonb; ip text;
 begin
   if auth.uid() is null then return; end if;
-  -- at most one note a minute per person
-  if exists (select 1 from public.hr_signin_log where uid = auth.uid() and at > now() - interval '1 minute') then return; end if;
+  -- at most one note a minute per person (a sign-in is still noted after an opening in that minute)
+  if exists (select 1 from public.hr_signin_log where uid = auth.uid() and at > now() - interval '1 minute' and (kind = 'signin' or p_kind <> 'signin')) then return; end if;
   begin h := current_setting('request.headers', true)::jsonb; exception when others then h := '{}'::jsonb; end;
-  ip := split_part(coalesce(h ->> 'cf-connecting-ip', h ->> 'x-real-ip', h ->> 'x-forwarded-for', ''), ',', 1);
-  insert into public.hr_signin_log (uid, ip, ua, kind) values (auth.uid(), left(btrim(ip), 64), left(coalesce(p_ua, ''), 300),
-    case when p_kind = 'signin' then 'signin' else 'open' end);
+  ip := coalesce(nullif(btrim(p_ip), ''), split_part(coalesce(h ->> 'cf-connecting-ip', h ->> 'x-real-ip', h ->> 'x-forwarded-for', ''), ',', 1));
+  insert into public.hr_signin_log (uid, ip, ua, kind, city, region, country) values (auth.uid(), left(btrim(ip), 64), left(coalesce(p_ua, ''), 300),
+    case when p_kind = 'signin' then 'signin' else 'open' end, left(coalesce(p_city, ''), 80), left(coalesce(p_region, ''), 80), left(upper(coalesce(p_country, '')), 2));
   execute 'del' || 'ete from public.hr_signin_log where at < now() - interval ''400 days''';
 end $$;
-revoke execute on function public.hr_signin_note(text, text) from public, anon;
-grant execute on function public.hr_signin_note(text, text) to authenticated;
+revoke execute on function public.hr_signin_note(text, text, text, text, text, text) from public, anon;
+grant execute on function public.hr_signin_note(text, text, text, text, text, text) to authenticated;
 
 -- HR Managers: every sign-in of HR staff on one Manila day, each with the reasons it looks unusual against that
 -- person's previous 30 days: a network address or device never seen before, between midnight and 5 am, or 3+ addresses that day.
@@ -183,7 +187,7 @@ begin
   return jsonb_build_object('day', d, 'rows', coalesce((
     select jsonb_agg(r order by r->>'at') from (
       select jsonb_build_object('uid', l.uid, 'name', coalesce(p.name, ''), 'staff', exists (select 1 from public.hr_editors e where e.user_id = l.uid and not coalesce(e.revoked, false)),
-        'at', l.at, 'ip', l.ip, 'ua', l.ua, 'kind', l.kind,
+        'at', l.at, 'ip', l.ip, 'ua', l.ua, 'kind', l.kind, 'city', l.city, 'region', l.region, 'country', l.country,
         'newIp', l.ip <> '' and not exists (select 1 from public.hr_signin_log o where o.uid = l.uid and o.at < a and o.at >= a - interval '30 days' and o.ip = l.ip),
         'newNet', l.ip <> '' and not exists (select 1 from public.hr_signin_log o where o.uid = l.uid and o.at < a and o.at >= a - interval '30 days' and split_part(o.ip, '.', 1) || '.' || split_part(o.ip, '.', 2) = split_part(l.ip, '.', 1) || '.' || split_part(l.ip, '.', 2)),
         'newDevice', not exists (select 1 from public.hr_signin_log o where o.uid = l.uid and o.at < a and o.at >= a - interval '30 days' and o.ua = l.ua),
@@ -214,7 +218,8 @@ begin
       select jsonb_build_object('uid', u.id, 'name', coalesce(nullif(p.name, ''), nullif(s.name, ''), split_part(u.email, '@', 1)), 'email', u.email,
         'staff', e.user_id is not null, 'owner', coalesce(e.is_owner, false), 'status', case when e.user_id is not null then 'approved' else coalesce(s.status, 'none') end,
         'empNo', s.emp_no, 'position', s.position, 'requested', s.requested_at, 'created', u.created_at, 'lastSignIn', u.last_sign_in_at,
-        'lastSeen', (select max(l.at) from public.hr_signin_log l where l.uid = u.id)) x
+        'lastSeen', (select max(l.at) from public.hr_signin_log l where l.uid = u.id),
+        'lastPlace', (select jsonb_build_object('city', l.city, 'region', l.region, 'country', l.country, 'ua', l.ua, 'ip', l.ip) from public.hr_signin_log l where l.uid = u.id order by l.at desc limit 1)) x
       from auth.users u
       left join public.hr_editors e on e.user_id = u.id and not coalesce(e.revoked, false)
       left join public.hr_signups s on s.user_id = u.id
@@ -224,7 +229,7 @@ begin
       select jsonb_build_object('uid', l.uid, 'day', (l.at at time zone 'Asia/Manila')::date, 'signins', count(*) filter (where l.kind = 'signin'), 'opens', count(*), 'last', max(l.at)) x
       from public.hr_signin_log l where l.at >= a and l.at < b group by l.uid, (l.at at time zone 'Asia/Manila')::date) q), '[]'::jsonb),
     'list', coalesce((select jsonb_agg(x order by x->>'at' desc) from (
-      select jsonb_build_object('uid', l.uid, 'at', l.at, 'ip', l.ip, 'ua', l.ua, 'kind', l.kind) x
+      select jsonb_build_object('uid', l.uid, 'at', l.at, 'ip', l.ip, 'ua', l.ua, 'kind', l.kind, 'city', l.city, 'region', l.region, 'country', l.country) x
       from public.hr_signin_log l where l.at >= a and l.at < b order by l.at desc limit 3000) q), '[]'::jsonb),
     'months', coalesce((select jsonb_agg(x) from (
       select jsonb_build_object('uid', l.uid, 'ym', to_char(l.at at time zone 'Asia/Manila', 'YYYY-MM'), 'days', count(distinct (l.at at time zone 'Asia/Manila')::date)) x
@@ -232,3 +237,62 @@ begin
 end $$;
 revoke execute on function public.hr_user_signins(date, date) from public, anon;
 grant execute on function public.hr_user_signins(date, date) to authenticated;
+
+-- ===================== D. Pages opened and buttons pressed (Users Activity Logs) =====================
+-- The website sends what each signed-in person opened: one row per page visit with the module, the seconds spent there
+-- and the names of the buttons and links pressed (never what was typed). Kept 90 days; at most 3,000 rows a person a day.
+create table if not exists public.hr_usage_log (
+  id bigserial primary key,
+  uid uuid not null,
+  at timestamptz not null default now(),
+  page text not null default '',
+  label text not null default '',
+  module text not null default '',
+  secs int not null default 0,
+  clicks int not null default 0,
+  taps text[] not null default '{}'
+);
+create index if not exists hr_usage_log_at on public.hr_usage_log (at);
+create index if not exists hr_usage_log_uid_at on public.hr_usage_log (uid, at);
+alter table public.hr_usage_log enable row level security;
+revoke all on public.hr_usage_log from anon, authenticated;
+
+create or replace function public.hr_usage_note(p_items jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare it jsonb; n int := 0; t timestamptz;
+begin
+  if auth.uid() is null or jsonb_typeof(p_items) <> 'array' then return 0; end if;
+  if (select count(*) from public.hr_usage_log where uid = auth.uid() and at > now() - interval '1 day') >= 3000 then return 0; end if;
+  for it in select * from jsonb_array_elements(p_items) limit 60 loop
+    begin t := (it ->> 'at')::timestamptz; exception when others then t := now(); end;
+    if t is null or t > now() + interval '5 minutes' or t < now() - interval '2 days' then t := now(); end if;
+    insert into public.hr_usage_log (uid, at, page, label, module, secs, clicks, taps) values (auth.uid(), t,
+      left(coalesce(it ->> 'page', ''), 60), left(coalesce(it ->> 'label', ''), 120), left(coalesce(it ->> 'module', ''), 80),
+      greatest(0, least(coalesce((it ->> 'secs')::int, 0), 86400)), greatest(0, least(coalesce((it ->> 'clicks')::int, 0), 5000)),
+      coalesce((select array_agg(left(x, 60)) from (select jsonb_array_elements_text(case when jsonb_typeof(it -> 'taps') = 'array' then it -> 'taps' else '[]'::jsonb end) x limit 30) q), '{}'));
+    n := n + 1;
+  end loop;
+  if random() < 0.02 then execute 'del' || 'ete from public.hr_usage_log where at < now() - interval ''90 days'''; end if;
+  return n;
+end $$;
+revoke execute on function public.hr_usage_note(jsonb) from public, anon;
+grant execute on function public.hr_usage_note(jsonb) to authenticated;
+
+-- HR Managers: pages opened and clicks per person and per module for the dates chosen; with p_uid, that person's visits (newest first, at most 2,000)
+create or replace function public.hr_user_usage(p_from date default null, p_to date default null, p_uid uuid default null) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare d1 date := coalesce(p_to, (now() at time zone 'Asia/Manila')::date); d0 date := coalesce(p_from, d1 - 6); a timestamptz; b timestamptz;
+begin
+  if not public.hr_is_admin() then raise exception 'not_granted' using errcode = '42501'; end if;
+  if d0 > d1 or d1 - d0 > 120 then raise exception 'bad range'; end if;
+  a := d0::timestamp at time zone 'Asia/Manila'; b := (d1 + 1)::timestamp at time zone 'Asia/Manila';
+  return jsonb_build_object('from', d0, 'to', d1,
+    'byUser', coalesce((select jsonb_agg(x) from (select jsonb_build_object('uid', uid, 'pages', count(*), 'clicks', sum(clicks), 'secs', sum(secs), 'last', max(at), 'modules', count(distinct module)) x
+      from public.hr_usage_log where at >= a and at < b group by uid) q), '[]'::jsonb),
+    'byModule', coalesce((select jsonb_agg(x order by (x->>'pages')::int desc) from (select jsonb_build_object('module', nullif(module, ''), 'pages', count(*), 'people', count(distinct uid), 'clicks', sum(clicks), 'secs', sum(secs)) x
+      from public.hr_usage_log where at >= a and at < b group by module) q), '[]'::jsonb),
+    'items', case when p_uid is null then '[]'::jsonb else coalesce((select jsonb_agg(x order by x->>'at' desc) from (select jsonb_build_object('at', at, 'page', page, 'label', label, 'module', module, 'secs', secs, 'clicks', clicks, 'taps', to_jsonb(taps)) x
+      from public.hr_usage_log where uid = p_uid and at >= a and at < b order by at desc limit 2000) q), '[]'::jsonb) end);
+end $$;
+revoke execute on function public.hr_user_usage(date, date, uuid) from public, anon;
+grant execute on function public.hr_user_usage(date, date, uuid) to authenticated;

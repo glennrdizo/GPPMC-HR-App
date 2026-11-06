@@ -291,10 +291,10 @@
 @media (max-width:900px){.rail:not(:has(#nav[data-open="true"])) .sb-acct{display:none}.sb-acct{margin:12px 0 4px;position:static;box-shadow:none}}`;
   let mode = "in";
   /* Data Privacy Act of 2012 (RA 10173): consent is required at sign-in and saved on the account with the notice version and time. */
-  const DPA_V = "2026-10-12"; let dpaNow = false, held = null;
+  const DPA_V = "2026-11-06"; let dpaNow = false, held = null; // 2026-11-06: the notice now covers sign-in place and pages opened, so everyone is asked once more
   const NOTICE = `<h2>Privacy Notice</h2><p class="meta">GD Prime Property Management Corporation · Human Resources Portal · Version ${DPA_V}</p>
     <p>We respect your privacy and protect your personal information under the <b>Data Privacy Act of 2012 (Republic Act No. 10173)</b>, its Implementing Rules and Regulations, and the issuances of the National Privacy Commission (NPC).</p>
-    <h3>What we collect</h3><ul><li>Personal and contact details: name, birth date, civil status, address, phone, email and emergency contacts.</li><li>Employment records: position, assignment, contracts, evaluations, training, disciplinary and separation records.</li><li>Government numbers: TIN, SSS, PhilHealth and Pag-IBIG.</li><li>Pay records: salary, allowances, deductions, loans, bank details and payslips.</li><li>Attendance: clock-in and out times, and when you clock in by phone, a selfie and your location at that moment.</li><li>Sign-ins: the time, network address and type of device each time you sign in or open the HR system, to keep accounts safe. Kept for 13 months.</li><li>Health information, such as medical exam results and medical certificates for leave. This is sensitive personal information and is handled with extra care.</li></ul>
+    <h3>What we collect</h3><ul><li>Personal and contact details: name, birth date, civil status, address, phone, email and emergency contacts.</li><li>Employment records: position, assignment, contracts, evaluations, training, disciplinary and separation records.</li><li>Government numbers: TIN, SSS, PhilHealth and Pag-IBIG.</li><li>Pay records: salary, allowances, deductions, loans, bank details and payslips.</li><li>Attendance: clock-in and out times, and when you clock in by phone, a selfie and your location at that moment.</li><li>Sign-ins and use: the time, approximate place (the city of your internet connection, not your exact location), network address and type of device each time you sign in or open the HR system, kept for 13 months; and the pages you open and the names of the buttons you press (never what you type), kept for 90 days. Only HR Managers see them, to keep accounts safe.</li><li>Health information, such as medical exam results and medical certificates for leave. This is sensitive personal information and is handled with extra care.</li></ul>
     <h3>Why we use it</h3><ul><li>To manage your employment, attendance, leave, training and benefits.</li><li>To compute and pay your salary, 13th month pay and final pay.</li><li>To meet our legal duties to SSS, PhilHealth, Pag-IBIG, BIR and DOLE.</li><li>To keep our workplaces safe and our records accurate.</li></ul>
     <h3>Who sees it</h3><p>Only authorized HR, payroll and management staff, each limited to what their role needs. You see your own records. We share data only with government agencies as the law requires, and with partners that help us pay or cover you (such as banks and HMOs), under agreements that protect it. We do not sell your data. The HR system's AI features (the HR assistant, document reading, writing help and summaries) send only the text or image a request needs to Anthropic, the AI provider, which does not use it to train its models. What the AI fills in or writes stays a draft until a person checks it.</p>
     <h3>How we protect and keep it</h3><p>Records are stored encrypted with access controls, and every change is logged. We keep them for as long as you work with us and afterward only as long as labor, tax and social security laws require, then dispose of them securely.</p>
@@ -391,8 +391,12 @@
     me = { id: u.id, email: u.email, name: name || u.email, editor: !!data?.editor, owner: !!data?.owner };
     sb.realtime.setAuth(session.access_token); swToken(session.access_token);
     document.querySelector(".sb-gate")?.remove(); readyOk();
-    // Sign-in watch (AI agents > Sign-ins): the server notes the time, network address and device of this sign-in or opening.
-    sb.rpc("hr_signin_note", { p_kind: startEv === "SIGNED_IN" ? "signin" : "open", p_ua: String(navigator.userAgent || "").slice(0, 300) }).then(() => {}, () => {});
+    // Users & Sign-Ins / sign-in watch: the website's /api/signin notes the time, place (city Vercel reports for the network),
+    // address and device of this sign-in or opening; where it can't be reached, the database notes it without the place.
+    const kind = startEv === "SIGNED_IN" ? "signin" : "open";
+    const direct = () => sb.rpc("hr_signin_note", { p_kind: kind, p_ua: String(navigator.userAgent || "").slice(0, 300) }).then(() => {}, () => {});
+    if (/^https?:$/.test(location.protocol)) fetch("/api/signin", { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ kind }) })
+      .then((r) => { if (!r.ok) direct(); }, direct); else direct();
   }
   let started = false, startEv = "";
   sb.auth.onAuthStateChange((ev, session) => {

@@ -44,7 +44,7 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   console.log('after link:', (await p.locator('#main').innerText()).slice(0, 200).replace(/\n+/g, ' | '));
   console.log('emp writes', JSON.stringify(await p.evaluate(() => window.__writes)));
   // 3. New account: must verify identity, then waits for HR.
-  p = await mk(D, { id: 'u-new', email: 'new@x.com', name: 'Juan Cruz', editor: false, access: 'none', dpa: '2026-10-12' });
+  p = await mk(D, { id: 'u-new', email: 'new@x.com', name: 'Juan Cruz', editor: false, access: 'none', dpa: '2026-11-06' });
   await p.setViewportSize({ width: 390, height: 860 }); await p.waitForTimeout(300);
   console.log('new acct gate:', await p.locator('.sb-card h1').textContent().catch(() => 'none'), '| main visible:', await p.locator('.sb-gate').count());
   await p.screenshot({ path: W + '/t-verify.png', fullPage: true });
@@ -55,7 +55,7 @@ const W = __dirname, S = process.env.HR_TEST_DATA || W;
   const req = await p.evaluate(() => window.__writes.find((w) => w[0] === 'request')); console.log('request sent:', JSON.stringify(req));
   // 4. HR sees the request on the dashboard and in Users & permissions, and approves it.
   const emp = Object.values(D).find((x) => x && x.no === 'EMP-0157');
-  p = await mk(D, { id: 'u-glenn', email: 'glennrdizo@gmail.com', name: 'Glenn Dizo', editor: true, owner: true, dpa: '2026-10-12' }, { signups: [{ user_id: 'u-new', status: 'pending', name: emp ? `${emp.first} ${emp.last}` : 'Juan Cruz', email: 'new@x.com', emp_no: 'EMP-0157', position: 'Guard', mobile: '0917 123 4567', requested_at: new Date().toISOString() }, { user_id: 'u-x', status: 'pending', name: 'Someone Else', email: 'x@x.com', emp_no: 'EMP-9999', position: 'Guard', mobile: '0918', requested_at: new Date().toISOString() }] });
+  p = await mk(D, { id: 'u-glenn', email: 'glennrdizo@gmail.com', name: 'Glenn Dizo', editor: true, owner: true, dpa: '2026-11-06' }, { signups: [{ user_id: 'u-new', status: 'pending', name: emp ? `${emp.first} ${emp.last}` : 'Juan Cruz', email: 'new@x.com', emp_no: 'EMP-0157', position: 'Guard', mobile: '0917 123 4567', requested_at: new Date().toISOString() }, { user_id: 'u-x', status: 'pending', name: 'Someone Else', email: 'x@x.com', emp_no: 'EMP-9999', position: 'Guard', mobile: '0918', requested_at: new Date().toISOString() }] });
   await p.waitForTimeout(1500); console.log('dash alert:', await p.locator('.su-alert').innerText().catch(() => 'none'));
   await p.evaluate(() => { const b = document.createElement('button'); b.dataset.go = 'perms'; document.querySelector('#main').appendChild(b); b.click(); }); await p.waitForTimeout(1200);
   console.log('requests card:', (await p.locator('#su-card').innerText().catch(() => 'none')).replace(/\n+/g, ' | ').slice(0, 400));
