@@ -16,7 +16,7 @@ import { type Target, chatKeys, sendChat } from "./chat.ts";
 import { type IvState, IV_MODEL_SCORE, scorePrompt, parseScore, jobText as ivJobText } from "./iv.ts";
 import { meetSync } from "./meetsync.ts";
 
-const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
+const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
 const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const env = (k: string) => (Deno.env.get(k) || "").trim();
@@ -41,6 +41,17 @@ async function getDoc(path: string): Promise<Doc | null> { const r = (await rest
 const rpc = (fn: string, args: Doc, auth = `Bearer ${SVC}`, key = SVC) => fetch(`${BASE}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: key, authorization: auth, "content-type": "application/json" }, body: JSON.stringify(args) })
   .then(async (r) => (r.ok ? r.json() : null)).catch(() => null);
 
+// US$ per million tokens (input, output), for the company's monthly AI budget (hr_ai_log, migration 20261106b_hr_ai_agents.sql).
+const AI_PRICE: Record<string, [number, number]> = { "claude-haiku-5-5": [0.1, 0.5], "claude-sonnet-5-5": [2, 10], "claude-opus-5-5": [4, 20] };
+const aiCost = (model: string, u: Doc) => { const [pi, po] = AI_PRICE[model] || [4, 20]; return ((Number(u?.input_tokens) || 0) * pi + (Number(u?.cache_creation_input_tokens) || 0) * pi * 1.25 + (Number(u?.cache_read_input_tokens) || 0) * pi * 0.1 + (Number(u?.output_tokens) || 0) * po) / 1e6; };
+// Every server AI call: refused when the monthly budget is used up or AI is switched off, then recorded with its cost.
+async function aiCall(body: Doc, purpose: string, ms: number): Promise<Doc> {
+  if ((await rpc("hr_ai_srv_ok", {})) === false) throw new Error("This month's AI budget has been used up.");
+  const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(ms) });
+  const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`);
+  await rpc("hr_ai_srv_log", { p_src: "jobs", p_uid: null, p_model: String(out.model || body.model), p_purpose: purpose, p_in: Number(out.usage?.input_tokens) || 0, p_out: Number(out.usage?.output_tokens) || 0, p_usd: aiCost(String(body.model), out.usage) });
+  return out;
+}
 /* ---------- AI screening (screen.ts) ---------- */
 function screenDeps() {
   const key = env("ANTHROPIC_API_KEY");
@@ -49,8 +60,7 @@ function screenDeps() {
     // Only plain stored-file names: no "..", so a resume id can't point at another file.
     fetchFile: async (id: string) => { if (!/^[A-Za-z0-9_-][A-Za-z0-9._-]*(\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$/.test(id) || /(^|\/)\.\.?(\/|$)/.test(id)) return null; const r = await fetch(`${BASE}/storage/v1/object/hr-files/${id.split("/").map(encodeURIComponent).join("/")}`, { headers: { apikey: SVC, authorization: `Bearer ${SVC}` }, signal: AbortSignal.timeout(20_000) });
       return r.ok ? { type: r.headers.get("content-type") || "", buf: await r.arrayBuffer() } : null; },
-    claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(60_000) });
-      const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; } };
+    claude: (body: Doc) => aiCall(body, "recruit", 60_000) };
 }
 
 /* ---------- recruitment rules by score, and interviews whose scoring failed (logic.ts ruleActions, iv.ts) ---------- */
@@ -131,8 +141,7 @@ async function putHelper(sections: { title: string; lines: string[] }[], at: str
 function meetDeps() {
   const ai = screenDeps();
   return { env, fetch, getDoc, patch: ai.patch,
-    claude: async (body: Doc) => { const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(80_000) });
-      const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out; },
+    claude: (body: Doc) => aiCall(body, "minutes", 80_000),
     imported: async () => (((await rest("hr_docs?select=path,mat:data->minutes->>at,tries:data->>minTries&col=eq.meetings&data->src=not.is.null")) as Doc[]) || [])
       .map((r) => ({ id: String(r.path).split("/")[1], mat: r.mat || null, tries: Number(r.tries) || 0 })),
     insert: async (id: string, data: Doc) => { await rest("hr_docs?on_conflict=path", { method: "POST", body: JSON.stringify([{ path: `meetings/${id}`, col: "meetings", data }]) }, { prefer: "resolution=ignore-duplicates,return=minimal" }); },

@@ -9,6 +9,17 @@
   const tfetch = (u, o = {}) => o.signal || !AbortSignal.timeout ? fetch(u, o) : fetch(u, { ...o, signal: AbortSignal.timeout(/\/storage\/v1\//.test(String(u?.url || u)) ? 180000 : 25000) });
   const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: tfetch } });
   window.__sb = sb;
+  // Calls an edge function with only the headers its CORS answer allows (supabase-js functions.invoke adds x-client-info,
+  // which the browser's preflight refuses, so the request was never sent). Returns { data, error } like functions.invoke.
+  window.__sbFn = async (name, body) => {
+    if (window.__FAKE_SB) return sb.functions.invoke(name, { body }); // tests (web/fake-sb.js)
+    try {
+      const { data: s } = await sb.auth.getSession();
+      const r = await tfetch(`${SB_URL}/functions/v1/${name}`, { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${s?.session?.access_token || SB_KEY}` }, body: JSON.stringify(body || {}) });
+      const j = await r.json().catch(() => null);
+      return r.ok ? { data: j, error: null } : { data: null, error: { message: j?.error || `${r.status} ${r.statusText}`, status: r.status } };
+    } catch (e) { return { data: null, error: { message: `Failed to send: ${e?.message || e}` } }; }
+  };
   window.__hosted = true;
 
   let me = null; // { id, email, name, editor, owner }
@@ -182,7 +193,7 @@
       let text = "";
       try {
         for (let round = 0; round < 6; round++) {
-          const r = await callAi({ messages, tools, tier: opts.modelTier || "default", last: round === 5 }, signal);
+          const r = await callAi({ messages, tools, tier: opts.modelTier || "default", last: round === 5, purpose: String(opts.purpose || "assistant").slice(0, 40) }, signal);
           const said = (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("");
           if (said) { text = text ? `${text}\n\n${said}` : said; opts.onText?.({ text, delta: said }); }
           const uses = (r.content || []).filter((c) => c.type === "tool_use");
@@ -280,12 +291,12 @@
 @media (max-width:900px){.rail:not(:has(#nav[data-open="true"])) .sb-acct{display:none}.sb-acct{margin:12px 0 4px;position:static;box-shadow:none}}`;
   let mode = "in";
   /* Data Privacy Act of 2012 (RA 10173): consent is required at sign-in and saved on the account with the notice version and time. */
-  const DPA_V = "2026-10-12"; let dpaNow = false, held = null;
+  const DPA_V = "2026-11-06"; let dpaNow = false, held = null; // 2026-11-06: the notice now covers sign-in place and pages opened, so everyone is asked once more
   const NOTICE = `<h2>Privacy Notice</h2><p class="meta">GD Prime Property Management Corporation · Human Resources Portal · Version ${DPA_V}</p>
     <p>We respect your privacy and protect your personal information under the <b>Data Privacy Act of 2012 (Republic Act No. 10173)</b>, its Implementing Rules and Regulations, and the issuances of the National Privacy Commission (NPC).</p>
-    <h3>What we collect</h3><ul><li>Personal and contact details: name, birth date, civil status, address, phone, email and emergency contacts.</li><li>Employment records: position, assignment, contracts, evaluations, training, disciplinary and separation records.</li><li>Government numbers: TIN, SSS, PhilHealth and Pag-IBIG.</li><li>Pay records: salary, allowances, deductions, loans, bank details and payslips.</li><li>Attendance: clock-in and out times, and when you clock in by phone, a selfie and your location at that moment.</li><li>Health information, such as medical exam results and medical certificates for leave. This is sensitive personal information and is handled with extra care.</li></ul>
+    <h3>What we collect</h3><ul><li>Personal and contact details: name, birth date, civil status, address, phone, email and emergency contacts.</li><li>Employment records: position, assignment, contracts, evaluations, training, disciplinary and separation records.</li><li>Government numbers: TIN, SSS, PhilHealth and Pag-IBIG.</li><li>Pay records: salary, allowances, deductions, loans, bank details and payslips.</li><li>Attendance: clock-in and out times, and when you clock in by phone, a selfie and your location at that moment.</li><li>Sign-ins and use: the time, approximate place (the city of your internet connection, not your exact location), network address and type of device each time you sign in or open the HR system, kept for 13 months; and the pages you open and the names of the buttons you press (never what you type), kept for 90 days. Only HR Managers see them, to keep accounts safe.</li><li>Health information, such as medical exam results and medical certificates for leave. This is sensitive personal information and is handled with extra care.</li></ul>
     <h3>Why we use it</h3><ul><li>To manage your employment, attendance, leave, training and benefits.</li><li>To compute and pay your salary, 13th month pay and final pay.</li><li>To meet our legal duties to SSS, PhilHealth, Pag-IBIG, BIR and DOLE.</li><li>To keep our workplaces safe and our records accurate.</li></ul>
-    <h3>Who sees it</h3><p>Only authorized HR, payroll and management staff, each limited to what their role needs. You see your own records. We share data only with government agencies as the law requires, and with partners that help us pay or cover you (such as banks and HMOs), under agreements that protect it. We do not sell your data.</p>
+    <h3>Who sees it</h3><p>Only authorized HR, payroll and management staff, each limited to what their role needs. You see your own records. We share data only with government agencies as the law requires, and with partners that help us pay or cover you (such as banks and HMOs), under agreements that protect it. We do not sell your data. The HR system's AI features (the HR assistant, document reading, writing help and summaries) send only the text or image a request needs to Anthropic, the AI provider, which does not use it to train its models. What the AI fills in or writes stays a draft until a person checks it.</p>
     <h3>How we protect and keep it</h3><p>Records are stored encrypted with access controls, and every change is logged. We keep them for as long as you work with us and afterward only as long as labor, tax and social security laws require, then dispose of them securely.</p>
     <h3>Your rights</h3><p>You have the right to be informed, to access your data, to object, to have it corrected, to have it erased or blocked when allowed by law, to data portability, to be indemnified for damages, and to file a complaint with the National Privacy Commission (privacy.gov.ph).</p>
     <h3>Contact us</h3><p>For questions or requests about your personal data, please contact HR at the Head Office.</p>
@@ -380,11 +391,17 @@
     me = { id: u.id, email: u.email, name: name || u.email, editor: !!data?.editor, owner: !!data?.owner };
     sb.realtime.setAuth(session.access_token); swToken(session.access_token);
     document.querySelector(".sb-gate")?.remove(); readyOk();
+    // Users & Sign-Ins / sign-in watch: the website's /api/signin notes the time, place (city Vercel reports for the network),
+    // address and device of this sign-in or opening; where it can't be reached, the database notes it without the place.
+    const kind = startEv === "SIGNED_IN" ? "signin" : "open";
+    const direct = () => sb.rpc("hr_signin_note", { p_kind: kind, p_ua: String(navigator.userAgent || "").slice(0, 300) }).then(() => {}, () => {});
+    if (/^https?:$/.test(location.protocol)) fetch("/api/signin", { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ kind }) })
+      .then((r) => { if (!r.ok) direct(); }, direct); else direct();
   }
-  let started = false;
+  let started = false, startEv = "";
   sb.auth.onAuthStateChange((ev, session) => {
     if (ev === "PASSWORD_RECOVERY") { mode = "newpw"; gate(); return; }
-    if (session && !started && ev !== "PASSWORD_RECOVERY") { const why = idleStale(); if (why) { idleOut(why); return; } started = true; idleFresh(); start(session); }
+    if (session && !started && ev !== "PASSWORD_RECOVERY") { const why = idleStale(); if (why) { idleOut(why); return; } started = true; idleFresh(); startEv = ev; start(session); }
     if (ev === "SIGNED_OUT" && !leaving) location.reload();
   });
   const boot = async () => { const { data } = await sb.auth.getSession(); if (!data.session && !started && mode !== "newpw") { let m = ""; try { m = sessionStorage.getItem("hr-idle-msg") || ""; sessionStorage.removeItem("hr-idle-msg"); } catch {} gate(m, m ? "ok" : ""); } };

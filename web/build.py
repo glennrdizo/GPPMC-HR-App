@@ -51,5 +51,6 @@ with zipfile.ZipFile(os.path.join(out, 'bio-sync.zip'), 'w', zipfile.ZIP_DEFLATE
 # Minify the published scripts (needs `npm install` in web/ once).
 if not os.path.exists(os.path.join(W, 'node_modules', 'terser')):
     raise SystemExit('Run `npm install` in web/ first: the website is published minified.')
-subprocess.run(['node', os.path.join(W, 'minify.cjs')], check=True)
+if os.environ.get('HR_NOMIN') != '1':  # HR_NOMIN=1 keeps the build readable for local tests
+    subprocess.run(['node', os.path.join(W, 'minify.cjs')], check=True)
 print('built', os.path.getsize(os.path.join(out, 'index.html')))
