@@ -1,16 +1,17 @@
 // GD Prime HR bots (Glenn 2026-10-24). One function, four doors:
 //  ?ch=viber      Viber bot webhook: employees and HR chat with the HR bot after linking with a code from the app.
 //  ?ch=messenger  Facebook Messenger webhook (GET answers Meta's verification).
+//  ?ch=telegram   Telegram bot webhook (checks the secret token set with setWebhook).
 //  ?ch=careers    the careers page assistant: anyone may ask about open jobs, a few questions a day each.
 //  ?ch=iv         the AI first-round interview on the careers page: a signed-in applicant answers HR's invitation.
-//  (no ch)        HR Admins: status of the keys, and connecting the Viber webhook.
+//  (no ch)        HR Admins: status of the keys, and connecting the Viber and Telegram webhooks.
 // Nothing answers until an HR Admin switches the bots on in Overview > Bots (org/bot). Requests the bot prepares are filed
 // only after the person replies YES; they then go into the same queue as the app's own forms (clockins/<uid>/reqs).
-// Secrets: ANTHROPIC_API_KEY; VIBER_BOT_TOKEN; MESSENGER_PAGE_TOKEN, MESSENGER_APP_SECRET, MESSENGER_VERIFY_TOKEN.
-// Deploy with verify_jwt off: Viber and Meta don't send a Supabase sign-in; each door checks its own proof.
+// Secrets: ANTHROPIC_API_KEY; VIBER_BOT_TOKEN; MESSENGER_PAGE_TOKEN, MESSENGER_APP_SECRET, MESSENGER_VERIFY_TOKEN; TELEGRAM_BOT_TOKEN.
+// Deploy with verify_jwt off: Viber, Meta and Telegram don't send a Supabase sign-in; each door checks its own proof.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { type Doc, type ChatIn, type Proposal, type Turn, parseViber, parseMessenger, intent, YES_NO, HELP_EMP, HELP_HR, notLinkedText, EMP_TOOLS, checkProposal, empSystem, hrSystem, quickAnswer, helperText, addHist, turnsFor, careersSystem, careersTurns, cleanJobLinks } from "./logic.ts";
-import { type Target, chatKeys, viberSigned, metaSigned, sendChat, setViberWebhook, hmacHex } from "./chat.ts";
+import { type Doc, type ChatIn, type Proposal, type Turn, parseViber, parseMessenger, parseTelegram, intent, YES_NO, HELP_EMP, HELP_HR, notLinkedText, EMP_TOOLS, checkProposal, empSystem, hrSystem, quickAnswer, helperText, addHist, turnsFor, careersSystem, careersTurns, cleanJobLinks } from "./logic.ts";
+import { type Target, type Channel, chatKeys, viberSigned, metaSigned, telegramSigned, sendChat, setViberWebhook, setTelegramWebhook, hmacHex } from "./chat.ts";
 import { type IvState, IV_MAX_TURNS, IV_MAX_ANSWER, IV_MODEL_TURN, IV_MODEL_SCORE, ivQuestions, genQsPrompt, parseQs, openState, startTurns, turnSystem, parseTurn, answerTurns, scorePrompt, parseScore, jobText, publicView, manilaDate as ivToday } from "./iv.ts";
 
 const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
@@ -20,6 +21,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const MODELS: Record<string, string> = { quick: "claude-haiku-5-5", default: "claude-sonnet-5-5" };
 const DAY_CAP = 80; // messages a chat may send the bot a day
 const manilaDate = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+const CH_NAME: Record<string, string> = { viber: "Viber", messenger: "Messenger", telegram: "Telegram" };
 const rid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 /* ---------- database (service role) ---------- */
@@ -32,7 +34,7 @@ async function getDoc(path: string): Promise<Doc | null> { const r = (await rest
 const putDoc = (path: string, data: Doc) => rest("hr_docs", { method: "POST", body: JSON.stringify([{ path, col: path.replace(/\/[^/]+$/, ""), data }]) }, { prefer: "return=minimal" });
 const rpc = (fn: string, args: Doc, auth = `Bearer ${SVC}`, key = SVC) => fetch(`${BASE}/rest/v1/rpc/${fn}`, { method: "POST", headers: { apikey: key, authorization: auth, "content-type": "application/json" }, body: JSON.stringify(args) })
   .then(async (r) => (r.ok ? r.json() : null)).catch(() => null);
-const BOT_DEF = { on: false, viber: true, messenger: true, careers: true, remind: true, chase: true, model: "quick" };
+const BOT_DEF = { on: false, viber: true, messenger: true, telegram: true, careers: true, remind: true, chase: true, model: "quick" };
 const botCfg = async () => ({ ...BOT_DEF, ...((await getDoc("org/bot").catch(() => null)) || {}) });
 const appUrl = async () => { const n = await getDoc("org/notify").catch(() => null); const u = String(n?.appUrl || ""); return /^https:\/\/(gppmc-hr-app1\.vercel\.app|hr\.gd-prime\.com)\b/.test(u) ? u : "https://gppmc-hr-app1.vercel.app"; };
 
@@ -69,9 +71,9 @@ async function linkWith(t: Target, ev: ChatIn, code: string) {
 async function applyProposal(uid: string, p: Proposal, channel: string, emp: Doc | null) {
   const now = new Date().toISOString(); const who = { empNo: emp?.no || null, name: emp ? [emp.first, emp.last].filter(Boolean).join(" ") : null };
   if (p.what === "req") return putDoc(`clockins/${uid}/reqs/${rid()}`, { ...p.rec, ...who, via: channel });
-  return putDoc(`clockins/${uid}/tickets/${rid()}`, { subject: p.subject, cat: "OTHER", tags: [], status: "OPEN", created: now, updated: now, msgs: [{ by: "emp", t: now, text: `${p.text}\n\n(Sent from ${channel === "viber" ? "Viber" : "Messenger"})` }], seenEmp: now, ...who });
+  return putDoc(`clockins/${uid}/tickets/${rid()}`, { subject: p.subject, cat: "OTHER", tags: [], status: "OPEN", created: now, updated: now, msgs: [{ by: "emp", t: now, text: `${p.text}\n\n(Sent from ${CH_NAME[channel] || "chat"})` }], seenEmp: now, ...who });
 }
-async function chat(channel: "viber" | "messenger", ev: ChatIn) {
+async function chat(channel: Channel, ev: ChatIn) {
   const t: Target = { channel, sender: ev.sender }; const cfg = await botCfg();
   if (!cfg.on || cfg[channel] === false) return;
   const rows = (await rest(`hr_chat_links?select=*&channel=eq.${channel}&sender=eq.${encodeURIComponent(ev.sender)}`)) as Doc[]; const link = rows?.[0];
@@ -211,6 +213,11 @@ Deno.serve(async (req) => {
       for (const ev of parseMessenger(body)) later(chat("messenger", ev));
       return new Response("EVENT_RECEIVED");
     }
+    if (ch === "telegram") {
+      if (!(await telegramSigned(req.headers.get("x-telegram-bot-api-secret-token"), env("TELEGRAM_BOT_TOKEN")))) return new Response("Forbidden", { status: 403 });
+      for (const ev of parseTelegram(body)) later(chat("telegram", ev));
+      return new Response("ok");
+    }
     if (ch === "careers") return await careers(req, body);
     if (ch === "iv") return await interview(req, body);
     // HR Admins only from here.
@@ -218,6 +225,7 @@ Deno.serve(async (req) => {
     if (!/^Bearer .+/.test(auth) || (await rpc("hr_is_admin", {}, auth, ANON || SVC)) !== true) return json({ error: "Only HR Admins can set up the bots." }, 403);
     const hook = `${BASE}/functions/v1/hr-bot`;
     if (body.setup === "viber") return json(await setViberWebhook(`${hook}?ch=viber`));
-    return json({ keys: chatKeys(), claude: !!env("ANTHROPIC_API_KEY"), verify: !!env("MESSENGER_VERIFY_TOKEN"), viberUrl: `${hook}?ch=viber`, messengerUrl: `${hook}?ch=messenger` });
+    if (body.setup === "telegram") return json(await setTelegramWebhook(`${hook}?ch=telegram`));
+    return json({ keys: chatKeys(), claude: !!env("ANTHROPIC_API_KEY"), verify: !!env("MESSENGER_VERIFY_TOKEN"), viberUrl: `${hook}?ch=viber`, messengerUrl: `${hook}?ch=messenger`, telegramUrl: `${hook}?ch=telegram` });
   } catch (e) { console.error(e); return json({ error: String((e as Error)?.message || e).slice(0, 300) }, 500); }
 });
