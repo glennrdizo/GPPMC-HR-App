@@ -10,7 +10,7 @@
 // Secrets: ANTHROPIC_API_KEY; VIBER_BOT_TOKEN; MESSENGER_PAGE_TOKEN, MESSENGER_APP_SECRET, MESSENGER_VERIFY_TOKEN; TELEGRAM_BOT_TOKEN.
 // Deploy with verify_jwt off: Viber, Meta and Telegram don't send a Supabase sign-in; each door checks its own proof.
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { type Doc, type ChatIn, type Proposal, type Turn, parseViber, parseMessenger, parseTelegram, intent, YES_NO, HELP_EMP, HELP_HR, notLinkedText, EMP_TOOLS, checkProposal, empSystem, hrSystem, quickAnswer, helperText, addHist, turnsFor, careersSystem, careersTurns, cleanJobLinks } from "./logic.ts";
+import { type Doc, type ChatIn, type Proposal, TICKET_DESK, type Turn, parseViber, parseMessenger, parseTelegram, intent, YES_NO, HELP_EMP, HELP_HR, notLinkedText, EMP_TOOLS, checkProposal, empSystem, hrSystem, quickAnswer, helperText, addHist, turnsFor, careersSystem, careersTurns, cleanJobLinks } from "./logic.ts";
 import { type Target, type Channel, chatKeys, viberSigned, metaSigned, telegramSigned, sendChat, setViberWebhook, setTelegramWebhook, hmacHex } from "./chat.ts";
 import { type IvState, IV_MAX_TURNS, IV_MAX_ANSWER, IV_MODEL_TURN, IV_MODEL_SCORE, ivQuestions, genQsPrompt, parseQs, openState, startTurns, turnSystem, parseTurn, answerTurns, scorePrompt, parseScore, jobText, publicView, manilaDate as ivToday } from "./iv.ts";
 
@@ -39,9 +39,15 @@ const botCfg = async () => ({ ...BOT_DEF, ...((await getDoc("org/bot").catch(() 
 const appUrl = async () => { const n = await getDoc("org/notify").catch(() => null); const u = String(n?.appUrl || ""); return /^https:\/\/(gppmc-hr-app1\.vercel\.app|hr\.gd-prime\.com)\b/.test(u) ? u : "https://gppmc-hr-app1.vercel.app"; };
 
 /* ---------- Claude ---------- */
-async function claude(body: Doc): Promise<Doc> {
+// US$ per million tokens (input, output), for the company's monthly AI budget (hr_ai_log, migration 20261106b_hr_ai_agents.sql).
+const AI_PRICE: Record<string, [number, number]> = { "claude-haiku-5-5": [0.1, 0.5], "claude-sonnet-5-5": [2, 10], "claude-opus-5-5": [4, 20] };
+const aiCost = (model: string, u: Doc) => { const [pi, po] = AI_PRICE[model] || [4, 20]; return ((Number(u?.input_tokens) || 0) * pi + (Number(u?.cache_creation_input_tokens) || 0) * pi * 1.25 + (Number(u?.cache_read_input_tokens) || 0) * pi * 0.1 + (Number(u?.output_tokens) || 0) * po) / 1e6; };
+async function claude(body: Doc, purpose = "bot", uid: string | null = null): Promise<Doc> {
+  if ((await rpc("hr_ai_srv_ok", {})) === false) throw new Error("This month's AI budget has been used up.");
   const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: { "x-api-key": env("ANTHROPIC_API_KEY"), "anthropic-version": "2023-06-01", "content-type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(45_000) });
-  const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`); return out;
+  const out = await r.json().catch(() => ({})); if (!r.ok) throw new Error(out?.error?.message || `Claude ${r.status}`);
+  await rpc("hr_ai_srv_log", { p_src: "bot", p_uid: uid, p_model: String(out.model || body.model), p_purpose: purpose, p_in: Number(out.usage?.input_tokens) || 0, p_out: Number(out.usage?.output_tokens) || 0, p_usd: aiCost(String(body.model), out.usage) });
+  return out;
 }
 const textOf = (c: Doc[]) => (c || []).filter((x) => x.type === "text").map((x) => x.text).join("").trim();
 
@@ -71,7 +77,9 @@ async function linkWith(t: Target, ev: ChatIn, code: string) {
 async function applyProposal(uid: string, p: Proposal, channel: string, emp: Doc | null) {
   const now = new Date().toISOString(); const who = { empNo: emp?.no || null, name: emp ? [emp.first, emp.last].filter(Boolean).join(" ") : null };
   if (p.what === "req") return putDoc(`clockins/${uid}/reqs/${rid()}`, { ...p.rec, ...who, via: channel });
-  return putDoc(`clockins/${uid}/tickets/${rid()}`, { subject: p.subject, cat: "OTHER", tags: [], status: "OPEN", created: now, updated: now, msgs: [{ by: "emp", t: now, text: `${p.text}\n\n(Sent from ${CH_NAME[channel] || "chat"})` }], seenEmp: now, ...who });
+  // Sorted by the AI when it prepared the message (topic, priority, desk); HR can change them in Ask HR.
+  const cat = p.cat || "OTHER";
+  return putDoc(`clockins/${uid}/tickets/${rid()}`, { subject: p.subject, cat, dept: TICKET_DESK[cat] || "HR", prio: p.prio || "NORMAL", aiTri: { cat, prio: p.prio || "NORMAL", desk: TICKET_DESK[cat] || "HR", why: p.why || "", at: now, via: channel }, tags: [], status: "OPEN", created: now, updated: now, msgs: [{ by: "emp", t: now, text: `${p.text}\n\n(Sent from ${CH_NAME[channel] || "chat"})` }], seenEmp: now, ...who });
 }
 async function chat(channel: Channel, ev: ChatIn) {
   const t: Target = { channel, sender: ev.sender }; const cfg = await botCfg();
@@ -108,7 +116,7 @@ async function chat(channel: Channel, ev: ChatIn) {
   const tools = who.empId ? EMP_TOOLS : undefined;
   let messages: Doc[] = turnsFor(link.hist || [], ev.text); let reply = ""; let prop: Proposal | null = null;
   for (let round = 0; round < 3 && !prop; round++) {
-    const out = await claude({ model: MODELS[cfg.model] || MODELS.quick, max_tokens: 700, system, messages, ...(tools ? { tools } : {}) });
+    const out = await claude({ model: MODELS[cfg.model] || MODELS.quick, max_tokens: 700, system, messages, ...(tools ? { tools } : {}) }, "chat", link.user_id);
     reply = textOf(out.content); const use = (out.content || []).find((c: Doc) => c.type === "tool_use");
     if (!use || out.stop_reason !== "tool_use") break;
     const chk = checkProposal(use.name, use.input || {}, { today, leave });
@@ -133,7 +141,7 @@ async function careers(req: Request, body: Doc) {
   const k = "ip:" + (await hmacHex(SVC, `${ip}|${req.headers.get("user-agent") || ""}`)).slice(0, 32);
   if ((await rpc("hr_bot_hit", { p_k: k, p_max: 30 })) !== true || (await rpc("hr_bot_hit", { p_k: "*", p_max: 1500 })) !== true) return json({ error: "That's all the questions for today. Please apply, or come back tomorrow." }, 429);
   const c = (await rpc("hr_careers", {}, `Bearer ${ANON || SVC}`, ANON || SVC)) || { jobs: [] };
-  const out = await claude({ model: MODELS.quick, max_tokens: 600, system: careersSystem(c, manilaDate()), messages: turns });
+  const out = await claude({ model: MODELS.quick, max_tokens: 600, system: careersSystem(c, manilaDate()), messages: turns }, "careers");
   return json({ text: cleanJobLinks(textOf(out.content) || "Sorry, I couldn't answer that. Please try again.", new Set((c.jobs || []).map((j: Doc) => j.id))) });
 }
 
@@ -141,7 +149,7 @@ async function careers(req: Request, body: Doc) {
 const patchDoc = (p: string, patch: Doc) => rest("rpc/hr_update", { method: "POST", body: JSON.stringify({ p, patch }) });
 async function scoreIv(path: string, a: Doc, job: Doc | null) {
   const s = a.aiiv as IvState; const company = String((await getDoc("org/main").catch(() => null))?.companyName || "GD Prime Property Management Corporation");
-  try { const out = await claude({ model: IV_MODEL_SCORE, max_tokens: 1800, messages: [{ role: "user", content: scorePrompt({ company, jobText: jobText(job || {}), s }) }] });
+  try { const out = await claude({ model: IV_MODEL_SCORE, max_tokens: 1800, messages: [{ role: "user", content: scorePrompt({ company, jobText: jobText(job || {}), s }) }] }, "interview");
     const r = parseScore(textOf(out.content)); if (!r) throw new Error("The scoring answer couldn't be read.");
     await patchDoc(path, { aiiv: { result: { ...r, at: new Date().toISOString(), model: IV_MODEL_SCORE }, err: null } });
   } catch (e) { await patchDoc(path, { aiiv: { err: String((e as Error)?.message || e).slice(0, 200), tries: (s.tries || 0) + 1 } }).catch(() => null); throw e; }
@@ -165,7 +173,7 @@ async function interview(req: Request, body: Doc) {
     if (s0.status === "STARTED") return json(publicView(appId, a, job));
     let qs = ivQuestions(job);
     if (!(Array.isArray(job?.aiivQs) && job!.aiivQs.length >= 3) && job) { // write questions for this job once, from its description
-      try { const out = await claude({ model: IV_MODEL_TURN, max_tokens: 700, messages: [{ role: "user", content: genQsPrompt(jobText(job)) }] }); const g = parseQs(textOf(out.content));
+      try { const out = await claude({ model: IV_MODEL_TURN, max_tokens: 700, messages: [{ role: "user", content: genQsPrompt(jobText(job)) }] }, "interview"); const g = parseQs(textOf(out.content));
         if (g.length >= 4) { qs = g; await patchDoc(`jobs/${a.jobId}`, { aiivQs: g, aiivAuto: true }).catch(() => null); } } catch (e) { console.error("iv qs", e); } }
     const s = startTurns({ ...s0, qs, qi: 0, turns: [] }, String(a.first || ""), String(job?.title || "this"), now);
     await patchDoc(path, { aiiv: { ...s, consent: now } }); return json(publicView(appId, { ...a, aiiv: s }, job));
@@ -179,7 +187,7 @@ async function interview(req: Request, body: Doc) {
     const followUsed = s0.turns.some((t) => t.role === "ai" && t.q === s0.qi && t.follow);
     let d = { follow: false, say: "" };
     try { const out = await claude({ model: IV_MODEL_TURN, max_tokens: 300, system: turnSystem({ company, job: String(job?.title || "this"), jobText: jobText(job || {}), qs: s0.qs, qi: s0.qi, followUsed }),
-      messages: [{ role: "user", content: `Applicant's answer:\n${text}` }] }); d = parseTurn(textOf(out.content)); } catch (e) { console.error("iv turn", e); } // without the AI, go on to the next question
+      messages: [{ role: "user", content: `Applicant's answer:\n${text}` }] }, "interview"); d = parseTurn(textOf(out.content)); } catch (e) { console.error("iv turn", e); } // without the AI, go on to the next question
     const s = answerTurns(s0, text, d, now); await patchDoc(path, { aiiv: s });
     if (s.status === "DONE") later(scoreIv(path, { ...a, aiiv: s }, job));
     return json(publicView(appId, { ...a, aiiv: s }, job));

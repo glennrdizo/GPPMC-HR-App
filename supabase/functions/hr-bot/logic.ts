@@ -62,8 +62,11 @@ export const EMP_TOOLS = [
       hours: { type: "number", description: "Overtime hours" }, time_in: { type: "string", description: "HH:MM 24-hour, time correction" }, time_out: { type: "string", description: "HH:MM 24-hour, time correction" },
       cert_type: { type: "string", enum: ["COE", "COEC", "SERVICE", "CLEAR", "2316", "CONTRIB"], description: "COE = certificate of employment, COEC = with compensation, SERVICE = service record, CLEAR = clearance, 2316 = BIR 2316 copy, CONTRIB = SSS/PhilHealth/Pag-IBIG contributions" },
       purpose: { type: "string" }, copies: { type: "number" }, reason: { type: "string" } }, required: ["kind"] } },
-  { name: "ask_hr", description: "Prepare a question or concern to send to a person in HR (Ask HR). Not sent until the employee confirms. Use when it needs a person: complaints, corrections, decisions, anything not in the data.",
-    input_schema: { type: "object", properties: { subject: { type: "string" }, message: { type: "string" } }, required: ["subject", "message"] } },
+  { name: "ask_hr", description: "Prepare a question or concern to send to a person in HR (Ask HR). Not sent until the employee confirms. Use when it needs a person: complaints, corrections, decisions, anything not in the data. Before preparing it, if the concern is missing what happened, which dates or payslip, or where, ask ONE short follow-up question first. Sort it into a topic and a priority so it reaches the right HR person.",
+    input_schema: { type: "object", properties: { subject: { type: "string" }, message: { type: "string" },
+      topic: { type: "string", enum: ["PAY", "LEAVE", "TIME", "LOAN", "GOV", "DOCS", "CONCERN", "OTHER"], description: "PAY = pay and payslip, LEAVE = leave, TIME = attendance and overtime, LOAN = loans and benefits, GOV = SSS/PhilHealth/Pag-IBIG, DOCS = documents and certificates, CONCERN = a complaint, harassment, safety or conflict, OTHER = anything else" },
+      priority: { type: "string", enum: ["LOW", "NORMAL", "HIGH", "URGENT"], description: "URGENT = safety, harassment, no pay received, or a deadline today; HIGH = wrong pay or a deadline this week" },
+      reason: { type: "string", description: "One line: why this topic and priority" } }, required: ["subject", "message", "topic", "priority"] } },
 ];
 const ISO = /^\d{4}-\d{2}-\d{2}$/, HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 const addDays = (s: string, n: number) => { const d = new Date(s + "T00:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
@@ -71,11 +74,15 @@ const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct
 export const fmt = (d: string) => { if (!ISO.test(d || "")) return d || ""; const [y, m, dd] = d.split("-").map(Number); return `${MON[m - 1]} ${dd}, ${y}`; };
 // Same codes as CERTS in app/empx.js.
 const CERT_NAME: Record<string, string> = { COE: "Certificate of employment", COEC: "Certificate of employment with compensation", SERVICE: "Service record", CLEAR: "Clearance certificate", "2316": "BIR 2316 copy", CONTRIB: "Certificate of SSS, PhilHealth and Pag-IBIG contributions" };
-export type Proposal = { what: "req"; rec: Doc; summary: string } | { what: "ticket"; subject: string; text: string; summary: string };
+export type Proposal = { what: "req"; rec: Doc; summary: string } | { what: "ticket"; subject: string; text: string; summary: string; cat?: string; prio?: string; why?: string };
+// Same topics and desks as AK_CAT / AK_CAT_DESK in app/askx.js.
+export const TICKET_CATS = ["PAY", "LEAVE", "TIME", "LOAN", "GOV", "DOCS", "CONCERN", "OTHER"];
+export const TICKET_DESK: Record<string, string> = { PAY: "PAYROLL", LOAN: "PAYROLL", GOV: "PAYROLL", TIME: "TIME", LEAVE: "TIME", DOCS: "HR", CONCERN: "HR", OTHER: "HR" };
 // Checks a proposal against the same rules the app's forms use; returns what to ask the employee to confirm, or what's wrong.
 export function checkProposal(name: string, x: Doc, o: { today: string; leave: [string, string][] }): Proposal | { error: string } {
   if (name === "ask_hr") { const subject = str(x.subject, 110), text = str(x.message, 2000); if (!subject || !text) return { error: "Give a subject and the message." };
-    return { what: "ticket", subject, text, summary: `Send this to HR (Ask HR)?\n\n"${subject}"\n${text.slice(0, 400)}` }; }
+    const cat = TICKET_CATS.includes(String(x.topic)) ? String(x.topic) : "OTHER"; const prio = ["LOW", "NORMAL", "HIGH", "URGENT"].includes(String(x.priority)) ? String(x.priority) : "NORMAL";
+    return { what: "ticket", subject, text, cat, prio, why: str(x.reason, 200), summary: `Send this to HR (Ask HR)?\n\n"${subject}"\n${text.slice(0, 400)}` }; }
   if (name !== "file_request") return { error: "Unknown action." };
   const kind = x.kind, reason = str(x.reason, 200), at = new Date().toISOString(), T = o.today;
   if (kind === "leave") {

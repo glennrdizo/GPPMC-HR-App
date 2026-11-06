@@ -70,6 +70,10 @@ window.__FAKE_SB = true;
       if (name === "hr_bio_site_list") return { data: B };
       if (name === "hr_bio_site_add") { B.push({ id: "s" + B.length, name: a.p_name, projects: a.p_projects, created_at: new Date().toISOString(), total_saved: 0, last_unmatched: [] }); return { data: "bio_" + "f".repeat(64) }; }
       if (name === "hr_bio_site_revoke") { const x = B.find((s) => s.id === a.p_id); if (x) x.revoked_at = new Date().toISOString(); return { data: null }; } }
+    if (name === "hr_signin_note") { window.__writes.push(["rpc", name, a.p_kind]); return { data: true }; }
+    if (name === "hr_signin_watch") { if (!isEd()) return denied; return { data: { day: a.p_day, rows: window.__SIGNINS || [] } }; }
+    if (name === "hr_ai_report") { if (!isEd()) return denied; return { data: window.__AIUSE || { month: "2026-11", settings: { enabled: true, monthly_cap_usd: 50, emp_daily: 60, hr_daily: 400 }, spent: 1.23, calls: 40, byPurpose: [{ purpose: "assistant", src: "app", calls: 30, usd: 1 }], byPerson: [{ uid: "u-glenn", name: "Glenn", calls: 30, usd: 1 }], byDay: [{ day: "2026-11-05", calls: 40, usd: 1.23 }] } }; }
+    if (name === "hr_ai_set") { if (!isEd()) return denied; window.__writes.push(["rpc", name, JSON.stringify(a)]); return { data: true }; }
     return { error: { message: "unknown rpc " + name } };
   };
   const from = (t) => {
