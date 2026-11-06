@@ -38,7 +38,8 @@ Commit and push to `main`; Vercel redeploys automatically.
 - Overview > AI agents: morning briefing, payroll watch, document and licence checker, attendance pattern watch, workforce budget draft, exit and survey themes, sign-in watch and AI usage. On forms: Fill from a document, Write with AI (English, Tagalog, Taglish), and the incident and NTE writer on Discipline. The HR assistant can find records and open a filled-in case, job opening, applicant or announcement. Meeting action items show in Reminders; Ask HR questions get a suggested topic, desk and priority.
 - The AI only drafts and flags. Nothing it fills in is saved, approved, paid or sent until a person checks it.
 - The daily checks run with the Automation runner (job `ai`). Results: `aiwatch/<kind>--<day>`; payroll and budget ones in `pay/` (Payroll roles only).
-- `supabase/migrations/20261106b_hr_ai_agents.sql`: monthly AI budget and daily limits (`hr_ai_settings`, `hr_ai_log`, `hr_ai_report`, `hr_ai_set`), used by `hr-ai`, `hr-bot` and `hr-jobs`; sign-in log for the sign-in watch (`hr_signin_log`, 120 days).
+- `supabase/migrations/20261106b_hr_ai_agents.sql`: monthly AI budget and daily limits (`hr_ai_settings`, `hr_ai_log`, `hr_ai_report`, `hr_ai_set`), used by `hr-ai`, `hr-bot` and `hr-jobs`; sign-in log for the sign-in watch (`hr_signin_log`, 13 months).
+- Overview > Users & Sign-Ins and Users Activity Logs (`app/usersign.js`, HR Managers): accounts by type, who signed in per day and month, the list of users, and each person's sign-ins and Audit Trail activity. Each box opens the people behind it and links to the page that holds those records. Sign-ins come from `hr_user_signins()` in the same migration.
 - Readable local test build: `HR_NOMIN=1 python3 build.py` (publish only the minified build).
 
 ## Live biometric sync (`tools/bio-sync`)

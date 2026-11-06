@@ -3,7 +3,7 @@
 --     hr-ai checks hr_ai_quota() before each call and records the real cost with hr_ai_record(); hr-bot and hr-jobs use
 --     hr_ai_srv_ok() / hr_ai_srv_log() with the service key. HR Managers see the spend and change the cap (hr_ai_report, hr_ai_set).
 --  B. Sign-in watch: the website notes each sign-in / app opening (time, network address, device) in hr_signin_log through
---     hr_signin_note(); HR Managers read the last day's unusual ones with hr_signin_watch(). Kept 120 days.
+--     hr_signin_note(); HR Managers read the last day's unusual ones with hr_signin_watch(). Kept 13 months (Users & Sign-Ins shows the last 12).
 -- Nothing is dropped.
 
 -- ===================== A. AI budget =====================
@@ -167,7 +167,7 @@ begin
   ip := split_part(coalesce(h ->> 'cf-connecting-ip', h ->> 'x-real-ip', h ->> 'x-forwarded-for', ''), ',', 1);
   insert into public.hr_signin_log (uid, ip, ua, kind) values (auth.uid(), left(btrim(ip), 64), left(coalesce(p_ua, ''), 300),
     case when p_kind = 'signin' then 'signin' else 'open' end);
-  execute 'del' || 'ete from public.hr_signin_log where at < now() - interval ''120 days''';
+  execute 'del' || 'ete from public.hr_signin_log where at < now() - interval ''400 days''';
 end $$;
 revoke execute on function public.hr_signin_note(text, text) from public, anon;
 grant execute on function public.hr_signin_note(text, text) to authenticated;
@@ -195,3 +195,40 @@ begin
 end $$;
 revoke execute on function public.hr_signin_watch(date) from public, anon;
 grant execute on function public.hr_signin_watch(date) to authenticated;
+
+-- ===================== C. Users & Sign-Ins and Users Activity Logs (Overview) =====================
+-- HR Managers: every account (HR staff and employee accounts, with requests waiting), its last sign-in on record
+-- (auth.users.last_sign_in_at, which predates hr_signin_log), each person's sign-in days for the dates chosen, every
+-- sign-in and opening in those dates (newest first, at most 3,000) and the days each person opened the app per month for the last 12 months.
+create or replace function public.hr_user_signins(p_from date default null, p_to date default null) returns jsonb
+language plpgsql stable security definer set search_path = public, auth as $$
+declare d1 date := coalesce(p_to, (now() at time zone 'Asia/Manila')::date); d0 date := coalesce(p_from, d1 - 29);
+  a timestamptz; b timestamptz; m0 timestamptz;
+begin
+  if not public.hr_is_admin() then raise exception 'not_granted' using errcode = '42501'; end if;
+  if d0 > d1 or d1 - d0 > 400 then raise exception 'bad range'; end if;
+  a := d0::timestamp at time zone 'Asia/Manila'; b := (d1 + 1)::timestamp at time zone 'Asia/Manila';
+  m0 := (date_trunc('month', (now() at time zone 'Asia/Manila')) - interval '11 months') at time zone 'Asia/Manila';
+  return jsonb_build_object('from', d0, 'to', d1,
+    'users', coalesce((select jsonb_agg(x order by x->>'name') from (
+      select jsonb_build_object('uid', u.id, 'name', coalesce(nullif(p.name, ''), nullif(s.name, ''), split_part(u.email, '@', 1)), 'email', u.email,
+        'staff', e.user_id is not null, 'owner', coalesce(e.is_owner, false), 'status', case when e.user_id is not null then 'approved' else coalesce(s.status, 'none') end,
+        'empNo', s.emp_no, 'position', s.position, 'requested', s.requested_at, 'created', u.created_at, 'lastSignIn', u.last_sign_in_at,
+        'lastSeen', (select max(l.at) from public.hr_signin_log l where l.uid = u.id)) x
+      from auth.users u
+      left join public.hr_editors e on e.user_id = u.id and not coalesce(e.revoked, false)
+      left join public.hr_signups s on s.user_id = u.id
+      left join public.hr_profiles p on p.user_id = u.id
+      where e.user_id is not null or s.user_id is not null) q), '[]'::jsonb),
+    'days', coalesce((select jsonb_agg(x) from (
+      select jsonb_build_object('uid', l.uid, 'day', (l.at at time zone 'Asia/Manila')::date, 'signins', count(*) filter (where l.kind = 'signin'), 'opens', count(*), 'last', max(l.at)) x
+      from public.hr_signin_log l where l.at >= a and l.at < b group by l.uid, (l.at at time zone 'Asia/Manila')::date) q), '[]'::jsonb),
+    'list', coalesce((select jsonb_agg(x order by x->>'at' desc) from (
+      select jsonb_build_object('uid', l.uid, 'at', l.at, 'ip', l.ip, 'ua', l.ua, 'kind', l.kind) x
+      from public.hr_signin_log l where l.at >= a and l.at < b order by l.at desc limit 3000) q), '[]'::jsonb),
+    'months', coalesce((select jsonb_agg(x) from (
+      select jsonb_build_object('uid', l.uid, 'ym', to_char(l.at at time zone 'Asia/Manila', 'YYYY-MM'), 'days', count(distinct (l.at at time zone 'Asia/Manila')::date)) x
+      from public.hr_signin_log l where l.at >= m0 group by l.uid, to_char(l.at at time zone 'Asia/Manila', 'YYYY-MM')) q), '[]'::jsonb));
+end $$;
+revoke execute on function public.hr_user_signins(date, date) from public, anon;
+grant execute on function public.hr_user_signins(date, date) to authenticated;
