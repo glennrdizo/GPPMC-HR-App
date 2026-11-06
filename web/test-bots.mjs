@@ -29,6 +29,24 @@ assert.deepEqual(B.parseViber({ event: "webhook" }), []);
 assert.deepEqual(B.parseMessenger({ object: "page", entry: [{ messaging: [{ sender: { id: "p1" }, message: { text: "leave?" } }, { sender: { id: "p1" }, message: { is_echo: true, text: "x" } }, { sender: { id: "p2" }, message: { text: "x", quick_reply: { payload: "YES" } } }, { sender: { id: "p3" }, postback: { payload: "GET_STARTED" } }] }] }),
   [{ sender: "p1", text: "leave?" }, { sender: "p2", text: "YES" }, { sender: "p3", text: "", start: true }]);
 assert.deepEqual(B.parseMessenger({ object: "user" }), []);
+const tg = (text, extra = {}) => ({ update_id: 1, message: { message_id: 1, chat: { id: 77, type: "private" }, from: { id: 77, is_bot: false, first_name: "Ana", last_name: "Cruz" }, text, ...extra } });
+assert.deepEqual(B.parseTelegram(tg("hello")), [{ sender: "77", name: "Ana Cruz", text: "hello" }]);
+assert.deepEqual(B.parseTelegram(tg("/start 123456")), [{ sender: "77", name: "Ana Cruz", text: "123456", start: false }]);
+assert.deepEqual(B.parseTelegram(tg("/start")), [{ sender: "77", name: "Ana Cruz", text: "", start: true }]);
+assert.deepEqual(B.parseTelegram(tg("/start abc")), [{ sender: "77", name: "Ana Cruz", text: "", start: true }]);
+assert.deepEqual(B.parseTelegram(tg("/help")), [{ sender: "77", name: "Ana Cruz", text: "help" }]);
+assert.deepEqual(B.parseTelegram(tg("hi", { chat: { id: -5, type: "group" } })), []);
+assert.deepEqual(B.parseTelegram(tg("hi", { from: { id: 9, is_bot: true } })), []);
+assert.deepEqual(B.parseTelegram({ update_id: 2, edited_message: {} }), []);
+assert.equal(B.parseTelegram(tg(undefined))[0].text, "");
+const tsec = await C.telegramSecret("tok");
+assert.match(tsec, /^[0-9a-f]{64}$/);
+assert.equal(await C.telegramSigned(tsec, "tok"), true);
+assert.equal(await C.telegramSigned(tsec.toUpperCase(), "tok"), true);
+assert.equal(await C.telegramSigned(tsec, "other"), false);
+assert.equal(await C.telegramSigned(null, "tok"), false);
+assert.equal(await C.telegramSigned(tsec, ""), false);
+assert.equal(await C.telegramSecret(""), "");
 console.log("events: passed");
 
 // Commands

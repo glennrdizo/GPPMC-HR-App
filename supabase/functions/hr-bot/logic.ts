@@ -11,6 +11,17 @@ export function parseViber(j: Doc): ChatIn[] {
   if ((j.event === "conversation_started" || j.event === "subscribed") && j.user?.id) return [{ sender: String(j.user.id), name: str(j.user.name, 80), text: "", start: true }];
   return [];
 }
+// Telegram: private chats only (a bot added to a group must not answer HR questions in front of others).
+export function parseTelegram(j: Doc): ChatIn[] {
+  const m = j?.message; const id = m?.chat?.id;
+  if (!m || id === undefined || m.chat?.type !== "private" || m.from?.is_bot) return [];
+  const name = str([m.from?.first_name, m.from?.last_name].filter(Boolean).join(" "), 80); const text = typeof m.text === "string" ? m.text.trim() : "";
+  const start = /^\/start(@\w+)?(\s|$)/.test(text); const arg = start ? text.replace(/^\/start(@\w+)?\s*/, "") : "";
+  // "/start 123456" (from a t.me/bot?start=123456 link) links straight away; a bare /start greets.
+  if (start) return [{ sender: String(id), name, text: /^\d{6}$/.test(arg) ? arg : "", start: !/^\d{6}$/.test(arg) }];
+  if (/^\/help(@\w+)?$/.test(text)) return [{ sender: String(id), name, text: "help" }];
+  return [{ sender: String(id), name, text: str(text, 1500) }];
+}
 export function parseMessenger(j: Doc): ChatIn[] {
   const out: ChatIn[] = [];
   if (j?.object !== "page") return out;
@@ -38,7 +49,7 @@ export function intent(text: string): Intent {
 export const YES_NO = [{ label: "Yes, send it", reply: "YES" }, { label: "Cancel", reply: "NO" }];
 export const HELP_EMP = "I'm the GD Prime HR bot. You can ask me about your leave balance, payslips, schedule, loans and company policies, or tell me what to file: leave, overtime, a time correction or a certificate. I always ask before sending anything to HR.";
 export const HELP_HR = "I'm the GD Prime HR helper. Ask me what's waiting for approval, who needs follow-up, or what to fix before payroll. I also send you the morning summary and approvals here.";
-export const notLinkedText = (app: string) => `Hi! This is GD Prime HR. To use this chat, sign in to the HR app (${app}), open "Connect Viber or Messenger" on your home page or on Overview > Bots, and send me the 6-digit code it shows.`;
+export const notLinkedText = (app: string) => `Hi! This is GD Prime HR. To use this chat, sign in to the HR app (${app}), open "Connect my chat app" on your home page or on Overview > Bots, and send me the 6-digit code it shows.`;
 
 /* ---------- what the employee assistant can propose ---------- */
 export const EMP_TOOLS = [
@@ -105,7 +116,7 @@ const RULES = `Rules:
 - Amounts are in Philippine pesos (PHP).`;
 export function empSystem(o: { company: string; today: string; sum: Doc | null; kb: Doc | null; leave: [string, string][] }) {
   const sum = o.sum ? { ...o.sum, at: undefined, fix: o.sum.fix ? { ...o.sum.fix, lv: undefined } : undefined } : null;
-  return `You are the HR assistant of ${o.company}, chatting on Viber or Messenger with employee ${o.sum?.name || "an employee"}. Today is ${o.today} (Philippine time).
+  return `You are the HR assistant of ${o.company}, chatting on Viber, Messenger or Telegram with employee ${o.sum?.name || "an employee"}. Today is ${o.today} (Philippine time).
 ${RULES}
 - You only see this one employee's data. Never discuss other employees.
 - You can PREPARE requests with the tools: leave, overtime, a time correction, a certificate, or a message to HR. The employee confirms before anything is sent, and HR or their supervisor approves it. Ask for missing details first, one short question at a time. Never say a request was sent or approved.
@@ -122,7 +133,7 @@ ${sum ? JSON.stringify(sum).slice(0, 12000) : "(not available yet: HR hasn't sha
 }
 export function hrSystem(o: { company: string; today: string; helper: Doc | null; kb: Doc | null }) {
   const h = o.helper; const secs = Array.isArray(h?.sections) ? h.sections : [];
-  return `You are the HR helper of ${o.company}, chatting on Viber or Messenger with a member of the HR team. Today is ${o.today} (Philippine time).
+  return `You are the HR helper of ${o.company}, chatting on Viber, Messenger or Telegram with a member of the HR team. Today is ${o.today} (Philippine time).
 ${RULES}
 - Answer from today's HR summary below: requests waiting past their target, approvals, payroll gaps, filings, contracts, documents and cases. Keep it short; list names only when asked.
 - You can't change records. Say which page of the HR app does it (Overview > Needs action, Payroll, Leave, Employees).

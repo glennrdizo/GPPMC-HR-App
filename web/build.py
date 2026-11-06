@@ -4,7 +4,7 @@ W = os.path.dirname(os.path.abspath(__file__))
 app = open(os.path.join(W, '..', 'app', 'index.html')).read()
 end = '\nboot();\n})();\n</script>'
 assert app.count(end) == 1, 'app end marker'
-app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + '\n' + open(os.path.join(W, 'autojobs.js')).read() + '\n' + open(os.path.join(W, 'biosync.js')).read() + '\n' + open(os.path.join(W, 'kioskadm.js')).read() + '\n' + open(os.path.join(W, 'dochist.js')).read() + '\n' + open(os.path.join(W, 'botsweb.js')).read() + end)
+app = app.replace(end, '\n' + open(os.path.join(W, 'hosted.js')).read() + '\n' + open(os.path.join(W, 'autojobs.js')).read() + '\n' + open(os.path.join(W, 'biosync.js')).read() + '\n' + open(os.path.join(W, 'kioskadm.js')).read() + '\n' + open(os.path.join(W, 'dochist.js')).read() + '\n' + open(os.path.join(W, 'botsweb.js')).read() + '\n' + open(os.path.join(W, 'install.js')).read() + end)
 logo = re.search(r'const CO_LOGO = "([^"]+)"', app).group(1)
 sbjs = open(os.path.join(W, '..', 'public', 'supabase.js')).read()  # @supabase/supabase-js 2.45.4 UMD
 shim = open(os.path.join(W, 'sb-shim.js')).read()
@@ -13,11 +13,15 @@ NOTICE = ('<!-- Copyright (c) 2026 GD Prime Property Management Corporation. All
 head = ('<!doctype html><html lang="en"><head>' + NOTICE + '<meta charset="utf-8"><meta name="robots" content="noindex, nofollow">'
         '<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">'
         '<meta name="theme-color" content="#0D1729"><link rel="icon" href="' + logo + '">'
+        '<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">'
+        '<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="GD Prime HR">'
         '<style>*,*::before,*::after{box-sizing:border-box}html,body{margin:0}</style>'
         '<script src="supabase.js"></script><script>window.CO_LOGO_URL="' + logo + '";\n' + shim + '</script></head><body>')
 out = os.path.join(W, '..', 'public'); os.makedirs(out, exist_ok=True)
 open(os.path.join(out, 'index.html'), 'w').write(head + app + '</body></html>')
 shutil.copy(os.path.join(W, 'sw.js'), os.path.join(out, 'sw.js'))
+shutil.copy(os.path.join(W, 'manifest.webmanifest'), os.path.join(out, 'manifest.webmanifest'))
+shutil.copytree(os.path.join(W, 'icons'), os.path.join(out, 'icons'), dirs_exist_ok=True)
 open(os.path.join(out, 'supabase.js'), 'w').write(sbjs)
 # Careers page and applicant portal (/careers): a light page of its own, sharing the same Supabase project and sign-in.
 car = ('<!doctype html><html lang="en"><head>' + NOTICE + '<meta charset="utf-8">'

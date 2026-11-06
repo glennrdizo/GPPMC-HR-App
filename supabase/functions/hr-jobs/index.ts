@@ -114,7 +114,7 @@ async function allData(ctx: Ctx): Promise<All> {
 type Chats = { on: boolean; forEmail: (to: string) => Target[]; forEmp: (empId?: string) => Target[]; hr: Target[]; emp: { uid: string; t: Target }[] };
 async function chats(): Promise<Chats> {
   const bot = (await getDoc("org/bot")) || {}; const keys = chatKeys(); const ok = (c: string) => (keys as Doc)[c] && bot[c] !== false;
-  const none: Chats = { on: false, forEmail: () => [], forEmp: () => [], hr: [], emp: [] }; if (bot.on !== true || (!ok("viber") && !ok("messenger"))) return none;
+  const none: Chats = { on: false, forEmail: () => [], forEmp: () => [], hr: [], emp: [] }; if (bot.on !== true || (!ok("viber") && !ok("messenger") && !ok("telegram"))) return none;
   const [links, prof, eds, cl] = await Promise.all([rest("hr_chat_links?select=channel,sender,user_id"), rest("hr_profiles?select=user_id,email"), rest("hr_editors?select=user_id,revoked"), getDoc("org/clocklinks")]);
   const L = ((links as Doc[]) || []).filter((l) => ok(l.channel)).map((l) => ({ uid: l.user_id as string, t: { channel: l.channel, sender: l.sender } as Target }));
   const mail = new Map(((prof as Doc[]) || []).map((p) => [p.user_id, String(p.email || "").toLowerCase()])); const ed = new Set(((eds as Doc[]) || []).filter((e) => !e.revoked).map((e) => e.user_id)); const emp = cl?.links || {};
