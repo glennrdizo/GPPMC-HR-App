@@ -10,9 +10,9 @@ const AJ_DEF = { on: false, company: "GD Prime Property Management Corporation",
   kinds: { decided: true, approval: true, payslip: true, applicant: true, digest: true } };
 const ajCfg = () => { const c = S.aj.cfg || {}; return { ...AJ_DEF, ...c, kinds: { ...AJ_DEF.kinds, ...(c.kinds || {}) } }; };
 async function ajCall(body) {
-  const { data, error } = await window.__sb.functions.invoke("hr-jobs", { body });
+  const { data, error } = await window.__sbFn("hr-jobs", body);
   if (!error) return data;
-  let msg = error.message || "The server job didn't answer."; try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch {}
+  let msg = error.message || "The server job didn't answer."; 
   if (/not found|404|Failed to send/i.test(msg)) msg = "The automatic jobs aren't installed on the server yet.";
   throw new Error(msg);
 }

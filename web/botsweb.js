@@ -9,9 +9,9 @@ const TG_RE = /^https:\/\/t\.me\/[A-Za-z0-9_]{5,32}$/;
 const botPub = (c) => ({ on: c.on, viber: c.viber && !!c.viberUri, messenger: c.messenger && !!c.messengerUrl, telegram: c.telegram !== false && !!c.telegramUrl, viberUri: c.viberUri, messengerUrl: c.messengerUrl, telegramUrl: c.telegramUrl || "" });
 const botCfgNow = () => ({ ...BOT_DEF, ...(S.bots.cfg || {}) });
 async function botFn(body) {
-  const { data, error } = await window.__sb.functions.invoke("hr-bot", { body });
-  if (!error) return data; let msg = error.message || "The bot server didn't answer."; try { const j = await error.context.json(); if (j?.error) msg = j.error; } catch {}
-  if (/not found|404|Failed to send/i.test(msg)) msg = "The bot server isn't installed yet."; throw new Error(msg);
+  const { data, error } = await window.__sbFn("hr-bot", body);
+  if (!error) return data; let msg = error.message || "The bot server didn't answer."; 
+  if (/not found|^404/i.test(msg)) msg = "The bot server isn't installed yet."; else if (/Failed to send/i.test(msg)) msg = "Couldn't reach the bot server. Check your internet and try again."; throw new Error(msg);
 }
 function botsSub() {
   if (S.bots.sub || !S.db) return; S.bots.sub = true;

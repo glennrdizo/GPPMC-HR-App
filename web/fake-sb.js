@@ -1,3 +1,4 @@
+window.__FAKE_SB = true;
 // Test double for supabase-js used by the website build (in-memory, emulates hr_* RPCs and row rules).
 (() => {
   const D = window.__D || {}; // path -> data

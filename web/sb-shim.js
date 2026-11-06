@@ -9,6 +9,17 @@
   const tfetch = (u, o = {}) => o.signal || !AbortSignal.timeout ? fetch(u, o) : fetch(u, { ...o, signal: AbortSignal.timeout(/\/storage\/v1\//.test(String(u?.url || u)) ? 180000 : 25000) });
   const sb = window.supabase.createClient(SB_URL, SB_KEY, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }, global: { fetch: tfetch } });
   window.__sb = sb;
+  // Calls an edge function with only the headers its CORS answer allows (supabase-js functions.invoke adds x-client-info,
+  // which the browser's preflight refuses, so the request was never sent). Returns { data, error } like functions.invoke.
+  window.__sbFn = async (name, body) => {
+    if (window.__FAKE_SB) return sb.functions.invoke(name, { body }); // tests (web/fake-sb.js)
+    try {
+      const { data: s } = await sb.auth.getSession();
+      const r = await tfetch(`${SB_URL}/functions/v1/${name}`, { method: "POST", headers: { "content-type": "application/json", apikey: SB_KEY, authorization: `Bearer ${s?.session?.access_token || SB_KEY}` }, body: JSON.stringify(body || {}) });
+      const j = await r.json().catch(() => null);
+      return r.ok ? { data: j, error: null } : { data: null, error: { message: j?.error || `${r.status} ${r.statusText}`, status: r.status } };
+    } catch (e) { return { data: null, error: { message: `Failed to send: ${e?.message || e}` } }; }
+  };
   window.__hosted = true;
 
   let me = null; // { id, email, name, editor, owner }

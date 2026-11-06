@@ -16,7 +16,7 @@ import { type Target, chatKeys, sendChat } from "./chat.ts";
 import { type IvState, IV_MODEL_SCORE, scorePrompt, parseScore, jobText as ivJobText } from "./iv.ts";
 import { meetSync } from "./meetsync.ts";
 
-const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
+const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-client-info, x-hr-jobs", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
 const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const env = (k: string) => (Deno.env.get(k) || "").trim();

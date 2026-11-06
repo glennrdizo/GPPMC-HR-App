@@ -16,7 +16,7 @@ import { type IvState, IV_MAX_TURNS, IV_MAX_ANSWER, IV_MODEL_TURN, IV_MODEL_SCOR
 
 const BASE = Deno.env.get("SUPABASE_URL") || "", SVC = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "", ANON = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const env = (k: string) => (Deno.env.get(k) || "").trim();
-const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type", "access-control-allow-methods": "POST, OPTIONS" };
+const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-client-info", "access-control-allow-methods": "POST, OPTIONS" };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, "content-type": "application/json" } });
 const MODELS: Record<string, string> = { quick: "claude-haiku-5-5", default: "claude-sonnet-5-5" };
 const DAY_CAP = 80; // messages a chat may send the bot a day
