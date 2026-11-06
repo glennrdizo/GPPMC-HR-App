@@ -33,6 +33,14 @@ Commit and push to `main`; Vercel redeploys automatically.
 - Secrets: `RESEND_API_KEY` (or `BREVO_API_KEY`) and `MAIL_FROM`, e.g. `GD Prime HR <hr@gd-prime.com>`. Optional `SEMAPHORE_API_KEY` and `SEMAPHORE_SENDER` for SMS.
 - HR Admins switch notices on and pick recipients in Users & Permissions > Automatic notices (`web/autojobs.js`, settings in `org/notify`). Rules and message wording: `supabase/functions/hr-jobs/logic.ts`; tests: `node --experimental-strip-types web/test-jobs.mjs`.
 
+## AI agents (`app/aiagents.js`)
+
+- Overview > AI agents: morning briefing, payroll watch, document and licence checker, attendance pattern watch, workforce budget draft, exit and survey themes, sign-in watch and AI usage. On forms: Fill from a document, Write with AI (English, Tagalog, Taglish), and the incident and NTE writer on Discipline. The HR assistant can find records and open a filled-in case, job opening, applicant or announcement. Meeting action items show in Reminders; Ask HR questions get a suggested topic, desk and priority.
+- The AI only drafts and flags. Nothing it fills in is saved, approved, paid or sent until a person checks it.
+- The daily checks run with the Automation runner (job `ai`). Results: `aiwatch/<kind>--<day>`; payroll and budget ones in `pay/` (Payroll roles only).
+- `supabase/migrations/20261106b_hr_ai_agents.sql`: monthly AI budget and daily limits (`hr_ai_settings`, `hr_ai_log`, `hr_ai_report`, `hr_ai_set`), used by `hr-ai`, `hr-bot` and `hr-jobs`; sign-in log for the sign-in watch (`hr_signin_log`, 120 days).
+- Readable local test build: `HR_NOMIN=1 python3 build.py` (publish only the minified build).
+
 ## Live biometric sync (`tools/bio-sync`)
 
 - ZKTeco TX628 terminals: a Python program (pyzk) on a computer at each site reads punches over port 4370 every 5 minutes and calls `hr_bio_push` with that site's key (`supabase/migrations/20261016b_hr_bio_sync.sql`). Punches land in `clockins/biometric/days/<date>`, the same place as the file import.
