@@ -512,3 +512,126 @@ bx("attrep", /^rejected$/i, bxArU((r) => r.status === "REJECTED"));
 bx("attrep", /^waiting$/i, bxArU((r) => r.status === "PENDING"));
 bx("attrep", /^days to decide$/i, () => { const s = bxArU((r) => r.decided?.d)(); s.cols = [...s.cols, "Days to decide"]; const xs = listOf(S.attReqs).filter((r) => S.emps.get(r.empId) && r.decided?.d && inUnit(S.emps.get(r.empId), S.repUnit || "")).sort((a, b) => (b.filed || "").localeCompare(a.filed || "")); s.rows.forEach((row, i) => row.c.push(xs[i] ? daysBetween(xs[i].filed, xs[i].decided.d) : "")); return s; });
 bx("attrep", /^people who asked$/i, () => { const by = {}; for (const r of listOf(S.attReqs)) if (S.emps.get(r.empId) && inUnit(S.emps.get(r.empId), S.repUnit || "")) by[r.empId] = (by[r.empId] || 0) + 1; return { cols: ["Employee", "Requests"], rows: Object.entries(by).sort((a, b) => b[1] - a[1]).map(([id, n]) => idR(id, n)), open: "attreqs" }; });
+
+/* ---------- Round 2 (2026-11-06): chart bars, breakdown rows and whole cards ----------
+   Glenn: "most of the dashboard boxes still not functioning when clicked; apply this to the whole system".
+   Every bar or row in a chart or breakdown card (.ra-row, .hbar, stacked-bar slices and legend, chart columns,
+   list rows, table rows) opens the people or records behind it, and every data card without a link gets
+   "Open <page>" in its heading and opens that page when its empty area is clicked. */
+const bxN = (s) => String(s || "").replace(/\s+/g, " ").trim().toLowerCase();
+const bxTitleOf = (el) => (el.closest(".card")?.querySelector(".card-head h2,.card-head h3,h2,h3")?.textContent || "").replace(/\s+/g, " ").trim();
+const bxYears = (d) => (d ? daysBetween(d, todayISO()) / 365.25 : null);
+const BX_AGE = { "under 25": [0, 25], "25 to 34": [25, 35], "35 to 44": [35, 45], "45 to 54": [45, 55], "55 and over": [55, 200] };
+const BX_TEN = { "under 1 year": [0, 1], "1 to 2": [1, 3], "3 to 4": [3, 5], "5 to 9": [5, 10], "10 or more": [10, 200] };
+const BX_MON = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+let bxIdx = null;
+function bxIndex() { /* group name -> active employees, rebuilt when the data changes */
+  const key = `${S.ver}|${S.emps.size}|${S.projects?.size}`; if (bxIdx?.key === key) return bxIdx;
+  const G = [["Department", (e) => deptName(e)], ["Site", (e) => unitName(e)], ["Project", (e) => (e.projectId ? S.projects.get(e.projectId)?.name : "")],
+    ["Status", (e) => STATUS[e.status]?.[0] || e.status], ["Position", (e) => bxPos(e)], ["Gender", (e) => ({ M: "Male", F: "Female" })[e.gender] || ""]];
+  const maps = G.map(([k, f]) => { const m = new Map(); for (const e of active()) { const v = bxN(f(e)); if (v) (m.get(v) || m.set(v, []).get(v)).push(e); } return [k, m]; });
+  const names = new Map(); for (const e of S.emps.values()) { const n = bxN(fullName(e)); if (n.length > 4) names.set(n, e); }
+  const projs = new Map(); for (const p of S.projects?.values?.() || []) { if (p.name) projs.set(bxN(p.name), p); if (p.code) projs.set(bxN(p.code), p); }
+  return (bxIdx = { key, maps, names, projs });
+}
+const bxGroup = (texts) => { const I = bxIndex(); for (const t of texts) { const n = bxN(t); if (!n) continue; for (const [k, m] of I.maps) if (m.has(n)) return [k, t, m.get(n)]; } return null; };
+const bxPersonIn = (txt) => { const n = bxN(txt); if (!n) return null; const I = bxIndex(); for (const [k, e] of I.names) if (n.includes(k)) return e; return null; };
+const bxBand = (B, lab, f) => { const r = B[bxN(lab)]; return r ? active().filter((e) => { const y = f(e); return y != null && y >= r[0] && y < r[1]; }) : null; };
+const bxMonthOf = (lab) => { const i = BX_MON.indexOf(bxN(lab).slice(0, 3)); if (i < 0 || bxN(lab).length > 9) return null; const t = todayISO(); let y = Number(t.slice(0, 4)); if (i + 1 > Number(t.slice(5, 7))) y--; return `${y}-${String(i + 1).padStart(2, "0")}`; };
+function bxRowSpec(lab, cells, title, page) {
+  const T = bxN(title), L = bxN(lab), base = bxBase(page); const head = title ? `${title}: ${lab}` : lab;
+  const people = (xs, extra = {}) => ({ ...bxPeople(xs), title: head, ...extra, ...(extra.cols ? { cols: ["Employee", ...extra.cols] } : {}) });
+  if (!L) return null;
+  if (/^age$/.test(T)) { const xs = bxBand(BX_AGE, lab, (e) => bxYears(e.birth)); if (xs) return people(xs, { cols: ["Age", "Status"], rows: xs.map((e) => eR(e, Math.floor(bxYears(e.birth)), bxStatusCell(e))) }); }
+  if (/years with the company|tenure/.test(T)) { const xs = bxBand(BX_TEN, lab, (e) => bxYears(e.hire)); if (xs) return people(xs, { cols: ["Years", "Hired"], rows: xs.map((e) => eR(e, bxYears(e.hire).toFixed(1), bxD(e.hire))) }); }
+  if (/applicant|funnel|hiring|recruit|refused/.test(T) || ["hiring", "ranalysis", "hireho", "hireprj", "rflow"].includes(base)) {
+    const st = STAGES.find(([, l]) => bxN(l) === L)?.[0] || Object.entries(typeof OUT !== "undefined" ? OUT : {}).find(([, v]) => bxN(v[0]) === L)?.[0];
+    if (st) { const funnel = /funnel/.test(T) && stageIdx(st) >= 0; return { ...bxApps(listOf(S.apps).filter((a) => (funnel ? stageIdx(a.stage) >= stageIdx(st) : a.stage === st))), title: head }; }
+    const m = bxMonthOf(lab); if (m) return { ...bxApps(listOf(S.apps).filter((a) => (a.applied || "").startsWith(m))), title: head };
+    const jobUnit = (a) => { const j = S.jobs.get(a.jobId); return j ? [j.projectId ? S.projects.get(j.projectId)?.name : "Head Office", dept(j.deptId)?.name, j.title, a.recruiter ? fullName(S.emps.get(a.recruiter) || {}) : ""].map(bxN) : []; };
+    const ax = listOf(S.apps).filter((a) => jobUnit(a).includes(L)); if (ax.length) return { ...bxApps(ax), title: head };
+    const wk = /^[a-z]{3} \d{1,2}$/.test(L) ? (() => { const y = todayISO().slice(0, 4); const d = new Date(`${lab} ${y}`); if (isNaN(d)) return null; let s = PAY.iso(d); if (s > todayISO()) s = PAY.iso(new Date(`${lab} ${Number(y) - 1}`)); return s; })() : null;
+    if (wk) return { ...bxApps(listOf(S.apps).filter((a) => a.applied >= wk && a.applied < addDays(wk, 7))), title: `${title}: week of ${lab}` };
+  }
+  if (/new employees|hires|joined/.test(T)) { const m = bxMonthOf(lab); if (m) { const xs = [...S.emps.values()].filter((e) => (e.hire || "").startsWith(m)); return people(xs, { cols: ["Hired", "Status"], rows: xs.map((e) => eR(e, bxD(e.hire), bxStatusCell(e))) }); } }
+  if (/separat|leaving|turnover/.test(T)) { const m = bxMonthOf(lab); if (m) { const xs = [...S.emps.values()].filter((e) => (e.separated?.date || "").startsWith(m)); return people(xs, { cols: ["Last day", "Reason"], rows: xs.map((e) => eR(e, bxD(e.separated?.date), e.separated?.reason || "")) }); } }
+  if (/missing|201|document/.test(T) && typeof F201 !== "undefined") { const k = F201.find(([, l]) => bxN(l) === L)?.[0]; if (k) return { ...bxF201((e) => !f201Status(e).find((x) => x.k === k)?.done), title: head }; }
+  if (/leave/.test(T)) { const g = bxGroup([lab]); if (g) { const y = todayISO().slice(0, 4); const ids = new Set(g[2].map((e) => e.id)); const L2 = allLeaves().filter((l) => l.status === "APPROVED" && ids.has(l.empId) && (l.from || "").startsWith(y));
+    return { cols: ["Employee", "Leave", "From", "Days"], rows: L2.map((l) => idR(l.empId, leaveType(l.type)?.name || l.type, bxD(l.from), l.days)), open: "leave", title: head, note: `Approved leave in ${y}.` }; } }
+  if (/overdue/.test(T) && typeof opsPending === "function") { const t = todayISO(); const xs = [...opsPending().filter((x) => x.late > 0), ...opsDeadlines().filter((x) => x.due < t)].filter((x) => bxN(x.unit) === L || (x.e && (bxN(unitName(x.e)) === L || bxN(deptName(x.e)) === L)));
+    return { ...bxOps(xs, "late"), title: head }; }
+  const g = bxGroup([lab, ...cells]);
+  if (g) { const [k, name, xs] = g; const pay = /pay|cost|salary/.test(T);
+    return people(xs, pay ? { cols: ["Basic a month", "Status"], rows: xs.map((e) => eR(e, bxM(monthlyOf(e.basicPay || 0, e.payType)), bxStatusCell(e))), open: "payroll" } : { title: `${title || k}: ${name}` }); }
+  const p = bxIndex().projs.get(L) || cells.map((c) => bxIndex().projs.get(bxN(c))).find(Boolean); if (p) return { go: "project", params: { id: p.id } };
+  const e = bxPersonIn([lab, ...cells].join(" ")); if (e) return { go: "employee", params: { id: e.id } };
+  return null;
+}
+const BX_CARD = [[/birthday|celebrant|anniversar/, "employees"], [/applicant|hiring|recruit|funnel|job opening|open jobs|refused|test result|interview|recruiter/, "hiring"], [/leave/, "leave"], [/overtime/, "otrep"],
+  [/attendance|late today|absent|punch|clock|time sheet/, "tk"], [/loan/, "loans"], [/contribution|1601|\bbir\b|\btax\b/, "contrib"], [/payroll|pay\b|cost|salary|final pay/, "payroll"], [/flexben/, "flex"],
+  [/training|course/, "trhome"], [/safety|osh|incident/, "safety"], [/201|document|missing/, "empdocs"], [/asset/, "property"], [/onboard|offboard|leaving|joining|new hires|separation/, "lifecycle"],
+  [/manpower|project/, "projects"], [/compliance/, "comply"], [/reminder/, "reminders"], [/announce/, "ann"], [/performance|review|probation|disciplin/, "perf"],
+  [/department|headcount|employee|age\b|^age$|years with|status|position|where they work|birthday|coming up/, "employees"]];
+const BX_DETAIL = /Form$|^(employee|project|applicant|job|review|caseView|course|trsession|asset|loan|payslip|mprView|meetRoom|rtest|rtake|osh|dtr|offboard|onboard|f201)$/;
+const bxCardPage = (title, page) => { const t = bxN(title); if (!t || BX_DETAIL.test(bxBase(page)) || /^(hrd_flow|hrd_\d+|hrbot|ann|annForm|finalpays|perms|faq)$/.test(bxBase(page))) return null; const hit = BX_CARD.find(([re]) => re.test(t)); const to = hit?.[1]; return to && VIEWS[to] && to !== bxBase(page) && (typeof navAllowed !== "function" || !S.perm || navAllowed(typeof HRD_PERM !== "undefined" && HRD_PERM[to] || "People") !== false) ? to : null; };
+const BX_ROWS = ".ra-row,.hbar,.stack-bar>i[title],ul.list>li,ul>li:has(> .dot),tbody>tr,svg.dx-chart g,svg.rd-chart g";
+function bxRowLabel(r) {
+  if (r.matches(".ra-row")) { const l = r.querySelector(".ra-l"); return [l?.firstChild?.textContent || l?.textContent || "", []]; }
+  if (r.matches(".hbar")) return [r.querySelector("span")?.textContent || (r.title || "").split(":")[0], []];
+  if (r.matches(".stack-bar>i")) return [(r.title || "").split(":")[0], []];
+  if (r.matches("g")) return [r.querySelector("text")?.textContent || "", []];
+  if (r.matches("tr")) { const c = [...r.cells].map((x) => x.textContent.trim()); const i = c.findIndex((x) => x && !/^[\d.,%₱\s—-]+$/.test(x)); return [c[i] || "", c.filter((x, j) => j !== i)]; }
+  const b = r.querySelector("b,strong,.name"); return [(b?.textContent || r.textContent).replace(/\s+/g, " ").trim().slice(0, 80), [r.textContent.replace(/\s+/g, " ").trim()]];
+}
+function bxMark2() {
+  const page = bxName(); if (!page) return; const noRows = /^(perms|roles|usrsign|usract|audit|audtrail|audsrv|hrd_matrix|hrd_div|timeSettings|paySetup|idset|autostat|autojobs|bots|hrbot|askhr)$/.test(bxBase(page));
+  for (const card of document.querySelectorAll("#main .card:not(.stat)")) {
+    if (card.querySelector(".card:not(.stat)") || card.closest(".stat")) continue;
+    const title = bxTitleOf(card); const form = !!card.querySelector("input:not([type=search]),select,textarea,form");
+    if (!form && !noRows) for (const r of card.querySelectorAll(BX_ROWS)) {
+      if (r.hasAttribute("data-bxr") || r.closest("[data-bxr]") && r.closest("[data-bxr]") !== r) continue;
+      if (r.matches("tr") && (r.querySelector(".empty,[colspan]") || r.closest("thead,tfoot"))) continue;
+      if (r.matches("[data-go],[data-emp],[data-app],button,a") || r.querySelector("a,button,input,select,[data-go],[data-emp],[data-app],[data-id],[data-edit]") || [...r.attributes].some((a) => /^data-(?!bx)/.test(a.name))) continue;
+      const [lab, cells] = bxRowLabel(r); if (!bxN(lab)) continue;
+      let spec = null; try { spec = bxRowSpec(lab.trim(), cells, title, page); } catch {}
+      if (!spec) continue;
+      r.setAttribute("data-bxr", ""); r.dataset.bxrLab = lab.trim(); if (!r.matches("g,i")) { r.setAttribute("role", "button"); r.tabIndex = 0; } r.setAttribute("aria-label", `${lab.trim()}: show the records`);
+    }
+    const head = card.querySelector(".card-head"); const hasLink = !!card.querySelector(".card-head [data-go],.card-head a,.card-head button");
+    const to = !form && bxCardPage(title, page);
+    if (to && !card.hasAttribute("data-bxc")) { card.setAttribute("data-bxc", to);
+      if (head && !hasLink) head.insertAdjacentHTML("beforeend", `<button class="link bx-cardlink" data-go="${to}">Open ${esc(typeof labelOf === "function" ? labelOf(to) : to)} ›</button>`); }
+  }
+}
+function bxRowOpen(r) {
+  const lab = r.dataset.bxrLab; const card = r.closest(".card"); const title = bxTitleOf(r); const page = bxName();
+  const cells = r.matches("tr") ? [...r.cells].map((x) => x.textContent.trim()).filter((x) => x !== lab) : bxRowLabel(r)[1];
+  let spec = null; try { spec = bxRowSpec(lab, cells, title, page); } catch (err) { console.warn("row", lab, err); }
+  if (!spec) { const to = card?.dataset.bxc; if (to) { go(to); return true; } return false; }
+  if (typeof spec === "string") { go(spec); return true; }
+  if (spec.go) { go(spec.go, spec.params || {}); return true; }
+  const val = r.querySelector(".ra-n,.num,b.num")?.textContent.trim() || (r.title || "").split(":")[1]?.trim() || "";
+  bxPanel({ title: spec.title || lab, value: val, note: spec.note || "", cols: spec.cols || ["Record"], rows: (spec.rows || []).filter(Boolean), open: spec.open === undefined ? card?.dataset.bxc || null : spec.open, openSet: spec.openSet });
+  return true;
+}
+{ const b = render; render = function (...a) { const r = b.apply(this, a); try { bxMark2(); } catch {} return r; }; }
+{ let t = 0; new MutationObserver(() => { clearTimeout(t); t = setTimeout(() => { try { bxMark2(); } catch {} }, 80); }).observe(document.documentElement, { childList: true, subtree: true }); }
+document.addEventListener("click", (ev) => {
+  if (ev.target.closest?.(".bx-back")) return;
+  const r = ev.target.closest?.("#main [data-bxr]");
+  if (r) { if (bxRowOpen(r)) { ev.preventDefault(); ev.stopImmediatePropagation(); } return; }
+  const c = ev.target.closest?.("#main [data-bxc]"); if (!c) return; const hit = ev.target.closest("a,button,input,select,textarea,label,summary,[data-go],[data-emp],[data-app],[role=button],[role=tab],.stat,tr,li,svg,[tabindex],[data-bxr]"); if (hit && hit !== c && c.contains(hit)) return;
+  if (window.getSelection?.().toString()) return; go(c.dataset.bxc);
+}, true);
+document.addEventListener("keydown", (ev) => { if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches?.("#main [data-bxr]")) { ev.preventDefault(); bxRowOpen(ev.target); } });
+{ const st = document.createElement("style"); st.textContent = `
+#main [data-bxr]{cursor:pointer}
+#main .ra-row[data-bxr],#main .hbar[data-bxr],#main li[data-bxr]{border-radius:8px;transition:background .12s}
+#main .ra-row[data-bxr]:hover,#main .hbar[data-bxr]:hover,#main li[data-bxr]:hover,#main tr[data-bxr]:hover td{background:rgba(201,169,97,.14)}
+#main [data-bxr]:focus-visible{outline:3px solid #C9A961;outline-offset:2px}
+#main g[data-bxr]:hover .rd-fill{filter:brightness(1.15)}
+#main .stack-bar>i[data-bxr]:hover{filter:brightness(1.12)}
+#main [data-bxc]{cursor:pointer}
+#main [data-bxc] .card-head{cursor:default}
+.bx-cardlink{margin-left:auto;white-space:nowrap;font-weight:600}
+`; document.head.appendChild(st); }
